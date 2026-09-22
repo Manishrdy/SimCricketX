@@ -422,6 +422,16 @@ def compute_game_state_vector(
 # Public: apply game-state multipliers to raw outcome weights
 # ---------------------------------------------------------------------------
 
+# How much of the collapse and consecutive-wicket WICKET escalation a short
+# format keeps. Both layers trigger on wickets and produce wickets, so over 60
+# balls they form a spiral with nothing to break it: a side five down reached a
+# 0.68 chance of losing a wicket to the very next delivery, and real innings
+# ended ten wickets down inside twenty-one balls. Halving the escalation keeps
+# clustering — wickets genuinely do come in bunches — without the runaway.
+# Both innings are damped, so this does not hand the chase an easy ride.
+SHORT_COLLAPSE_DAMPEN = 0.4
+
+
 def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     """
     Apply GSME multipliers to a raw_weights dict and return the adjusted dict.
@@ -476,7 +486,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
         _effective_cm = min(collapse_multiplier, 1.20)
     if _effective_cm > 1.0:
         excess = _effective_cm - 1.0             # 0.0 → 0.85 range
-        mults["Wicket"] *= _effective_cm
+        mults["Wicket"] *= (1.0 + excess * SHORT_COLLAPSE_DAMPEN) if _is_short else _effective_cm
         if _is_short:
             # Wickets still cluster — that part is real — but a T10 side does
             # not stop hitting because it lost two. The window here is 12
@@ -652,6 +662,8 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     # innings has no room for.
     _cw_dot, _cw_four, _cw_six = (
         (1.00, 0.92, 0.90) if _is_short else (1.32, 0.68, 0.62))
+    if _is_short:
+        _cw_dampen *= SHORT_COLLAPSE_DAMPEN
     if consecutive_wickets >= 4:
         mults["Wicket"] *= 1.0 + 0.495 * _cw_dampen   # normal: 1.495 | convergence: 1.248
         mults["Dot"]    *= _cw_dot

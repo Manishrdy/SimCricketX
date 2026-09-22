@@ -1926,10 +1926,15 @@
   }
 
   function updateValidation() {
-    const identityOk = state.identity.team_name.trim() &&
-                       state.identity.short_code.trim() &&
-                       state.identity.home_ground.trim() &&
-                       state.identity.pitch_preference;
+    // The rendered form is the source of truth here. Browser autofill and
+    // back/forward restoration can populate these controls without firing the
+    // input/change handlers above, leaving state.identity stale even though the
+    // user can see a complete identity form.
+    const identityOk = nameInput.value.trim() &&
+                       shortInput.value.trim() &&
+                       groundInput.value.trim() &&
+                       pitchSelect.value &&
+                       colorInput.value;
     const anyPlayers = VALID_FORMATS.some(f => state.rosters[f].length > 0);
 
     updateTabStatus();

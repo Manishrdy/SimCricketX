@@ -402,3 +402,71 @@ def test_t10_par_curve_matches_its_targets():
     assert fmt.rrr_baseline == {p: t / 10 for p, t in fmt.target_scores.items()}
     # Derived from expected_rr, not hand-written: 3x12.0 + 4x11.0 + 3x15.0.
     assert fmt.expected_rr == {'Powerplay': 12.0, 'Middle': 11.0, 'Death': 15.0}
+
+
+# ---------------------------------------------------------------------------
+# No sudden collapses
+#
+# Every wicket multiplier is applied multiplicatively and, apart from the
+# game-state engine's own clamp, nothing bounded their product. In a chase they
+# share one trigger — wickets raise the required rate, which switches on the
+# escalators, which take more wickets — so a side a few down could reach a 0.68
+# chance of losing a wicket to the very next ball. Real innings ended ten
+# wickets down inside twenty-one deliveries. Guarded here, and by the low-tail
+# and all-out-speed gates in scripts/bench_t10.py.
+# ---------------------------------------------------------------------------
+
+def _wicket_probability(fmt_name, monkeypatch, **extra):
+    """Normalised P(Wicket) for one deliberately extreme delivery."""
+    import random
+    from engine import ball_outcome
+    captured = {}
+    outcomes = {'Dot', 'Single', 'Double', 'Three', 'Four', 'Six', 'Wicket', 'Extras'}
+    real = random.choices
+
+    def spy(population, weights=None, **kw):
+        if weights and set(population) == outcomes:
+            captured['p'] = dict(zip(population, weights))['Wicket']
+        return real(population, weights=weights, **kw)
+
+    monkeypatch.setattr(ball_outcome.random, 'choices', spy)
+    fmt = get_format(fmt_name)
+    ball_outcome.calculate_outcome(
+        batter={'name': 'B', 'batting_rating': 20, 'batting_hand': 'Right'},
+        bowler={'name': 'W', 'bowling_rating': 95, 'bowling_type': 'Fast',
+                'bowling_hand': 'Right', 'fielding_rating': 70},
+        pitch='Green', streak={}, over_number=8, batter_runs=0, innings=2,
+        balls_faced=0, batting_position=9, format_config=fmt,
+        # Everything that can pile onto a wicket, all at once.
+        pressure_effects={'wicket_modifier': 6.0, 'boundary_modifier': 1.0,
+                          'dot_bonus': 0.0},
+        game_state={'innings': 2, 'collapse_multiplier': 1.85,
+                    'consecutive_wickets': 4, 'required_aggression': 2.4,
+                    'partnership_balls': 1, 'partnership_runs': 0,
+                    'wickets_in_hand': 2, 'resource_index': 0.05,
+                    '_is_short': fmt.strict_short_bowling, '_in_death': True,
+                    '_partnership_thresholds': fmt.partnership_thresholds},
+        **extra)
+    return captured['p']
+
+
+def test_a_single_delivery_cannot_be_a_coin_flip(monkeypatch):
+    from engine.ball_outcome import SHORT_FORMAT_WICKET_CAP
+    capped = _wicket_probability('T10', monkeypatch)
+    assert capped <= SHORT_FORMAT_WICKET_CAP + 1e-9, capped
+    # The same stack is unbounded in T20, whose bands were calibrated with it.
+    assert _wicket_probability('T20', monkeypatch) > SHORT_FORMAT_WICKET_CAP
+
+
+def test_collapse_escalation_is_damped_in_short_formats():
+    from engine.game_state_engine import apply_game_state_to_probs, SHORT_COLLAPSE_DAMPEN
+    probs = {'Dot': .25, 'Single': .34, 'Double': .12, 'Three': .01,
+             'Four': .13, 'Six': .08, 'Wicket': .05, 'Extras': .02}
+    state = dict(innings=1, collapse_multiplier=1.765, consecutive_wickets=4,
+                 _partnership_thresholds=(15, 30, 45, 60))
+    short = apply_game_state_to_probs(dict(probs), dict(state, _is_short=True))
+    full = apply_game_state_to_probs(dict(probs), dict(state, _is_short=False))
+    assert short['Wicket'] < full['Wicket']
+    assert 0 < SHORT_COLLAPSE_DAMPEN < 1
+    # Wickets must still cluster — damped, not removed.
+    assert short['Wicket'] > probs['Wicket'] / sum(probs.values())

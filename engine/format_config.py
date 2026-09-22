@@ -410,7 +410,10 @@ _T10.revise_short_innings(10)
 _T10.par_scores = {0: 0.0}
 for _over in range(10):
     _T10.par_scores[_over + 1] = _T10.par_scores[_over] + _T10.expected_rr[_T10.phase_key(_over)]
-_T10.target_scores = {"Green": 95, "Dry": 100, "Hard": 125, "Flat": 137, "Dead": 155}
+# Measured first-innings means, not aspirations — these ARE what the engine
+# produces. rrr_baseline is target/10, so a target below the real par makes
+# every chase read as needing more than it does and over-accelerate.
+_T10.target_scores = {"Green": 103, "Dry": 106, "Hard": 125, "Flat": 138, "Dead": 157}
 _T10.pitch_par_factors = {pitch: total / _T10.par_scores[10] for pitch, total in _T10.target_scores.items()}
 _T10.rrr_baseline = {pitch: total / 10 for pitch, total in _T10.target_scores.items()}
 _T10.extras_per_innings = 3

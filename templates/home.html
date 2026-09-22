@@ -1,101 +1,943 @@
 {% extends "layout.html" %}
 
-{% block title %}Clubhouse · SimCricketX{% endblock %}
+{% block title %}SimCricketX Dashboard{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
+<style>
+    /* --- Command Center Theme (teal/amber identity, evolved from landing) --- */
+    :root {
+        --font-sans: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+        --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+        --bg: #f9fffe;
+        --bg-secondary: #f0faf9;
+        --fg: #1a2e2c;
+        --fg-secondary: #52726e;
+        --card-bg: #ffffff;
+        --card-border: #cfe8e6;
+
+        --accent: #0f766e;
+        --accent-hover: #0d6860;
+        --accent-light: rgba(15, 118, 110, 0.10);
+        --amber: #f59e0b;
+        --amber-dark: #d97706;
+        --gradient: linear-gradient(135deg, #0f766e 0%, #f59e0b 100%);
+    }
+
+    [data-theme="dark"] {
+        --bg: #0d1416;
+        --bg-secondary: #111b1e;
+        --fg: #e6edf0;
+        --fg-secondary: #9aa5b1;
+        --card-bg: #111b1e;
+        --card-border: #1f3035;
+
+        --accent: #3fb6a8;
+        --accent-hover: #35a89a;
+        --accent-light: rgba(63, 182, 168, 0.15);
+        --amber: #f1b84b;
+        --amber-dark: #d9a240;
+        --gradient: linear-gradient(135deg, #3fb6a8 0%, #f1b84b 100%);
+    }
+
+    body {
+        font-family: var(--font-sans);
+    }
+
+    @keyframes tileIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* ── Command Bar (compact header, replaces the old marketing hero) ── */
+    .cmd-bar {
+        position: relative;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+        padding: 1.75rem 2rem;
+        margin-bottom: 2rem;
+        border-radius: 22px;
+        background: color-mix(in srgb, var(--bg-secondary), transparent 0%);
+        border: 1px solid var(--card-border);
+        overflow: hidden;
+    }
+
+    .cmd-bar::before {
+        content: '';
+        position: absolute;
+        top: -40%;
+        right: -10%;
+        width: 320px;
+        height: 320px;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--amber) 0%, transparent 70%);
+        opacity: 0.14;
+        filter: blur(10px);
+        pointer-events: none;
+    }
+
+    .cmd-greeting {
+        position: relative;
+        z-index: 1;
+        min-width: 240px;
+    }
+
+    .cmd-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 0.5rem;
+    }
+
+    .cmd-title {
+        font-size: clamp(1.5rem, 3vw, 2.1rem);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--fg);
+        margin-bottom: 0.35rem;
+        line-height: 1.2;
+    }
+
+    .cmd-subtitle {
+        font-size: 0.94rem;
+        color: var(--fg-secondary);
+        max-width: 480px;
+        line-height: 1.5;
+    }
+
+    .cmd-stats {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+    }
+
+    .cmd-stat {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-width: 92px;
+        padding: 0.7rem 1rem;
+        border-radius: 14px;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+    }
+
+    .cmd-stat-num {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: var(--fg);
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+    }
+
+    .cmd-stat-num.is-online {
+        color: #10b981;
+        text-shadow: 0 0 16px rgba(16, 185, 129, 0.35);
+    }
+
+    .cmd-stat-label {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 600;
+        color: var(--fg-secondary);
+        margin-top: 0.15rem;
+    }
+
+    /* ── Bento command grid ── */
+    .bento-section {
+        margin-bottom: 3rem;
+    }
+
+    .bento-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 1rem;
+        margin-bottom: 1.1rem;
+    }
+
+    .bento-eyebrow {
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--fg-secondary);
+        margin-bottom: 0.35rem;
+    }
+
+    .bento-heading {
+        font-size: clamp(1.4rem, 2.4vw, 1.9rem);
+        color: var(--fg);
+        letter-spacing: -0.02em;
+        font-weight: 700;
+    }
+
+    .bento-count {
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--fg-secondary);
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 999px;
+        padding: 0.35rem 0.75rem;
+        flex-shrink: 0;
+    }
+
+    .bento-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-auto-rows: 150px;
+        grid-auto-flow: dense;
+        gap: 1rem;
+    }
+
+    .bento-tile {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        border-radius: 20px;
+        border: 1px solid var(--card-border);
+        background: var(--card-bg);
+        padding: 1.25rem;
+        text-decoration: none;
+        overflow: hidden;
+        opacity: 0;
+        animation: tileIn 0.4s ease forwards;
+        transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+    }
+
+    .bento-grid .bento-tile:nth-child(1) {
+        animation-delay: 0ms;
+    }
+
+    .bento-grid .bento-tile:nth-child(2) {
+        animation-delay: 40ms;
+    }
+
+    .bento-grid .bento-tile:nth-child(3) {
+        animation-delay: 80ms;
+    }
+
+    .bento-grid .bento-tile:nth-child(4) {
+        animation-delay: 120ms;
+    }
+
+    .bento-grid .bento-tile:nth-child(5) {
+        animation-delay: 160ms;
+    }
+
+    .bento-grid .bento-tile:nth-child(6) {
+        animation-delay: 200ms;
+    }
+
+    .bento-grid .bento-tile:nth-child(7) {
+        animation-delay: 240ms;
+    }
+
+    .bento-grid .bento-tile:nth-child(8) {
+        animation-delay: 280ms;
+    }
+
+    .bento-tile:hover {
+        transform: translateY(-3px);
+        border-color: var(--accent);
+        box-shadow: 0 16px 32px -20px rgba(0, 0, 0, 0.4);
+    }
+
+    .bento-tile:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+
+    .tile-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        border: 1px solid var(--card-border);
+        background: var(--bg-secondary);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.05rem;
+        flex-shrink: 0;
+        transition: transform 0.22s ease, background 0.22s ease, color 0.22s ease;
+    }
+
+    .bento-tile:hover .tile-icon {
+        transform: rotate(-6deg) scale(1.06);
+        background: var(--accent);
+        color: #fff;
+    }
+
+    .tile-title {
+        font-size: 1rem;
+        font-weight: 650;
+        color: var(--fg);
+        margin: 0.7rem 0 0.25rem;
+        line-height: 1.3;
+    }
+
+    .tile-desc {
+        font-size: 0.84rem;
+        color: var(--fg-secondary);
+        line-height: 1.4;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .tile-arrow {
+        align-self: flex-end;
+        color: var(--fg-secondary);
+        font-size: 0.86rem;
+        transition: transform 0.22s ease, color 0.22s ease;
+    }
+
+    .bento-tile:hover .tile-arrow {
+        transform: translateX(3px);
+        color: var(--accent);
+    }
+
+    /* Featured "Simulate Match" tile — the primary action */
+    .tile-hero {
+        grid-column: span 2;
+        grid-row: span 2;
+        background: linear-gradient(160deg, var(--accent) 0%, var(--accent-hover) 55%, #0a2e2b 100%);
+        border-color: transparent;
+        color: #f3fffb;
+    }
+
+    [data-theme="dark"] .tile-hero {
+        background: linear-gradient(160deg, var(--accent) 0%, #0f2a27 65%, #081d1b 100%);
+    }
+
+    .tile-hero::before {
+        content: '';
+        position: absolute;
+        top: -20%;
+        right: -15%;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--amber) 0%, transparent 70%);
+        opacity: 0.4;
+        filter: blur(6px);
+        pointer-events: none;
+    }
+
+    .tile-hero:hover {
+        border-color: transparent;
+        box-shadow: 0 20px 44px -20px rgba(15, 118, 110, 0.55);
+    }
+
+    .tile-hero .tile-icon {
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.22);
+        color: #fff;
+        width: 52px;
+        height: 52px;
+        font-size: 1.3rem;
+    }
+
+    .tile-hero:hover .tile-icon {
+        background: rgba(255, 255, 255, 0.24);
+        color: #fff;
+    }
+
+    .tile-kicker {
+        position: relative;
+        z-index: 1;
+        display: inline-block;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.75);
+        margin-top: 0.8rem;
+    }
+
+    .tile-hero .tile-title {
+        position: relative;
+        z-index: 1;
+        font-size: 1.35rem;
+        color: #fff;
+        margin-top: 0.3rem;
+    }
+
+    .tile-hero .tile-desc {
+        position: relative;
+        z-index: 1;
+        color: rgba(255, 255, 255, 0.78);
+        font-size: 0.9rem;
+        -webkit-line-clamp: 3;
+        max-width: 380px;
+    }
+
+    .tile-cta {
+        position: relative;
+        z-index: 1;
+        align-self: flex-start;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        padding: 0.55rem 1rem;
+        border-radius: 999px;
+        background: var(--amber);
+        color: #0a2e2b;
+        font-size: 0.85rem;
+        font-weight: 700;
+        transition: transform 0.22s ease, gap 0.22s ease;
+    }
+
+    .tile-hero:hover .tile-cta {
+        transform: translateX(2px);
+    }
+
+    /* Wide tile — Create Team */
+    .tile-wide {
+        grid-column: span 2;
+    }
+
+    .tile-wide .tile-title {
+        font-size: 1.1rem;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+        .bento-tile,
+        .tile-icon,
+        .tile-arrow,
+        .tile-cta {
+            animation: none !important;
+            opacity: 1 !important;
+            transition: none !important;
+        }
+
+        .bento-tile:hover {
+            transform: none;
+        }
+
+        .bento-tile:hover .tile-icon {
+            transform: none;
+        }
+    }
+
+    .global-announcement-banner {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(920px, calc(100vw - 2rem));
+        z-index: 120;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 14px;
+        box-shadow: 0 16px 42px rgba(0, 0, 0, 0.32);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        animation: banner-pop-in 220ms ease-out;
+    }
+
+    .global-announcement-banner.pos-bottom {
+        bottom: 1rem;
+        top: auto;
+    }
+
+    .global-announcement-banner.pos-top {
+        top: calc(var(--nav-height) + 0.85rem);
+        bottom: auto;
+    }
+
+    .global-announcement-banner.theme-urgent {
+        background: linear-gradient(135deg, #b45309 0%, #ea580c 46%, #dc2626 100%);
+    }
+
+    .global-announcement-banner.theme-spotlight {
+        background: linear-gradient(135deg, #1d4ed8 0%, #0284c7 52%, #0891b2 100%);
+    }
+
+    .global-announcement-banner.theme-calm {
+        background: linear-gradient(135deg, #334155 0%, #0f766e 52%, #047857 100%);
+    }
+
+    .global-announcement-banner::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 14px;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+        pointer-events: none;
+    }
+
+    @keyframes banner-pop-in {
+        from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    }
+
+    .global-announcement-inner {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.85rem 1rem;
+    }
+
+    .global-announcement-icon {
+        color: #fff7ed;
+        font-size: 1rem;
+        margin-top: 0.1rem;
+        opacity: 0.95;
+    }
+
+    .global-announcement-tag {
+        display: inline-flex;
+        align-items: center;
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 800;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 999px;
+        padding: 0.12rem 0.5rem;
+        margin-bottom: 0.28rem;
+    }
+
+    .global-announcement-text {
+        flex: 1;
+        font-size: 0.94rem;
+        line-height: 1.45;
+        color: #fff;
+        white-space: pre-line;
+        text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+    }
+
+    .global-announcement-close {
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.14);
+        color: #fff;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+    }
+
+    .global-announcement-close:hover {
+        border-color: rgba(255, 255, 255, 0.65);
+        background: rgba(255, 255, 255, 0.24);
+    }
+
+    .changelog-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        padding: 1rem;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .changelog-modal {
+        width: min(680px, 100%);
+        max-height: min(84vh, 760px);
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        overflow: hidden;
+    }
+
+    .changelog-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+
+    .changelog-kicker {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
+    }
+
+    .changelog-kicker i {
+        color: var(--accent);
+        font-size: 1.05rem;
+    }
+
+    .changelog-kicker span {
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        color: var(--fg-secondary);
+        text-transform: uppercase;
+    }
+
+    .changelog-title {
+        margin: 0 0 4px;
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: var(--fg);
+    }
+
+    .changelog-subtitle {
+        margin: 0;
+        font-size: 0.8rem;
+        color: var(--fg-secondary);
+    }
+
+    .changelog-icon-close {
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        background: var(--bg-secondary);
+        color: var(--fg-secondary);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .changelog-scroll {
+        overflow-y: auto;
+        scrollbar-gutter: stable;
+        padding-right: 4px;
+    }
+
+    .changelog-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+    }
+
+    .changelog-item {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        font-size: 0.86rem;
+        line-height: 1.45;
+        color: var(--fg);
+    }
+
+    .changelog-item i {
+        color: var(--accent);
+        margin-top: 3px;
+        flex-shrink: 0;
+        font-size: 0.82rem;
+    }
+
+    .changelog-close-btn {
+        width: 100%;
+        padding: 10px;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        font-weight: 600;
+        cursor: pointer;
+        letter-spacing: 0.02em;
+        margin-top: auto;
+    }
+
+    /* Media Queries */
+    @media (max-width: 1023px) {
+        .bento-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 768px) {
+        .cmd-bar {
+            padding: 1.4rem;
+        }
+
+        .cmd-stats {
+            width: 100%;
+        }
+
+        .cmd-stat {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .bento-grid {
+            grid-template-columns: 1fr;
+            grid-auto-rows: auto;
+        }
+
+        .tile-hero,
+        .tile-wide {
+            grid-column: span 1;
+            grid-row: span 1;
+        }
+
+        .bento-toolbar {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .global-announcement-banner {
+            width: calc(100vw - 1rem);
+        }
+
+        .global-announcement-banner.pos-bottom {
+            bottom: 0.7rem;
+        }
+
+        .global-announcement-banner.pos-top {
+            top: calc(var(--nav-height) + 0.45rem);
+        }
+
+        .global-announcement-inner {
+            padding: 0.75rem;
+            gap: 0.6rem;
+        }
+
+        .global-announcement-text {
+            font-size: 0.86rem;
+        }
+
+        .global-announcement-tag {
+            font-size: 0.62rem;
+        }
+
+        .changelog-backdrop {
+            padding: 0.6rem;
+        }
+
+        .changelog-modal {
+            max-height: 88vh;
+            border-radius: 10px;
+            padding: 0.85rem;
+        }
+
+        .changelog-title {
+            font-size: 1.05rem;
+        }
+
+        .changelog-item {
+            font-size: 0.82rem;
+        }
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="home-shell">
-    <header class="home-hero">
-        <div class="hero-copy">
-            <div class="hero-kicker"><span class="live-pip"></span> Clubhouse</div>
-            <h1>Good to see you,<br><span>{{ user.display_name or user.id.split('@')[0] }}</span>.</h1>
-            <p>Build the sides. Set the conditions. Let the next cricket story unfold.</p>
-            <div class="hero-actions">
-                <a class="hero-primary" href="/match/setup"><span class="hero-primary-icon"><i class="fa-solid fa-play"></i></span><span><small>Quick start</small>Simulate a match</span><i class="fa-solid fa-arrow-right"></i></a>
-                <a class="hero-secondary" href="/my-matches"><i class="fa-solid fa-clock-rotate-left"></i> Match archive</a>
-            </div>
-        </div>
+<!-- Command Bar -->
+<section class="cmd-bar">
+    <div class="cmd-greeting">
+        <span class="cmd-eyebrow"><i class="fa-solid fa-crown"></i> Welcome back</span>
+        <h1 class="cmd-title">{{ user.display_name or user.id.split('@')[0] }}</h1>
+        <p class="cmd-subtitle">Your cricket command center — build squads, run simulations, and track every stat.</p>
+    </div>
 
-        <div class="hero-scoreboard" aria-label="Your SimCricketX overview">
-            <div class="scoreboard-topline"><span>SCX // PROFILE</span><span class="scoreboard-status"><i></i> ONLINE</span></div>
-            <div class="scoreboard-main">
-                <div class="scoreboard-mark" aria-hidden="true"><span class="stump"></span><span class="stump"></span><span class="stump"></span><span class="bail bail-one"></span><span class="bail bail-two"></span></div>
-                <div><span class="scoreboard-label">Career simulations</span><strong>{{ user_stats.matches_count }}</strong><span class="scoreboard-caption">matches in your archive</span></div>
-            </div>
-            <div class="scoreboard-grid">
-                <div><strong>{{ user_stats.teams_count }}</strong><span>Teams</span></div>
-                <div><strong>{{ user_stats.tournaments_count }}</strong><span>Tournaments</span></div>
-                <div><strong>{{ matches_simulated }}</strong><span>Global matches</span></div>
-            </div>
+    <div class="cmd-stats">
+        <div class="cmd-stat">
+            <span class="cmd-stat-num">∞</span>
+            <span class="cmd-stat-label">Teams</span>
         </div>
-    </header>
+        <div class="cmd-stat">
+            <span class="cmd-stat-num">{{ matches_simulated }}</span>
+            <span class="cmd-stat-label">Matches</span>
+        </div>
+        <div class="cmd-stat">
+            <span class="cmd-stat-num">{{ total_visits }}</span>
+            <span class="cmd-stat-label">Fans</span>
+        </div>
+        <div class="cmd-stat">
+            <span id="active-users-count" class="cmd-stat-num{% if active_users > 0 %} is-online{% endif %}">{{ active_users }}</span>
+            <span id="active-users-label" class="cmd-stat-label" title="Users active in the last {{ online_activity_minutes }} minutes">Active ({{ online_activity_minutes }}m)</span>
+        </div>
+    </div>
+</section>
 
-    <section class="home-section">
-        <div class="section-heading"><div><span class="section-index">01</span><div><p>Your next move</p><h2>Enter the game</h2></div></div><span class="section-line"></span></div>
-        <div class="action-grid">
-            <a class="action-card action-card-featured" href="/match/setup">
-                <div class="action-top"><span class="action-number">01</span><span class="action-icon"><i class="fa-solid fa-bolt"></i></span></div>
-                <div><p class="action-label">Match centre</p><h3>New simulation</h3><p>Choose two squads, tune the format and take it ball by ball.</p></div>
-                <span class="action-link">Set up match <i class="fa-solid fa-arrow-right"></i></span>
-            </a>
-            <a class="action-card" href="/team/create">
-                <div class="action-top"><span class="action-number">02</span><span class="action-icon"><i class="fa-solid fa-user-plus"></i></span></div>
-                <div><p class="action-label">Squad builder</p><h3>Create a team</h3><p>Draft a balanced XI with the roles and ratings to compete.</p></div>
-                <span class="action-link">Build squad <i class="fa-solid fa-arrow-right"></i></span>
-            </a>
-            <a class="action-card" href="/tournaments">
-                <div class="action-top"><span class="action-number">03</span><span class="action-icon"><i class="fa-solid fa-trophy"></i></span></div>
-                <div><p class="action-label">Competition</p><h3>Run a tournament</h3><p>Create fixtures, manage the table and chase the silverware.</p></div>
-                <span class="action-link">Open tournaments <i class="fa-solid fa-arrow-right"></i></span>
-            </a>
+<!-- Bento Command Grid -->
+<section class="bento-section">
+    <div class="bento-toolbar">
+        <div>
+            <p class="bento-eyebrow">Command Center</p>
+            <h2 class="bento-heading">Pick Your Next Move</h2>
         </div>
-    </section>
+        <span class="bento-count">8 Modules</span>
+    </div>
 
-    <section class="home-section home-lower">
-        <div class="toolkit-panel">
-            <div class="section-heading section-heading-compact"><div><span class="section-index">02</span><div><p>The pavilion</p><h2>Manage & explore</h2></div></div></div>
-            <div class="tool-list">
-                <a href="/teams/manage"><span class="tool-icon"><i class="fa-solid fa-shirt"></i></span><span><strong>Manage teams</strong><small>Edit squads and lineups</small></span><i class="fa-solid fa-chevron-right"></i></a>
-                <a href="/player-pool"><span class="tool-icon"><i class="fa-solid fa-people-group"></i></span><span><strong>Player pool</strong><small>Browse your player catalog</small></span><i class="fa-solid fa-chevron-right"></i></a>
-                <a href="/statistics"><span class="tool-icon"><i class="fa-solid fa-chart-simple"></i></span><span><strong>Statistics</strong><small>Form, records and leaders</small></span><i class="fa-solid fa-chevron-right"></i></a>
-                <a href="/ground-conditions"><span class="tool-icon"><i class="fa-solid fa-cloud-sun"></i></span><span><strong>Ground lab</strong><small>Shape pitches and weather</small></span><i class="fa-solid fa-chevron-right"></i></a>
+    <div class="bento-grid">
+        <a class="bento-tile tile-hero" href="/match/setup">
+            <div class="tile-icon"><i class="fa-solid fa-circle-play"></i></div>
+            <div>
+                <span class="tile-kicker">Core Action</span>
+                <h3 class="tile-title">Simulate Match</h3>
+                <p class="tile-desc">Set up conditions and launch a full ball-by-ball simulation between any two of your teams.</p>
             </div>
-        </div>
-        <aside class="pulse-panel">
-            <div class="pulse-header"><span>Community pulse</span><i class="fa-solid fa-tower-broadcast"></i></div>
-            <div class="pulse-live"><span id="active-users-count" class="pulse-number{% if active_users > 0 %} is-online{% endif %}">{{ active_users }}</span><div><strong id="active-users-label" title="Users active in the last {{ online_activity_minutes }} minutes">active now</strong><small>in the last {{ online_activity_minutes }} minutes</small><span class="sr-only">Active ({{ online_activity_minutes }}m)</span></div></div>
-            <div class="pulse-rule"></div>
-            <div class="pulse-stat"><span>Matches simulated</span><strong>{{ matches_simulated }}</strong></div>
-            <div class="pulse-stat"><span>Clubhouse visits</span><strong>{{ total_visits }}</strong></div>
-            <a class="pulse-archive" href="/statistics">Explore global statistics <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
-        </aside>
-    </section>
-</div>
+            <span class="tile-cta">Start a match <i class="fa-solid fa-arrow-right"></i></span>
+        </a>
+
+        <a class="bento-tile tile-wide" href="/team/create">
+            <div class="tile-icon"><i class="fa-solid fa-users"></i></div>
+            <div>
+                <h3 class="tile-title">Create Team</h3>
+                <p class="tile-desc">Draft your championship squad with custom roles and balanced lineups.</p>
+            </div>
+            <i class="fa-solid fa-arrow-right tile-arrow"></i>
+        </a>
+
+        <a class="bento-tile" href="/teams/manage">
+            <div class="tile-icon"><i class="fa-solid fa-clipboard-list"></i></div>
+            <div>
+                <h3 class="tile-title">Manage Teams</h3>
+                <p class="tile-desc">Tune tactics and keep every squad match-ready.</p>
+            </div>
+            <i class="fa-solid fa-arrow-right tile-arrow"></i>
+        </a>
+
+        <a class="bento-tile" href="/statistics">
+            <div class="tile-icon"><i class="fa-solid fa-chart-line"></i></div>
+            <div>
+                <h3 class="tile-title">Statistics Hub</h3>
+                <p class="tile-desc">Explore performance trends and leaderboards.</p>
+            </div>
+            <i class="fa-solid fa-arrow-right tile-arrow"></i>
+        </a>
+
+        <a class="bento-tile" href="/tournaments">
+            <div class="tile-icon"><i class="fa-solid fa-trophy"></i></div>
+            <div>
+                <h3 class="tile-title">Tournaments</h3>
+                <p class="tile-desc">Run leagues with fixtures and playoff structure.</p>
+            </div>
+            <i class="fa-solid fa-arrow-right tile-arrow"></i>
+        </a>
+
+        <a class="bento-tile" href="/my-matches">
+            <div class="tile-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+            <div>
+                <h3 class="tile-title">Match Archives</h3>
+                <p class="tile-desc">Revisit completed games and key moments.</p>
+            </div>
+            <i class="fa-solid fa-arrow-right tile-arrow"></i>
+        </a>
+
+        <a class="bento-tile" href="/ground-conditions">
+            <div class="tile-icon"><i class="fa-solid fa-mountain-sun"></i></div>
+            <div>
+                <h3 class="tile-title">Ground Conditions</h3>
+                <p class="tile-desc">Adjust pitch and weather profiles.</p>
+            </div>
+            <i class="fa-solid fa-arrow-right tile-arrow"></i>
+        </a>
+
+        <a class="bento-tile" href="/player-pool">
+            <div class="tile-icon"><i class="fa-solid fa-people-group"></i></div>
+            <div>
+                <h3 class="tile-title">Player Pool</h3>
+                <p class="tile-desc">Maintain your central player catalog.</p>
+            </div>
+            <i class="fa-solid fa-arrow-right tile-arrow"></i>
+        </a>
+    </div>
+</section>
 
 {% if announcement_banner %}
 <div id="global-announcement-banner" class="global-announcement-banner theme-{{ announcement_banner.color_preset }} pos-{{ announcement_banner.position }}" data-version="{{ announcement_banner.version }}">
-    <div class="global-announcement-inner"><i class="fa-solid fa-bullhorn global-announcement-icon" aria-hidden="true"></i><div class="global-announcement-text"><span class="global-announcement-tag">Announcement</span><br>{{ announcement_banner.message }}</div><button id="global-announcement-close" class="global-announcement-close" type="button" aria-label="Close announcement"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
+    <div class="global-announcement-inner">
+        <i class="fa-solid fa-bullhorn global-announcement-icon" aria-hidden="true"></i>
+        <div class="global-announcement-text"><span class="global-announcement-tag">Announcement</span><br>{{ announcement_banner.message }}</div>
+        <button
+            id="global-announcement-close"
+            class="global-announcement-close"
+            type="button"
+            aria-label="Close announcement"
+        >
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+    </div>
 </div>
 {% endif %}
 
 {% if changelog_entries %}
 <div id="changelog-backdrop" data-focus-dialog data-viewport-dialog data-dialog-close="#changelog-icon-close-btn" role="dialog" aria-modal="true" aria-labelledby="changelog-title" class="changelog-backdrop" aria-hidden="true">
     <div class="changelog-modal">
-        <div class="changelog-top"><div><div class="changelog-kicker"><i class="fa-solid fa-rocket"></i><span>What's new</span></div><h2 id="changelog-title">Version {{ app_version }}</h2><p>Fresh from the dressing room.</p></div><button id="changelog-icon-close-btn" class="changelog-icon-close" type="button" aria-label="Close changelog"><i class="fa-solid fa-xmark"></i></button></div>
-        <div class="changelog-scroll"><ul>{% for entry in changelog_entries %}<li><i class="fa-solid fa-circle-check"></i><span>{{ entry }}</span></li>{% endfor %}</ul></div>
-        <button id="changelog-close-btn" class="changelog-close-btn" type="button">Back to the clubhouse</button>
+        <div class="changelog-top">
+            <div>
+                <div class="changelog-kicker">
+                    <i class="fa-solid fa-rocket"></i>
+                    <span>What's New</span>
+                </div>
+                <h2 id="changelog-title" class="changelog-title">Version {{ app_version }}</h2>
+                <p class="changelog-subtitle">Here's what changed in this release.</p>
+            </div>
+            <button id="changelog-icon-close-btn" class="changelog-icon-close" type="button" aria-label="Close changelog">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="changelog-scroll">
+            <ul class="changelog-list">
+                {% for entry in changelog_entries %}
+                <li class="changelog-item">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span>{{ entry }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        <button id="changelog-close-btn" class="changelog-close-btn" type="button">Got it</button>
     </div>
 </div>
 {% endif %}
 
 <script>
     const shouldClearTeamDraft = {{ 'true' if request.args.get('clear_team_draft') == '1' else 'false' }};
+
     function clearTeamCreateDraftIfNeeded() {
         if (!shouldClearTeamDraft) return;
-        try { window.scxStorage.removeItem('team_create_draft_v1'); window.scxStorage.removeItem('team_create_draft_v2'); window.scxStorage.removeItem('team_create_draft'); } catch (_) { /* Storage may be unavailable. */ }
+        try {
+            window.scxStorage.removeItem('team_create_draft_v1');
+            window.scxStorage.removeItem('team_create_draft_v2');
+            window.scxStorage.removeItem('team_create_draft'); // Legacy key cleanup.
+        } catch (_) { /* Storage may be unavailable. */ }
+
         const url = new URL(window.location.href);
         if (!url.searchParams.has('clear_team_draft')) return;
         url.searchParams.delete('clear_team_draft');
@@ -105,39 +947,101 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         clearTeamCreateDraftIfNeeded();
+
+        // Keep the estimate fresh without letting an abandoned background tab
+        // manufacture activity. A refresh only runs for a visible tab after
+        // recent keyboard, pointer, touch, or scroll interaction.
         const activeUsersCount = document.getElementById('active-users-count');
         const activeUsersLabel = document.getElementById('active-users-label');
-        let lastInteractionAt = Date.now(), lastPresenceRefreshAt = 0, presenceRefreshInFlight = false;
+        let lastInteractionAt = Date.now();
+        let lastPresenceRefreshAt = 0;
+        let presenceRefreshInFlight = false;
+
         const noteInteraction = () => { lastInteractionAt = Date.now(); };
-        ['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach((eventName) => document.addEventListener(eventName, noteInteraction, { passive: true }));
+        ['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach((eventName) => {
+            document.addEventListener(eventName, noteInteraction, { passive: true });
+        });
+
         const refreshPresence = async () => {
             const now = Date.now();
-            if (!activeUsersCount || document.hidden || presenceRefreshInFlight || now - lastInteractionAt > 120000 || now - lastPresenceRefreshAt < 30000) return;
-            presenceRefreshInFlight = true; lastPresenceRefreshAt = now;
+            if (!activeUsersCount || document.hidden || presenceRefreshInFlight) return;
+            if (now - lastInteractionAt > 2 * 60 * 1000) return;
+            if (now - lastPresenceRefreshAt < 30 * 1000) return;
+
+            presenceRefreshInFlight = true;
+            lastPresenceRefreshAt = now;
             try {
-                const response = await fetch('/api/presence', { credentials: 'same-origin', cache: 'no-store' });
+                const response = await fetch('/api/presence', {
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                });
                 if (!response.ok) return;
-                const data = await response.json(), count = Number(data.active_users || 0), minutes = Number(data.window_minutes || {{ online_activity_minutes }});
-                activeUsersCount.textContent = String(count); activeUsersCount.classList.toggle('is-online', count > 0);
-                if (activeUsersLabel) { activeUsersLabel.textContent = 'active now'; activeUsersLabel.title = `Users active in the last ${minutes} minutes`; const detail = activeUsersLabel.nextElementSibling; if (detail) detail.textContent = `in the last ${minutes} minutes`; }
-            } catch (_) { /* Keep the last known count. */ } finally { presenceRefreshInFlight = false; }
+                const data = await response.json();
+                const count = Number(data.active_users || 0);
+                const minutes = Number(data.window_minutes || {{ online_activity_minutes }});
+                activeUsersCount.textContent = String(count);
+                activeUsersCount.classList.toggle('is-online', count > 0);
+                if (activeUsersLabel) {
+                    activeUsersLabel.textContent = `Active (${minutes}m)`;
+                    activeUsersLabel.title = `Users active in the last ${minutes} minutes`;
+                }
+            } catch (err) {
+                // Keep the last known count when the network is unavailable.
+            } finally {
+                presenceRefreshInFlight = false;
+            }
         };
-        window.setInterval(refreshPresence, 60000);
-        document.addEventListener('visibilitychange', () => { if (!document.hidden) { noteInteraction(); refreshPresence(); } });
+
+        window.setInterval(refreshPresence, 60 * 1000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                noteInteraction();
+                refreshPresence();
+            }
+        });
 
         {% if announcement_banner %}
-        const announcementBanner = document.getElementById('global-announcement-banner'), announcementCloseBtn = document.getElementById('global-announcement-close');
-        if (announcementBanner && announcementCloseBtn) announcementCloseBtn.addEventListener('click', async () => { announcementBanner.style.display = 'none'; try { await fetch('/announcement-banner/dismiss', { method: 'POST' }); } catch (_) { /* Retry next time. */ } });
+        const announcementBanner = document.getElementById('global-announcement-banner');
+        const announcementCloseBtn = document.getElementById('global-announcement-close');
+        if (announcementBanner && announcementCloseBtn) {
+            announcementCloseBtn.addEventListener('click', async () => {
+                announcementBanner.style.display = 'none';
+                try {
+                    await fetch('/announcement-banner/dismiss', { method: 'POST' });
+                } catch (err) {
+                    // Ignore network errors; backend persistence will be retried on next close.
+                }
+            });
+        }
         {% endif %}
 
         {% if changelog_entries %}
-        const CURRENT_VERSION = "{{ app_version }}", SEEN_KEY = 'scx_seen_version';
+        const CURRENT_VERSION = "{{ app_version }}";
+        const SEEN_KEY = "scx_seen_version";
         if (window.scxStorage.getItem(SEEN_KEY) !== CURRENT_VERSION) {
-            const backdrop = document.getElementById('changelog-backdrop'), closeBtn = document.getElementById('changelog-close-btn'), iconCloseBtn = document.getElementById('changelog-icon-close-btn');
-            const closeChangelog = () => { window.scxStorage.setItem(SEEN_KEY, CURRENT_VERSION); backdrop.style.display = 'none'; backdrop.setAttribute('aria-hidden', 'true'); };
-            backdrop.style.display = 'flex'; backdrop.setAttribute('aria-hidden', 'false'); closeBtn.addEventListener('click', closeChangelog); iconCloseBtn.addEventListener('click', closeChangelog);
-            backdrop.addEventListener('click', (event) => { if (event.target === backdrop) closeChangelog(); });
-            document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && backdrop.style.display === 'flex') closeChangelog(); });
+            const backdrop = document.getElementById('changelog-backdrop');
+            const closeBtn = document.getElementById('changelog-close-btn');
+            const iconCloseBtn = document.getElementById('changelog-icon-close-btn');
+            const closeChangelog = () => {
+                window.scxStorage.setItem(SEEN_KEY, CURRENT_VERSION);
+                backdrop.style.display = 'none';
+                backdrop.setAttribute('aria-hidden', 'true');
+            };
+
+            backdrop.style.display = 'flex';
+            backdrop.setAttribute('aria-hidden', 'false');
+            closeBtn.addEventListener('click', closeChangelog);
+            iconCloseBtn.addEventListener('click', closeChangelog);
+            backdrop.addEventListener('click', (event) => {
+                if (event.target === backdrop) {
+                    closeChangelog();
+                }
+            });
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && backdrop.style.display === 'flex') {
+                    closeChangelog();
+                }
+            });
         }
         {% endif %}
     });
