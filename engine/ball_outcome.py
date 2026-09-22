@@ -892,6 +892,28 @@ def resolve_fielding_chance(fielding_team, bowler_name: str, wicket_choice: str,
 # -----------------------------------------------------------------------------
 # 5) Main outcome selection function: calculate_outcome
 # -----------------------------------------------------------------------------
+# Ceiling on the chance that any single short-format delivery is a wicket.
+#
+# Every wicket multiplier in the engine is applied multiplicatively and, apart
+# from the game-state engine's own [0.35, 3.00] clamp, nothing bounds their
+# product: collapse risk, consecutive wickets, a fresh partnership, the
+# required-aggression band, risk urgency, the pressure band and the aggressive
+# game mode all stack on the same delivery. In a T10 chase they share a common
+# trigger — wickets push the required rate up, which turns on the escalators,
+# which take more wickets — so a side five down could reach a 0.68 chance of
+# losing a wicket to the next ball. Measured on real squads, that produced
+# innings of ten wickets in twenty-one deliveries.
+#
+# The cap is a ceiling, not a rescale: nothing changes until a delivery is
+# already past the most dangerous ball a bowler realistically sends down, and
+# the ordering underneath is untouched. It is deliberately set loose enough to
+# be a rare backstop — SHORT_COLLAPSE_DAMPEN in game_state_engine does the
+# routine work of keeping the spiral from starting. It applies to BOTH innings, because a
+# first innings could reach 0.43 by the same route, and capping only the chase
+# would re-introduce the asymmetry this format was just fixed for.
+SHORT_FORMAT_WICKET_CAP = 0.30
+
+
 def calculate_outcome(
     batter: dict,
     bowler: dict,
@@ -1273,6 +1295,18 @@ def calculate_outcome(
         # attacking policy's additive adjustment. Never sample negatives.
         raw_weights = {key: max(0.0, weight) for key, weight in raw_weights.items()}
         total_weight = sum(raw_weights.values())
+
+    # 4.9) Short-format wicket ceiling — see SHORT_FORMAT_WICKET_CAP.
+    if _short and total_weight > 0:
+        _wicket = raw_weights.get("Wicket", 0.0)
+        _others = total_weight - _wicket
+        # Weight that normalises to exactly the cap, given everything else.
+        _ceiling = SHORT_FORMAT_WICKET_CAP / (1.0 - SHORT_FORMAT_WICKET_CAP) * _others
+        if _others > 0 and _wicket > _ceiling:
+            logger.debug("[WicketCap] %.3f -> %.3f of total", _wicket / total_weight,
+                         SHORT_FORMAT_WICKET_CAP)
+            raw_weights["Wicket"] = _ceiling
+            total_weight = _others + _ceiling
 
     # 5) Normalize weights into probabilities
     # print(f"\n[calculate_outcome] Total raw weight sum: {total_weight:.6f}")

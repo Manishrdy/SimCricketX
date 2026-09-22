@@ -22,8 +22,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tests.test_scoring_calibration import _match_data, _simulate_first_innings, PITCHES
 import engine.match as match_module
 
-BANDS = {'Green': (88, 105), 'Dry': (92, 110), 'Hard': (116, 136),
-         'Flat': (128, 148), 'Dead': (145, 168)}
+# Centred on FormatConfig's target_scores at roughly +/-10%. Keep them centred
+# there: the targets ARE the expected first-innings totals, and rrr_baseline is
+# derived from them, so a band that drifts off its target quietly means every
+# chase is judged against the wrong par.
+BANDS = {'Green': (93, 114), 'Dry': (95, 117), 'Hard': (113, 138),
+         'Flat': (124, 152), 'Dead': (141, 173)}
 
 # Innings-2 vs innings-1 tolerances, day matches (night carries dew, which is
 # meant to favour the chase, so it is reported but not gated).
@@ -59,6 +63,23 @@ DEATH_WICKET_SHARE_OVERRIDES = {'Dry': 0.26}
 # scores vary most, which is why Dry sits at the top of this range and the
 # roads sit near the middle of it.
 CHASE_WIN_RANGE = (38.0, 67.0)
+
+# LOW-TAIL gates. Everything above is an average or a ratio, and a second
+# innings can satisfy all of them while still folding for 19 once in a while —
+# which is exactly what happened: the wicket multipliers compound, so a chase
+# that lost a few early could reach a 0.68 chance of losing a wicket to the
+# next ball and end ten down inside twenty-one deliveries. Means cannot see
+# that. These two can.
+# The pathology was never that chases got bowled out — that is cricket, and
+# the remaining ones take a median of 54 balls, which is a side losing its last
+# wicket going for the win. It was the SPEED: ten wickets inside twenty-one
+# deliveries, because the wicket multipliers compound on a common trigger.
+# Measured on Green before the fix, 12 chases in 300 were all out inside five
+# overs and the fastest took 17 balls. So gate the speed, and the bad-day
+# chase against the bad-day first innings. Neither is visible in a mean.
+MIN_TAIL_RATIO = 0.80        # innings-2 5th percentile against innings-1's
+MIN_ALL_OUT_BALLS = 24       # no innings may evaporate inside four overs
+MAX_FAST_COLLAPSE_PCT = 1.0  # % of chases all out inside half the scheduled balls
 
 
 def simulate(pitch, seed, night=False):
@@ -117,6 +138,16 @@ def simulate(pitch, seed, night=False):
     raise AssertionError('Match did not terminate')
 
 
+def _match_overs(rows):
+    """Scheduled overs per innings for this cohort (10 for T10)."""
+    return 10
+
+
+def _percentile(values, pct):
+    ordered = sorted(values)
+    return ordered[max(0, min(len(ordered) - 1, int(len(ordered) * pct / 100)))]
+
+
 def _phase_rpo(row, name):
     counts = row['phases'].get(name, {})
     balls = counts.get('legal_balls', 0)
@@ -136,6 +167,10 @@ def main():
     for pitch in PITCHES:
         for night in (False, True):
             rows = [m for m in matches if m['pitch'] == pitch and m['night'] == night]
+            outs = [m['innings'][1] for m in rows if m['innings'][1]['wickets'] >= 10]
+            half = _match_overs(rows) * 3          # half the scheduled deliveries
+            collapses = 100 * sum(1 for c in outs if c['legal_balls'] < half) / len(rows)
+            fastest = min((c['legal_balls'] for c in outs), default=None)
             for innings in (1, 2):
                 cards = [m['innings'][innings - 1] for m in rows]
                 balls = sum(c['legal_balls'] for c in cards)
@@ -162,6 +197,11 @@ def main():
                     death_wicket_share=round(death_wickets / phase_wickets, 4) if phase_wickets else 0.0,
                     all_out_pct=round(100 * sum(c['all_out'] for c in cards) / len(cards), 2),
                     chase_win_pct=100 * sum(m['chase_won'] for m in rows) / len(rows),
+                    p5=_percentile([c['runs'] for c in cards], 5),
+                    p10=_percentile([c['runs'] for c in cards], 10),
+                    lowest=min(c['runs'] for c in cards),
+                    fast_collapse_pct=round(collapses, 2),
+                    fastest_all_out=fastest,
                     tied_matches=sum(m['tied'] for m in rows), phases=dict(phases),
                     per_over={o: dict(per_over[o]) for o in sorted(per_over)}))
 
@@ -192,6 +232,16 @@ def main():
             _phase_rpo(r, 'Death') >= _phase_rpo(r, 'Powerplay') for r in (one, two))
         checks[f'{pitch}_chase_balance'] = (
             CHASE_WIN_RANGE[0] <= one['chase_win_pct'] <= CHASE_WIN_RANGE[1])
+        # The bad-day chase must be roughly as bad as the bad-day first innings,
+        # not catastrophically worse.
+        checks[f'{pitch}_low_tail'] = two['p5'] >= one['p5'] * MIN_TAIL_RATIO
+        checks[f'{pitch}_no_sudden_collapse'] = (
+            two['fast_collapse_pct'] <= MAX_FAST_COLLAPSE_PCT
+            and (two['fastest_all_out'] is None
+                 or two['fastest_all_out'] >= MIN_ALL_OUT_BALLS))
+        parity[pitch].update(p5=[one['p5'], two['p5']], lowest=[one['lowest'], two['lowest']],
+                             fast_collapse_pct=two['fast_collapse_pct'],
+                             fastest_all_out=two['fastest_all_out'])
 
     output = Path(args.output); output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(dict(seeds=list(seeds), summary=summary, checks=checks,

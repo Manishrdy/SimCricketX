@@ -12,6 +12,17 @@ logger = logging.getLogger(__name__)
 # before wickets/rate are factored in; see calculate_super_over_pressure().
 SUPER_OVER_PRESSURE_FLOOR = 45.0
 
+# First-innings rebuild (see PressureEngine.calculate_rebuild_factor).
+# EARLY is how many wickets down counts as trouble in the first half of the
+# innings, DEEP in the second; the two CUTs are the most it gives up in
+# boundaries and gains in wicket safety. The wicket cut is the larger of the
+# two on purpose — digging in has to be a trade that works.
+REBUILD_EARLY = 5
+REBUILD_DEEP = 7
+REBUILD_BOUNDARY_CUT = 0.18
+REBUILD_WICKET_CUT = 0.32
+
+
 class PressureEngine:
     def __init__(self, format_config=None):
         # Resolve format — defaults to T20 for backward compatibility
@@ -216,6 +227,63 @@ class PressureEngine:
         
         return None
     
+    def calculate_rebuild_factor(self, match_state):
+        """First innings: consolidate after a cluster of wickets.
+
+        The mirror of calculate_defensive_factor, which only ever applied to a
+        chase. A side batting first had no way to dig in at all: once it lost a
+        few, every layer in the engine pushed the same direction — more wickets
+        AND fewer boundaries — with nothing modelling the obvious cricket
+        answer of two batters seeing off a spell and rebuilding. Measured on a
+        Green T20, going from none down to six down raised the chance of a
+        wicket by 32% while cutting the chance of a boundary by 16%, and a side
+        five down after six overs failed to reach 60 a fifth of the time.
+
+        Not for short formats. A ten-over innings has no room to rebuild in,
+        and T10 deliberately carries no brake in either innings so that the two
+        halves of the match play alike.
+        """
+        if match_state['innings'] != 1 or self._is_short:
+            return None
+
+        current_over = match_state.get('current_over', 0)
+        wickets = match_state.get('wickets', 0)
+        overs_remaining = match_state.get('overs_remaining', 0)
+
+        # Rebuilding only pays while there are overs left to rebuild in. At the
+        # death a side seven down swings — that is what the phase is for.
+        if self.fmt.is_death(current_over) or overs_remaining < self.fmt.overs / 3.0:
+            return None
+
+        # "In trouble" is relative to the stage of the innings, not an absolute
+        # count: five down in the sixth over is a crisis, five down in the
+        # fourteenth is an ordinary T20 innings that is about to accelerate.
+        # Half the side gone before halfway, or REBUILD_DEEP down after it.
+        progress = current_over / float(self.fmt.overs)
+        threshold = REBUILD_EARLY if progress < 0.5 else REBUILD_DEEP
+        if wickets < threshold:
+            return None
+
+        level = min(1.0, (wickets - threshold + 2) / 4.0)
+
+        effects = {
+            'rebuild_active': True,
+            'rebuild_level': level,
+            # Wickets are protected by MORE than boundaries are given up, so
+            # digging in is a trade that actually works. The old seven-down
+            # trigger did the reverse — it cut scoring harder than it cut risk,
+            # which is precisely why an innings that crossed it never came back.
+            'boundary_reduction': REBUILD_BOUNDARY_CUT * (0.4 + level * 0.6),
+            'wicket_reduction':   REBUILD_WICKET_CUT * (0.4 + level * 0.6),
+            'dot_increase':       level * 0.04,
+            'single_boost':       1.0 + level * 0.40,    # rotate the strike
+            'mode': 'REBUILDING',
+        }
+        logger.info("REBUILDING: %d down with %.1f overs left — consolidating "
+                    "(boundaries -%.0f%%, wickets -%.0f%%)", wickets, overs_remaining,
+                    effects['boundary_reduction'] * 100, effects['wicket_reduction'] * 100)
+        return effects
+
     def should_trigger_wicket_cluster(self, match_state, recent_wickets=0):
         """Check if conditions are right for rapid wicket fall"""
         current_over = match_state.get('current_over', 0)

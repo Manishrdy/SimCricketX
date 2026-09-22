@@ -121,6 +121,35 @@ fielding_rating=70 for all 11 players, so individual-vs-team-average quality is
 numerically identical, yet the old baseline is only reproduced by stripping the
 new fielding_team argument back out.
 
+REPIN NOTE (2026-09-21): re-measured after the first-innings collapse fix.
+What moved is first-innings run totals on the surfaces where innings used to
+die — T20 Green 116.9 -> 127.8, T20 Dry 132.4 -> 141.9, List A Green
+229.1 -> 237.8 — with smaller lifts on T20 Hard and Flat. Mean wickets, dot%
+and boundaries-per-100 barely move anywhere, and Dead is identical on both
+formats. That signature is the point: this was not a scoring recalibration, it
+is the removal of a collapse tail. The means rose because fewer innings end at
+30. Two changes did it, both in the first innings, where until now nothing
+could ever arrest a slide.
+
+  1. The seven-down trapdoor is gone. `_get_dynamic_game_mode` used to flip a
+     FIRST innings into "bowlers_day" the moment it lost seven — Four x0.65,
+     Six x0.50, Wicket x1.50. Measured on Green, crossing that line halved the
+     chance of a boundary (10.3% -> 6.2%) and raised the chance of a wicket by
+     three quarters (8.9% -> 11.8%), so past it a side was likelier to lose a
+     wicket than hit a boundary and could not come back. It also read the
+     scoreboard as the cause rather than the effect. The mode still exists and
+     still applies when a user pins it; only the automatic trigger is gone.
+  2. A side batting first can now dig in (PressureEngine.calculate_rebuild_factor).
+     calculate_defensive_factor only ever applied to a chase, so a first
+     innings had no way to see off a spell and rebuild.
+
+Together these took T20 Green first innings under 40 from 12 in 200 to 4 in
+200, innings under 60 from 18 to 5, and lifted the 5th percentile from 35 to
+76. Sides five down after six overs now finish on a median of 111 rather
+than 96. T10 is deliberately excluded from both: a ten-over innings has no
+room to rebuild in, and it carries no brake in either innings so that the two
+halves of the match play alike (see docs/t10.md).
+
 REPIN NOTE (2026-08-30): re-measured again after the commentary pack was
 expanded (dot-ball lines 20 -> 52, singles 16 -> 42) and CommentaryEngine was
 given its own random.Random(). Same story as above and confirmed the same way:
@@ -170,23 +199,25 @@ SQUAD = [
 
 # Pinned to engine behaviour at Phase 0, re-pinned after the fielder-first
 # catch-drop/misfield change (see the first REPIN NOTE above), again after the
-# 2026-08-16 T20 pitch recalibration (see T20 PITCH RECALIBRATION above), and
-# again on 2026-08-30 for the commentary-RNG split (second REPIN NOTE).
+# 2026-08-16 T20 pitch recalibration (see T20 PITCH RECALIBRATION above),
+# again on 2026-08-30 for the commentary-RNG split (second REPIN NOTE), and
+# again on 2026-09-21 for the collapse fix (third REPIN NOTE).
 # (mean_runs, mean_wickets, dot_pct, bdry_per_100)
 T20_BASELINE = {
-    "Green": (116.9, 8.4, 42.7, 12.2),
-    "Dry":   (132.4, 7.8, 41.7, 13.4),
-    "Hard":  (182.8, 5.2, 34.4, 19.6),
-    "Flat":  (209.0, 4.9, 30.3, 23.4),
+    "Green": (127.8, 8.4, 41.3, 12.6),
+    "Dry":   (141.9, 7.4, 41.4, 14.0),
+    "Hard":  (186.7, 5.2, 33.6, 20.0),
+    "Flat":  (214.9, 4.7, 29.7, 23.7),
     "Dead":  (247.8, 1.8, 24.3, 29.8),
 }
 
 # Re-pinned after the 2026-08-16 ListA recalibration (see LISTA PITCH
-# RECALIBRATION below) and again on 2026-08-30 for the commentary-RNG split.
+# RECALIBRATION below), again on 2026-08-30 for the commentary-RNG split, and
+# again on 2026-09-21 for the collapse fix (third REPIN NOTE).
 LISTA_BASELINE = {
-    "Green": (229.1, 8.6, 44.9, 4.2),
-    "Dry":   (214.0, 10.0, 45.0, 4.0),
-    "Hard":  (309.1, 6.8, 38.5, 7.3),
+    "Green": (237.8, 8.6, 44.5, 4.4),
+    "Dry":   (219.4, 10.0, 44.9, 4.0),
+    "Hard":  (307.9, 6.9, 38.5, 7.1),
     "Flat":  (336.1, 4.9, 35.6, 8.8),
     "Dead":  (363.1, 3.6, 31.7, 9.8),
 }
