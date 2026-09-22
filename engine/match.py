@@ -1167,6 +1167,8 @@ class Match:
         total_balls = self.current_over * 6 + self.current_ball
         current_rr = (self.score * 6) / total_balls if total_balls > 0 else 0
 
+        overs_played = self.current_over + (self.current_ball / 6)
+
         state = {
             'innings': self.innings,
             'current_over': self.current_over,
@@ -1176,16 +1178,20 @@ class Match:
             'pitch': self.pitch,
             'current_partnership_balls': self.current_partnership_balls,
             'current_partnership_runs': self.current_partnership_runs,
+            # Set for BOTH innings. It used to be populated only when chasing,
+            # alongside the target-derived fields, which quietly meant no
+            # first-innings logic could ask how much of the innings was left —
+            # the reason a side batting first had no way to judge whether
+            # there was still time to rebuild.
+            'overs_remaining': self.overs - overs_played,
         }
 
         if self.innings == 2:
-            overs_played = self.current_over + (self.current_ball / 6)
-            overs_remaining = self.overs - overs_played
+            overs_remaining = state['overs_remaining']
             runs_needed = self.target - self.score
             required_rr = (runs_needed * 6) / (overs_remaining * 6) if overs_remaining > 0 else 0
 
             state.update({
-                'overs_remaining': overs_remaining,
                 'runs_needed': runs_needed,
                 'required_run_rate': required_rr
             })
@@ -2799,15 +2805,19 @@ class Match:
         if pitch in ("Dead", "Flat") and wickets < 3 and over < (self.fmt.overs / 2 if getattr(self.fmt, "strict_short_bowling", False) else 10):
             return "flat_track_bully"
 
-        # Heavy wicket loss in 1st innings → bowlers have the upper hand.
-        # Not in short formats: this is a first-innings-ONLY mode, and it is
-        # savage (Four x0.65, Six x0.50, Wicket x1.50, Dot x1.30). Seven down
-        # in a 10-over innings usually means over 8 or 9, i.e. exactly when
-        # the side should be swinging — and since the chase has no equivalent
-        # penalty, it was a one-sided tax that showed up as a 64% chase win
-        # rate on Dry, the surface where first innings lose most wickets.
-        if innings == 1 and wickets >= 7 and not getattr(self.fmt, "strict_short_bowling", False):
-            return "bowlers_day"
+        # NOTE: "bowlers_day" is no longer triggered automatically in any
+        # format. It used to fire whenever a FIRST innings reached seven down,
+        # and it is savage — Four x0.65, Six x0.50, Wicket x1.50, Dot x1.30.
+        # Measured on a Green T20, crossing that line halved the chance of a
+        # boundary (10.3% -> 6.2%) and raised the chance of a wicket by three
+        # quarters (8.9% -> 11.8%), so past it a side was likelier to lose a
+        # wicket than hit a boundary and the innings could not come back. It
+        # also read the scoreboard as the cause rather than the effect: a
+        # bowler's day is a property of the conditions, not of how many the
+        # batting side has already lost. Removing the trigger halved Green's
+        # sub-40 first innings (12/200 -> 6/200) and left every pinned T20 and
+        # List A calibration band unmoved. The mode itself is untouched and
+        # still applies whenever a user pins it in Ground Conditions.
 
         # 2nd innings: adapt to required run rate
         if innings == 2 and self.target:
@@ -7017,11 +7027,19 @@ class Match:
                 pressure_effects['wicket_modifier'] *= chasing_advantage['wicket_reduction']
                 print(f"🎯 CHASING ADVANTAGE: {chasing_advantage['boundary_boost']:.2f}x boundaries, {chasing_advantage['wicket_reduction']:.2f}x wickets")
 
-            # Check for defensive mode first
-            defensive_effects = self.pressure_engine.calculate_defensive_factor(match_state)
+            # Check for defensive mode first. Innings 2 protects a chase that
+            # is already gone; innings 1 rebuilds after a cluster of wickets.
+            # Both are the same shape — consolidate rather than push — so they
+            # share the application below, and both are an if/else against the
+            # risk path: a side is either digging in or going after it.
+            defensive_effects = (self.pressure_engine.calculate_defensive_factor(match_state)
+                                 or self.pressure_engine.calculate_rebuild_factor(match_state))
+            _consolidating = bool(defensive_effects and (
+                defensive_effects.get('defensive_active')
+                or defensive_effects.get('rebuild_active')))
 
-            if defensive_effects and defensive_effects['defensive_active']:
-                # Defensive mode (many wickets down)
+            if _consolidating:
+                # Defensive mode (many wickets down) or a first-innings rebuild
                 pressure_effects['boundary_modifier'] *= (1 - defensive_effects['boundary_reduction'])
                 pressure_effects['wicket_modifier'] *= (1 - defensive_effects['wicket_reduction'])
                 pressure_effects['dot_bonus'] += defensive_effects['dot_increase']
@@ -7056,7 +7074,11 @@ class Match:
                     pressure_effects['strike_rotation_penalty'] = risk_effects['strike_rotation_penalty']
                     pressure_effects['single_floor'] = risk_effects['single_floor']
 
-            # First innings collapse psychology (works even outside death overs)
+            # First innings collapse psychology (works even outside death overs).
+            # Still applies while rebuilding: a cluster is the bowling side on
+            # top, not a choice the batters made, and deciding to see off a
+            # spell does not make you immune to it. The rebuild's own wicket
+            # reduction is what gives the batting side its side of that trade.
             if self.innings == 1:
                 recent_wickets = getattr(self, 'recent_wickets_count', 0)
                 if self.pressure_engine.should_trigger_wicket_cluster(match_state, recent_wickets):
