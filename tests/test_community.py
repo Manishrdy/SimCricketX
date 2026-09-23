@@ -623,3 +623,57 @@ def test_private_posts_cannot_be_voted_on(app, alice, boss):
     pid = create(app, alice, visibility="private").get_json()["post"]["id"]
     resp = as_user(app, boss).post(f"/api/community/posts/{pid}/vote")
     assert resp.status_code == 400 and resp.get_json()["code"] == "private"
+
+
+# ── Live search / autocomplete ───────────────────────────────────────────────
+
+def test_autocomplete_matches_half_typed_words_and_ranks_all_terms_first(app, alice, bob, fts):
+    create(app, alice, BUG)  # "Scorecard shows the wrong bowler after rain"
+    create(app, alice, title="Wrong team name shown on the home page",
+           body="The home page greets me with the wrong team name after I rename a team.")
+    create(app, alice, title="Private scorecard wrong bowler question", visibility="private")
+    data = as_user(app, bob).get("/api/community/search?q=wrong bowl").get_json()
+    titles = [s["title"] for s in data["suggestions"]]
+    assert titles[0] == "Scorecard shows the wrong bowler after rain"   # both terms, "bowl" as a prefix
+    assert "Wrong team name shown on the home page" in titles          # any-term match tops up
+    assert all("Private" not in t for t in titles)                     # other people's private posts never leak
+    assert data["terms"] == ["wrong", "bowl"]
+    assert as_user(app, bob).get("/api/community/search?q=w").get_json()["suggestions"] == []
+
+
+def test_autocomplete_snippet_and_own_private_post(app, alice, fts):
+    create(app, alice, title="Cannot change my account email", visibility="private",
+           body="Every time I try to verify the new address the link has already expired, even when I click at once.")
+    data = as_user(app, alice).get("/api/community/search?q=expired link").get_json()
+    assert len(data["suggestions"]) == 1
+    hit = data["suggestions"][0]
+    assert hit["visibility"] == "private" and "expired" in hit["snippet"]
+
+
+def test_did_you_mean_for_typos(app, alice, bob, fts, monkeypatch):
+    monkeypatch.setattr(cs, "_vocab_cache", (0.0, frozenset()))
+    create(app, alice, BUG)
+    data = as_user(app, bob).get("/api/community/search?q=scorcard").get_json()
+    # prefix search misses the typo, so the dropdown offers a correction
+    assert data["suggestions"] == [] and data["did_you_mean"] == "scorecard"
+    page = as_user(app, bob).get("/community?q=scorcard").get_data(as_text=True)
+    assert "Did you mean" in page and 'data-dym="scorecard"' in page
+
+
+def test_partial_results_fragment(app, alice, bob, fts):
+    create(app, alice, BUG)
+    frag = as_user(app, bob).get("/community?q=bowler&partial=1").get_data(as_text=True)
+    assert "Scorecard shows the wrong bowler" in frag
+    assert "<html" not in frag and "cm-hero" not in frag  # just the results block
+    full = as_user(app, bob).get("/community?q=bowler").get_data(as_text=True)
+    assert 'role="combobox"' in full and 'id="cm-results"' in full
+
+
+def test_search_ranks_duplicates_last(app, alice, bob, boss, fts):
+    original = create(app, alice, BUG, title="Bowler credited wrongly after a rain break").get_json()["post"]["id"]
+    dupe = create(app, bob, BUG, title="Wrong bowler after rain").get_json()["post"]["id"]
+    as_user(app, boss).post(f"/api/admin/community/posts/{dupe}/moderate", json={"action": "duplicate", "value": original})
+    ids = [s["id"] for s in as_user(app, bob).get("/api/community/search?q=wrong bowler rain").get_json()["suggestions"]]
+    assert ids == [original, dupe]
+    similar = as_user(app, bob).get("/api/community/similar?q=wrong bowler after rain").get_json()["posts"]
+    assert [p["id"] for p in similar] == [original]

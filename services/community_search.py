@@ -68,17 +68,33 @@ def match_expression(terms: list[str]) -> str:
     return " OR ".join(f'"{t}"*' for t in terms)
 
 
-def search_post_ids(session, q: str, limit: int = 50) -> list[int]:
-    """Ranked post ids matching ``q`` (best first). Caller applies visibility."""
+def _fts_ids(session, expression: str, limit: int) -> list[int]:
+    rows = session.execute(text(
+        f"SELECT rowid FROM {FTS_TABLE} WHERE {FTS_TABLE} MATCH :m "
+        f"ORDER BY bm25({FTS_TABLE}, 4.0, 1.0) LIMIT :lim"),
+        {"m": expression, "lim": limit}).fetchall()
+    return [r[0] for r in rows]
+
+
+def search_post_ids(session, q: str, limit: int = 50, *, precise: bool = False) -> list[int]:
+    """Ranked post ids matching ``q`` (best first). Caller applies visibility.
+
+    Every term is a prefix match, so a half-typed last word ("wrong bow")
+    already finds "bowler". ``precise`` ranks posts containing *all* terms
+    first and tops up with posts matching *any* term — what search-as-you-type
+    wants. Without it, any-term matching only (duplicate detection wants the
+    wider net)."""
     terms = query_terms(q)
     if not terms:
         return []
     if fts_available(session):
-        rows = session.execute(text(
-            f"SELECT rowid FROM {FTS_TABLE} WHERE {FTS_TABLE} MATCH :m "
-            f"ORDER BY bm25({FTS_TABLE}, 4.0, 1.0) LIMIT :lim"),
-            {"m": match_expression(terms), "lim": limit}).fetchall()
-        return [r[0] for r in rows]
+        ids: list[int] = []
+        if precise and len(terms) > 1:
+            ids = _fts_ids(session, " AND ".join(f'"{t}"*' for t in terms), limit)
+        if len(ids) < limit:
+            seen = set(ids)
+            ids += [i for i in _fts_ids(session, match_expression(terms), limit) if i not in seen]
+        return ids[:limit]
     # Fallback: rank by number of matching terms in title/body.
     clauses = " + ".join(
         f"(CASE WHEN lower(title) LIKE :t{i} THEN 2 ELSE 0 END + CASE WHEN lower(body) LIKE :t{i} THEN 1 ELSE 0 END)"
