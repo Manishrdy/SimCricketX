@@ -118,9 +118,8 @@ from routes.match_routes import register_match_routes
 from routes.admin_routes import register_admin_routes
 from routes.admin_issue_routes import register_admin_issue_routes
 from routes.webhook_routes import register_webhook_routes
-from routes.support_routes import register_support_routes
-from routes.admin_support_routes import register_admin_support_routes
-from routes.support_realtime import register_support_realtime
+from routes.community_routes import register_community_routes
+from routes.admin_community_routes import register_admin_community_routes
 from routes.player_pool_routes import register_player_pool_routes
 from routes.scenario_routes import register_scenario_routes
 from utils.exception_tracker import log_exception
@@ -1136,7 +1135,6 @@ def create_app():
         if app.config.get("TESTING") and (
             request.endpoint in {"create_team", "manage_teams", "team_squad"}
             or request.path.startswith("/match/")
-            or (request.endpoint and request.endpoint.startswith(("support_", "admin_support")))
         ):
             return None
         if request.endpoint in ('login', 'logout', 'static',
@@ -1598,9 +1596,9 @@ def create_app():
             log_exception(source="backend")
 
         try:
-            from services import support_retention
-            support_retention.start_worker(app)
-            app.logger.info("[SupportRetention] Cleanup worker started")
+            from services import community_retention
+            community_retention.start_worker(app)
+            app.logger.info("[CommunityRetention] Cleanup worker started")
         except Exception:
             log_exception(source="backend")
 
@@ -1694,9 +1692,9 @@ def create_app():
         get_cleanup_status=lambda: (_cleanup_scheduler_started, _last_cleanup_run),
     )
 
-    # In-app support messaging routes for the replacement floating chat widget.
-    register_support_routes(app, db=db, socketio=socketio)
-    register_admin_support_routes(app, db=db, socketio=socketio)
+    # Community board (Q&A / bug reports / feature requests).
+    register_community_routes(app, db=db, limiter=limiter)
+    register_admin_community_routes(app, db=db)
 
     # Admin-side issue tracker (PLAN-IR-001 Phase 2).
     register_admin_issue_routes(app, db=db)
@@ -1715,12 +1713,6 @@ def create_app():
 
     # --- Story Mode Routes (legendary match arcs gallery) ---
     register_scenario_routes(app)
-
-    register_support_realtime(
-        app,
-        socketio=socketio,
-        db=db,
-    )
 
     # --- Request logging ---
     @app.before_request

@@ -1,0 +1,116 @@
+{% extends "layout.html" %}
+{% from "community/_macros.html" import block_notice %}
+{% block title %}{{ 'Edit post' if post else 'New post' }} | Community | SimCricketX{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/community.css') }}">{% endblock %}
+{% block content %}
+<div class="cm-wrap cm-wrap--narrow">
+  <a class="cm-crumb" href="{{ url_for('community_post', public_id=post.id) if post else url_for('community_index') }}"><i class="fas fa-arrow-left" aria-hidden="true"></i>{{ 'Back to post' if post else 'Community' }}</a>
+  <div class="cm-head"><div>
+    <h1>{{ 'Edit post' if post else 'New post' }}</h1>
+    {% if not post %}<p>Posts must be in English. Bug reports need exact steps so the bug can be reproduced.</p>{% endif %}
+  </div></div>
+
+  {{ block_notice(block, new_account) }}
+
+  <div id="cm-form-error" class="cm-notice cm-notice--error" role="alert" hidden><i class="fas fa-circle-exclamation" aria-hidden="true"></i><div></div></div>
+
+  <form id="cm-post-form" class="cm-form" novalidate {% if block or new_account %}inert aria-disabled="true" style="opacity:.6"{% endif %}>
+    <div class="cm-field" data-field="flair">
+      <span class="cm-label" id="cm-flair-label">What kind of post is this?</span>
+      <div class="cm-flair-pick" role="radiogroup" aria-labelledby="cm-flair-label">
+        {% for key, f in flairs.items() %}
+        <label><input type="radio" name="flair" value="{{ key }}" required
+          {% if (post and post.flair == key) or (not post and prefill.flair == key) %}checked{% endif %}>
+          <i class="fas {{ f.icon }}" aria-hidden="true"></i>{{ f.label }}</label>
+        {% endfor %}
+      </div>
+      <p class="cm-inline-error" hidden></p>
+    </div>
+
+    <div class="cm-field" data-field="title">
+      <label for="cm-title">Title <span class="cm-counter" data-counter-for="cm-title"></span></label>
+      <input id="cm-title" class="cm-input" name="title" maxlength="{{ limits.title[1] }}" autocomplete="off"
+        value="{{ post.title if post else '' }}" placeholder="e.g. Scorecard shows wrong bowler after a rain delay">
+      <small>{{ limits.title[0] }}–{{ limits.title[1] }} characters. Be specific.</small>
+      <p class="cm-inline-error" hidden></p>
+      <div id="cm-similar" class="cm-similar" hidden aria-live="polite">
+        <h4><i class="fas fa-lightbulb" aria-hidden="true"></i> Similar posts: if one matches, vote on it instead of posting again</h4>
+        <div id="cm-similar-list"></div>
+      </div>
+    </div>
+
+    <fieldset id="cm-bug-fields" class="cm-form" style="border:0;padding:0;margin:0" hidden>
+      <div class="cm-field" data-field="steps">
+        <span class="cm-label">Steps to reproduce</span>
+        <div id="cm-steps"></div>
+        <button type="button" class="cm-btn cm-btn--sm" id="cm-add-step"><i class="fas fa-plus" aria-hidden="true"></i>Add step</button>
+        <small>At least {{ limits.steps[0] }} steps, one action each: what you clicked, in what order.</small>
+        <p class="cm-inline-error" hidden></p>
+      </div>
+      <div class="cm-field" data-field="expected">
+        <label for="cm-expected">What did you expect to happen?</label>
+        <textarea id="cm-expected" class="cm-textarea" name="expected" maxlength="{{ limits.expect[1] }}" style="min-height:70px">{{ post.expected or '' if post else '' }}</textarea>
+        <p class="cm-inline-error" hidden></p>
+      </div>
+      <div class="cm-field" data-field="actual">
+        <label for="cm-actual">What actually happened?</label>
+        <textarea id="cm-actual" class="cm-textarea" name="actual" maxlength="{{ limits.expect[1] }}" style="min-height:70px">{{ post.actual or '' if post else '' }}</textarea>
+        <p class="cm-inline-error" hidden></p>
+      </div>
+      <div class="cm-field" data-field="match_format">
+        <label for="cm-format">Format</label>
+        <select id="cm-format" class="cm-select" name="match_format">
+          <option value="">Choose…</option>
+          {% for key, label in formats.items() %}
+          <option value="{{ key }}" {% if post and post.match_format == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <p class="cm-inline-error" hidden></p>
+      </div>
+    </fieldset>
+
+    <div class="cm-field" data-field="body">
+      <label for="cm-body"><span id="cm-body-label">Details</span> <span class="cm-counter" data-counter-for="cm-body"></span></label>
+      <textarea id="cm-body" class="cm-textarea" name="body" maxlength="{{ limits.body[1] }}" style="min-height:160px">{{ post.body if post else '' }}</textarea>
+      <small id="cm-body-hint">{{ limits.body[0] }}+ characters. Plain text; links are clickable.</small>
+      <p class="cm-inline-error" hidden></p>
+    </div>
+
+    <div class="cm-field" data-field="images">
+      <span class="cm-label">Screenshots <span style="font-weight:400;color:var(--fg-secondary)">(optional, up to {{ limits.images }})</span></span>
+      <div class="cm-uploads" id="cm-uploads">
+        <button type="button" class="cm-upload-add" id="cm-upload-add"><span><i class="fas fa-image" aria-hidden="true"></i><br>Add image</span></button>
+      </div>
+      <input type="file" id="cm-file" accept="image/jpeg,image/png,image/webp" hidden>
+      <small>JPEG, PNG or WebP, up to 10 MB. Images are compressed and location data is removed.</small>
+      <p class="cm-inline-error" hidden></p>
+    </div>
+
+    <div class="cm-field" id="cm-private-field">
+      <label class="cm-check"><input type="checkbox" name="private" id="cm-private" {% if post and post.visibility == 'private' %}checked{% endif %}>
+        <span><strong>Private</strong>: only you and the admin can see this. Use it for account problems or anything with personal details.</span></label>
+    </div>
+
+    <div style="display:flex;gap:.6rem;justify-content:flex-end;flex-wrap:wrap">
+      <a class="cm-btn" href="{{ url_for('community_post', public_id=post.id) if post else url_for('community_index') }}">Cancel</a>
+      <button type="submit" class="cm-btn cm-btn--primary" id="cm-submit">{{ 'Save changes' if post else 'Post' }}</button>
+    </div>
+  </form>
+</div>
+
+<script type="application/json" id="cm-config">{{ {
+  'mode': 'edit' if post else 'new',
+  'post': post,
+  'limits': limits,
+  'prefill': prefill,
+  'app_version': app_version,
+  'endpoints': {
+    'create': url_for('community_api_create'),
+    'update': url_for('community_api_update', public_id=post.id) if post else None,
+    'similar': url_for('community_api_similar'),
+    'upload': url_for('community_api_upload'),
+    'image': url_for('community_api_delete_image', public_id='__ID__'),
+  }
+}|tojson }}</script>
+{% endblock %}
+{% block extra_js %}<script src="{{ url_for('static', filename='js/community.js') }}"></script>{% endblock %}

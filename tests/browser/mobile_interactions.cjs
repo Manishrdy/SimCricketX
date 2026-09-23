@@ -27,21 +27,7 @@ async function assertInside(page, selector, visual) {
 for (const [name, size, visual] of [
     ['portrait keyboard', { width: 390, height: 844 }, { width: 390, height: 330, offsetTop: 80, offsetLeft: 0 }],
     ['landscape keyboard', { width: 844, height: 390 }, { width: 844, height: 190, offsetTop: 20, offsetLeft: 0 }]
-]) test(`${name}: support composer and modal actions stay reachable`, () => browserTest(async page => {
-    const support = read('templates/_support_widget.html');
-    const section = support.slice(support.indexOf('<section'), support.indexOf('</section>') + 10).replace('class="scx-support-panel"', 'class="scx-support-panel is-open"');
-    await viewportSetup(page, size, visual, section, read('static/css/support_widget.css'));
-    await page.locator('#scx-support-input').fill('Keyboard test');
-    await assertInside(page, '#scx-support-panel', visual);
-    await page.locator('#scx-support-send').evaluate(el => el.scrollIntoView({ block: 'nearest' }));
-    await assertInside(page, '#scx-support-send', visual);
-    await page.evaluate(() => {
-        Object.assign(testViewport, { height: innerHeight, offsetTop: 0 });
-        testViewport.dispatchEvent(new Event('resize'));
-    });
-    await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--scx-vv-height') === innerHeight + 'px');
-    await assertInside(page, '#scx-support-panel', { offsetTop: 0, height: size.height });
-
+]) test(`${name}: modal actions stay reachable`, () => browserTest(async page => {
     const auth = read('templates/admin/auth_events.html');
     const notes = auth.slice(auth.indexOf('<div id="notesModal"'), auth.indexOf('\n<style>', auth.indexOf('<div id="notesModal"'))).replace('display:none;', 'display:flex;');
     await viewportSetup(page, size, visual, notes, '');
