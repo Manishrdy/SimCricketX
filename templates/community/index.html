@@ -18,15 +18,18 @@
   <div class="cm-layout">
     <main>
       <div class="cm-toolbar">
-        <form class="cm-search" method="get" action="{{ url_for('community_index') }}" role="search">
+        <form class="cm-search" id="cm-search" method="get" action="{{ url_for('community_index') }}" role="search" autocomplete="off">
           <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
           <label class="cm-sr" for="cm-q">Search posts</label>
-          <input id="cm-q" class="cm-input" type="search" name="q" value="{{ filters.q or '' }}" placeholder="Search posts…" maxlength="100">
-          <button class="cm-btn" type="submit">Search</button>
+          <input id="cm-q" class="cm-input" type="search" name="q" value="{{ filters.q or '' }}" maxlength="100"
+                 placeholder="Search bugs, questions, ideas…" role="combobox" aria-autocomplete="list"
+                 aria-expanded="false" aria-controls="cm-suggest" spellcheck="false">
+          <kbd class="cm-kbd" aria-hidden="true">/</kbd>
+          <span class="cm-search-spin" aria-hidden="true"></span>
+          <div class="cm-suggest" id="cm-suggest" role="listbox" aria-label="Suggestions" hidden></div>
         </form>
 
-        {% if not filters.q %}
-        <div class="cm-row-between">
+        <div class="cm-row-between" id="cm-browse-controls" {% if filters.q %}hidden{% endif %}>
           <nav class="cm-tabs" aria-label="Sort posts">
             {% for key, label, icon in [('active', 'Active', 'fa-bolt'), ('new', 'New', 'fa-clock'), ('top', 'Top', 'fa-arrow-trend-up')] %}
             <a class="cm-tab{% if filters.sort == key %} is-active{% endif %}" {% if filters.sort == key %}aria-current="page"{% endif %}
@@ -47,36 +50,18 @@
           </form>
         </div>
 
-        <nav class="cm-chips" aria-label="Filter by flair">
+        <nav class="cm-chips" id="cm-browse-chips" aria-label="Filter by flair" {% if filters.q %}hidden{% endif %}>
           <a class="cm-chip{% if not filters.flair and not filters.mine %} is-active{% endif %}" href="{{ url_for('community_index', sort=filters.sort, status=filters.status) }}">All</a>
           {% for key, f in flairs.items() %}
           <a class="cm-chip{% if filters.flair == key %} is-active{% endif %}" href="{{ url_for('community_index', flair=key, sort=filters.sort, status=filters.status) }}"><i class="fas {{ f.icon }}" aria-hidden="true"></i>{{ f.label }}</a>
           {% endfor %}
           <a class="cm-chip{% if filters.mine %} is-active{% endif %}" href="{{ url_for('community_index', mine='1', sort=filters.sort) }}"><i class="fas fa-user" aria-hidden="true"></i>My posts</a>
         </nav>
-        {% else %}
-        <div class="cm-row-between"><span style="font-size:.85rem;color:var(--cm-muted)">{{ posts|length }} result{{ '' if posts|length == 1 else 's' }} for “{{ filters.q }}”</span>
-          <a class="cm-btn cm-btn--ghost" href="{{ url_for('community_index') }}"><i class="fas fa-xmark" aria-hidden="true"></i>Clear search</a></div>
-        {% endif %}
       </div>
 
-      <div class="cm-list">
-        {% for p in pinned %}{{ post_card(p, pinned=True) }}{% endfor %}
-        {% for p in posts %}{{ post_card(p) }}{% endfor %}
-        {% if not pinned and not posts %}
-        <div class="cm-empty">
-          <i class="fas fa-{{ 'magnifying-glass' if filters.q else 'comments' }}" aria-hidden="true"></i>
-          {% if filters.q %}Nothing matches that search. <a href="{{ url_for('community_new') }}">Start a new post</a>
-          {% else %}No posts here yet. <a href="{{ url_for('community_new') }}">Be the first to post</a>{% endif %}
-        </div>
-        {% endif %}
+      <div id="cm-results" aria-busy="false">
+        {% include "community/_results.html" %}
       </div>
-
-      {% if next_cursor %}
-      <div class="cm-more">
-        <a class="cm-btn" href="{{ url_for('community_index', cursor=next_cursor, sort=filters.sort, flair=filters.flair, status=filters.status, mine='1' if filters.mine else None) }}">Older posts <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
-      </div>
-      {% endif %}
     </main>
 
     <aside class="cm-aside" aria-label="About the community">
@@ -104,7 +89,10 @@
 
 <script type="application/json" id="cm-config">{{ {
   'mode': 'index',
-  'endpoints': {'vote': url_for('community_api_vote', public_id='__ID__')}
+  'endpoints': {'vote': url_for('community_api_vote', public_id='__ID__'),
+                'search': url_for('community_api_search'),
+                'results': url_for('community_index'),
+                'new': url_for('community_new')}
 }|tojson }}</script>
 {% endblock %}
 {% block extra_js %}<script src="{{ url_for('static', filename='js/community.js') }}"></script>{% endblock %}

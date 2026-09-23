@@ -731,11 +731,11 @@ def list_posts(viewer, *, flair=None, status=None, sort="active", mine=False, vi
         base = base.filter(CommunityPost.visibility == visibility)
 
     if q and q.strip():
-        ids = community_search.search_post_ids(db.session, q, limit=50)
+        ids = community_search.search_post_ids(db.session, q, limit=50, precise=True)
         if not ids:
             return [], [], None
         rows = {p.id: p for p in base.filter(CommunityPost.id.in_(ids)).all()}
-        return [], [rows[i] for i in ids if i in rows], None
+        return [], _demote_duplicates([rows[i] for i in ids if i in rows]), None
 
     pinned = []
     filtered = bool(flair or status or mine or visibility)
@@ -764,10 +764,90 @@ def similar_posts(viewer, title: str, limit=5, exclude_id=None):
     if not ids:
         return []
     q = (CommunityPost.query.filter(CommunityPost.id.in_(ids), CommunityPost.deleted_at.is_(None),
-                                    CommunityPost.visibility == "public"))
+                                    CommunityPost.visibility == "public", CommunityPost.status != "duplicate"))
     rows = {p.id: p for p in q.all()}
     out = [rows[i] for i in ids if i in rows and i != exclude_id]
     return out[:limit]
+
+
+# ── Search-as-you-type ────────────────────────────────────────────────────────
+
+SNIPPET_CHARS = 140
+
+
+def _demote_duplicates(posts: list[CommunityPost]) -> list[CommunityPost]:
+    """A closed-as-duplicate post often has the best-matching title (it was
+    written by someone searching for the same thing), but the original is
+    where the answer lives. Keep relevance order, duplicates last."""
+    return sorted(posts, key=lambda p: p.status == "duplicate")
+
+
+def _snippet(post: CommunityPost, terms: list[str]) -> str:
+    """A short window of the post text around the first matched term, so the
+    dropdown can show *why* a post matched. Plain text; the client highlights."""
+    text = " ".join(t for t in (post.body, post.actual, post.expected) if t)
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return ""
+    lower = text.lower()
+    hit = min((m.start() for t in terms for m in [re.search(r"\b" + re.escape(t), lower)] if m), default=0)
+    start = max(0, hit - 40)
+    if start:
+        start = text.find(" ", start) + 1 or start
+    chunk = text[start:start + SNIPPET_CHARS]
+    return ("… " if start else "") + chunk + (" …" if start + SNIPPET_CHARS < len(text) else "")
+
+
+def search_suggestions(viewer, q: str, limit: int = 8) -> tuple[list[tuple[CommunityPost, str]], int]:
+    """Best matches for a (possibly half-typed) query: all-terms matches
+    first, then any-term. Returns ([(post, snippet)], total visible matches)."""
+    ids = community_search.search_post_ids(db.session, q, limit=60, precise=True)
+    if not ids:
+        return [], 0
+    rows = {p.id: p for p in _visible_query(viewer).filter(CommunityPost.id.in_(ids)).all()}
+    ordered = _demote_duplicates([rows[i] for i in ids if i in rows])
+    terms = community_search.query_terms(q)
+    return [(p, _snippet(p, terms)) for p in ordered[:limit]], len(ordered)
+
+
+_vocab_cache: tuple[float, frozenset[str]] = (0.0, frozenset())
+
+
+def _search_vocabulary() -> frozenset[str]:
+    """Words used in public posts, refreshed every 2 minutes. Small corpus,
+    so a Python set beats maintaining an FTS vocab table."""
+    global _vocab_cache
+    loaded_at, words = _vocab_cache
+    if time.monotonic() - loaded_at < 120 and words:
+        return words
+    rows = (db.session.query(CommunityPost.title, CommunityPost.body)
+            .filter(CommunityPost.deleted_at.is_(None), CommunityPost.visibility == "public").all())
+    words = frozenset(w for title, body in rows for w in re.findall(r"[a-z]{3,}", f"{title} {body or ''}".lower()))
+    _vocab_cache = (time.monotonic(), words)
+    return words
+
+
+def did_you_mean(q: str) -> str | None:
+    """Google-style spelling fix: swap each unknown term for the closest word
+    that actually appears in posts. None when nothing would change."""
+    import difflib
+    vocab = _search_vocabulary()
+    if not vocab:
+        return None
+    changed = False
+    out = []
+    for word in re.findall(r"[A-Za-z0-9]+", q or ""):
+        low = word.lower()
+        if len(low) < 3 or low in vocab or any(v.startswith(low) for v in vocab):
+            out.append(low)
+            continue
+        match = difflib.get_close_matches(low, vocab, n=1, cutoff=0.75)
+        if match:
+            out.append(match[0])
+            changed = True
+        else:
+            out.append(low)
+    return " ".join(out) if changed else None
 
 
 # ── Notifications ─────────────────────────────────────────────────────────────
