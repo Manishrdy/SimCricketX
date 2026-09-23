@@ -268,7 +268,8 @@ def update_user_email(old_email: str, new_email: str, admin_email: str = None) -
         # Community board rows reference users.id too.
         for table, col in (("community_posts", "author_id"), ("community_comments", "author_id"),
                            ("community_votes", "user_id"), ("community_images", "uploader_id"),
-                           ("community_notifications", "user_id"), ("community_reports", "reporter_id")):
+                           ("community_notifications", "user_id"), ("community_reports", "reporter_id"),
+                           ("community_mentions", "user_id"), ("community_mentions", "author_id")):
             db.session.execute(text(f"UPDATE {table} SET {col} = :new WHERE {col} = :old"), {"new": new_email, "old": old_email})
 
         # Update the primary key last

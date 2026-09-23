@@ -36,13 +36,36 @@ def _json_body() -> dict:
 _URL_RE = re.compile(r"https?://[^\s<>\"']+[^\s<>\"'.,;:!?)\]]")
 
 
-def linkify(text) -> Markup:
-    """Escape user text, then turn bare http(s) URLs into safe links.
+def linkify(text, mentions=None) -> Markup:
+    """Escape user text, then turn bare http(s) URLs into safe links and
+    tagged '@Name's into highlighted chips. ``mentions`` are the tags stored
+    for this text ([{name, me, is_admin}]); an untagged '@Name' stays plain.
+    One regex pass, so a name can never be rewritten inside an href.
     Line breaks are preserved by CSS (white-space: pre-wrap)."""
     escaped = str(escape(text or ""))
-    return Markup(_URL_RE.sub(
-        lambda m: f'<a href="{m.group(0)}" rel="nofollow ugc noopener noreferrer" target="_blank">{m.group(0)}</a>',
-        escaped))
+    classes = {}
+    for m in mentions or ():
+        key = str(escape(m.get("name") or "")).lower()
+        if key:
+            cls = "cm-mention"
+            if m.get("me"):
+                cls += " cm-mention--me"
+            if m.get("is_admin"):
+                cls += " cm-mention--admin"
+            classes[key] = cls
+    pattern = _URL_RE
+    if classes:
+        names = "|".join(re.escape(n) for n in sorted(classes, key=len, reverse=True))
+        pattern = re.compile(f"(?P<url>{_URL_RE.pattern})|(?<![\\w@])@(?P<name>{names})(?!\\w)", re.IGNORECASE)
+
+    def sub(m):
+        name = m.groupdict().get("name")
+        if name is not None:
+            return f'<span class="{classes[name.lower()]}">@{name}</span>'
+        url = m.group(0)
+        return f'<a href="{url}" rel="nofollow ugc noopener noreferrer" target="_blank">{url}</a>'
+
+    return Markup(pattern.sub(sub, escaped))
 
 
 def time_ago(iso) -> str:
@@ -85,6 +108,7 @@ def register_community_routes(app, *, db=db, limiter=None):
             "status": args.get("status") or None,
             "sort": args.get("sort") or "active",
             "mine": args.get("mine") == "1",
+            "mentions": args.get("mentions") == "1",
             "q": (args.get("q") or "").strip()[:100] or None,
         }
         pinned, posts, next_cursor = cs.list_posts(current_user, cursor=args.get("cursor"), **filters)
@@ -119,8 +143,10 @@ def register_community_routes(app, *, db=db, limiter=None):
             post = cs.get_visible_post(public_id, current_user)
         except cs.CommunityError:
             abort(404)
+        tags = cs.mentions_for_post(post, current_user)
         threads = [
-            (cs.serialize_comment(top, current_user), [cs.serialize_comment(r, current_user) for r in kids])
+            (cs.serialize_comment(top, current_user, tags.get(top.id)),
+             [cs.serialize_comment(r, current_user, tags.get(r.id)) for r in kids])
             for top, kids in cs.visible_comments(post, current_user)
         ]
         similar = []
@@ -128,7 +154,8 @@ def register_community_routes(app, *, db=db, limiter=None):
             similar = [cs.serialize_post(p, current_user) for p in cs.similar_posts(current_user, post.title, 4, post.id)]
         return render_template(
             "community/post.html",
-            post=cs.serialize_post(post, current_user, detail=True), threads=threads, similar=similar,
+            post=cs.serialize_post(post, current_user, detail=True, mentions=tags.get(None)),
+            threads=threads, similar=similar,
             statuses=cs.STATUSES, flairs=cs.FLAIRS, report_reasons=cs.REPORT_REASONS,
             block=cs.posting_block_reason(current_user), new_account=cs.new_account_block(current_user),
             comment_max=cs.COMMENT_MAX,
@@ -153,9 +180,14 @@ def register_community_routes(app, *, db=db, limiter=None):
     @app.route("/community/notifications")
     @login_required
     def community_notifications_page():
-        notes = [cs.serialize_notification(n) for n in cs.recent_notifications(current_user, 100)]
-        cs.mark_notifications_read(current_user)
-        return render_template("community/notifications.html", notes=notes)
+        try:
+            page, _ = notification_pagination(default_limit=30)
+        except cs.CommunityError:
+            abort(400)
+        notes = [cs.serialize_notification(n) for n in cs.recent_notifications(current_user, 30, page)]
+        total = cs.visible_notifications(current_user).count()
+        return render_template("community/notifications.html", notes=notes, page=page,
+                               has_next=page * 30 < total, total=total, unread=cs.unread_count(current_user))
 
     def _limits():
         return {"title": [cs.TITLE_MIN, cs.TITLE_MAX], "body": [cs.BODY_MIN, cs.BODY_MAX],
@@ -254,6 +286,24 @@ def register_community_routes(app, *, db=db, limiter=None):
             } for p, snippet in rows],
         })
 
+    @app.route("/api/community/mentions/suggest")
+    @login_required
+    @limit_reads("240 per minute")
+    def community_api_mention_suggest():
+        """People to offer after '@'. Never returns emails; ``id`` is the
+        user's stable_id, which the composer sends back as ``mentions``."""
+        post = None
+        if request.args.get("post"):
+            try:
+                post = cs.get_visible_post(request.args["post"], current_user)
+            except cs.CommunityError:
+                post = None
+        people = cs.mention_candidates(current_user, (request.args.get("q") or "")[:cs.MENTION_QUERY_MAX],
+                                       post=post, private=request.args.get("private") == "1")
+        for person in people:  # same avatar colour as the server-rendered pages
+            person["hue"] = zlib.crc32(person["name"].encode()) % 360
+        return jsonify({"people": people})
+
     @app.route("/api/community/similar")
     @login_required
     def community_api_similar():
@@ -274,7 +324,8 @@ def register_community_routes(app, *, db=db, limiter=None):
         data = _json_body()
         try:
             post = cs.get_visible_post(public_id, current_user)
-            comment = cs.add_comment(post, current_user, data.get("body"), data.get("parent_id"))
+            comment = cs.add_comment(post, current_user, data.get("body"), data.get("parent_id"),
+                                     data.get("mentions"))
         except cs.CommunityError as exc:
             db.session.rollback()
             return _error(exc)
@@ -294,7 +345,8 @@ def register_community_routes(app, *, db=db, limiter=None):
     def community_api_edit_comment(comment_id):
         try:
             comment = _comment_or_404(comment_id)
-            cs.edit_comment(comment, current_user, _json_body().get("body"))
+            data = _json_body()
+            cs.edit_comment(comment, current_user, data.get("body"), data.get("mentions"))
             if current_user.is_admin and comment.author_id != current_user.id:
                 _audit("community_edit_comment", f"{comment.post.public_id}#{comment.id}")
         except cs.CommunityError as exc:
@@ -338,16 +390,42 @@ def register_community_routes(app, *, db=db, limiter=None):
 
     # ── Notifications ────────────────────────────────────────────────────────
 
+    def notification_pagination(default_limit=15):
+        try:
+            page = int(request.args.get("page", "1"))
+            limit = int(request.args.get("limit", str(default_limit)))
+            if not 1 <= page <= 1000000 or not 1 <= limit <= 100:
+                raise ValueError
+            return page, limit
+        except (TypeError, ValueError):
+            raise cs.CommunityError("Invalid notification pagination.")
+
     @app.route("/api/community/notifications")
     @login_required
     def community_api_notifications():
-        return jsonify({"unread": cs.unread_count(current_user),
-                        "items": [cs.serialize_notification(n) for n in cs.recent_notifications(current_user, 15)]})
+        try:
+            page, limit = notification_pagination()
+        except cs.CommunityError as exc:
+            return _error(exc)
+        total = cs.visible_notifications(current_user).count()
+        return jsonify({"unread": cs.unread_count(current_user), "page": page,
+                        "has_next": page * limit < total,
+                        "items": [cs.serialize_notification(n) for n in
+                                  cs.recent_notifications(current_user, limit, page)]})
 
     @app.route("/api/community/notifications/read", methods=["POST"])
     @login_required
     def community_api_notifications_read():
-        cs.mark_notifications_read(current_user, _json_body().get("ids"))
+        data = _json_body()
+        try:
+            if set(data) == {"all"} and data["all"] is True:
+                cs.mark_notifications_read(current_user, all=True)
+            elif set(data) == {"ids"}:
+                cs.mark_notifications_read(current_user, data["ids"])
+            else:
+                raise cs.CommunityError("Provide ids or all: true.")
+        except cs.CommunityError as exc:
+            return _error(exc)
         return jsonify({"ok": True, "unread": cs.unread_count(current_user)})
 
     # ── Images ───────────────────────────────────────────────────────────────

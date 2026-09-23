@@ -16,6 +16,7 @@ from database.models import (
     AdminAuditLog,
     CommunityComment,
     CommunityImage,
+    CommunityMention,
     CommunityNotification,
     CommunityPost,
     CommunityReport,
@@ -582,34 +583,44 @@ def test_private_posts_of_deleted_accounts_are_purged(app, boss):
 
 # ── Migrations ───────────────────────────────────────────────────────────────
 
-def test_add_community_migration_idempotent(app):
-    from migrations.add_community import run_migration
-    run_migration(db, app)
-    run_migration(db, app)
-    with db.engine.connect() as conn:
-        names = {r[0] for r in conn.execute(text("SELECT name FROM sqlite_master"))}
-        conn.execute(text("DROP TABLE IF EXISTS community_posts_fts"))
-        conn.commit()
-    assert {"community_posts", "community_posts_fts", "community_posts_fts_ai"} <= names
-
-
-def test_drop_support_migration(app):
-    from migrations.drop_support_messaging import run_migration
+def test_community_board_migration_dry_run_apply_and_boot(app, capsys):
+    from migrations.community_board import inspect_plan, run_migration, run_on_boot
     with db.engine.begin() as conn:
+        conn.execute(text("DROP TABLE community_votes"))
         conn.execute(text("CREATE TABLE support_conversation (id INTEGER PRIMARY KEY)"))
         conn.execute(text("CREATE TABLE support_message (id INTEGER PRIMARY KEY)"))
-    run_migration(db, app)
-    run_migration(db, app)
+        conn.execute(text("INSERT INTO support_message (id) VALUES (1)"))
+
+    def names():
+        with db.engine.connect() as conn:
+            return {r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
+
+    run_migration(db, app)  # dry run
+    assert "DRY RUN" in capsys.readouterr().out
+    assert "community_votes" not in names() and "support_message" in names()
+
+    run_on_boot(db, app)  # additive only
+    out = capsys.readouterr().out
+    assert "community_votes" in names() and "community_posts_fts" in names()
+    assert "support_message" in names() and "--apply" in out
+
+    run_migration(db, app, apply=True)
+    assert not {n for n in names() if n.startswith("support_")}
+    capsys.readouterr()
+    run_migration(db, app, apply=True)  # idempotent
+    assert "Nothing to do" in capsys.readouterr().out
     with db.engine.connect() as conn:
-        names = {r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
-    assert not {n for n in names if n.startswith("support_")}
+        plan = inspect_plan(conn)
+        conn.execute(text("DROP TABLE IF EXISTS community_posts_fts"))  # later tests build their own
+        conn.commit()
+    assert not (plan["create_tables"] or plan["add_columns"] or plan["support_tables"])
 
 
 def test_precheck_registry_no_longer_recreates_support():
     from migrations.precheck import MIGRATIONS
     names = [n for n, _ in MIGRATIONS]
     assert "add_support_messaging" not in names
-    assert names.index("drop_support_messaging") > names.index("add_community")
+    assert "community_board" in names
 
 
 def test_status_change_counts_as_triage(app, alice, boss):
@@ -677,3 +688,240 @@ def test_search_ranks_duplicates_last(app, alice, bob, boss, fts):
     assert ids == [original, dupe]
     similar = as_user(app, bob).get("/api/community/similar?q=wrong bowler after rain").get_json()["posts"]
     assert [p["id"] for p in similar] == [original]
+
+
+# ── @-tags ───────────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def carol(app):
+    return make_user("carol@example.com", name="Carol")
+
+
+def make_member(user, **overrides):
+    """A public post makes ``user`` a community member (taggable by users)."""
+    return cs.create_post(user, {**QUESTION, "title": f"Rain question from {user.display_name}", **overrides})
+
+
+def tagged_ids(**where):
+    return {m.user_id for m in CommunityMention.query.filter_by(**where).all()}
+
+
+def notes_for(user, kind=None):
+    q = CommunityNotification.query.filter_by(user_id=user.id)
+    return q.filter_by(kind=kind).all() if kind else q.all()
+
+
+def suggest(app, user, q, **params):
+    resp = as_user(app, user).get("/api/community/mentions/suggest", query_string={"q": q, **params})
+    assert resp.status_code == 200
+    return resp.get_json()["people"]
+
+
+def test_tag_member_in_post_notifies_and_renders(app, alice, bob):
+    make_member(bob)
+    resp = create(app, alice, body="Rain never starts for me. Maybe @Bob knows where the setting is?",
+                  mentions=[bob.stable_id])
+    assert resp.status_code == 201
+    pid = resp.get_json()["post"]["id"]
+    post = CommunityPost.query.filter_by(public_id=pid).one()
+    assert tagged_ids(post_id=post.id, comment_id=None) == {bob.id}
+    assert len(notes_for(bob, "mention")) == 1
+    html = as_user(app, bob).get(f"/community/p/{pid}").get_data(as_text=True)
+    assert 'class="cm-mention cm-mention--me">@Bob</span>' in html
+    # Everyone else sees the tag, not highlighted as theirs.
+    html = as_user(app, alice).get(f"/community/p/{pid}").get_data(as_text=True)
+    assert 'class="cm-mention">@Bob</span>' in html
+
+
+def test_users_cannot_tag_admins_but_admins_can_tag_anyone(app, alice, boss):
+    boss2 = make_user("boss2@example.com", name="Deputy", admin=True)
+    make_member(alice)
+    make_member(boss)
+    pid = create(app, alice, body="Could @Boss please look at the rain settings for T20 matches?",
+                 mentions=[boss.stable_id]).get_json()["post"]["id"]
+    post = CommunityPost.query.filter_by(public_id=pid).one()
+    assert tagged_ids(post_id=post.id) == set()  # dropped silently, stays plain text
+    assert not notes_for(boss, "mention")
+    assert "cm-mention" not in as_user(app, alice).get(f"/community/p/{pid}").get_data(as_text=True)
+    assert suggest(app, alice, "Bo") == []
+
+    resp = as_user(app, boss).post(f"/api/community/posts/{pid}/comments", json={
+        "body": "@Alice thanks, @Deputy can you check this one?", "mentions": [alice.stable_id, boss2.stable_id]})
+    assert resp.status_code == 201
+    assert tagged_ids(post_id=post.id, comment_id=resp.get_json()["comment"]["id"]) == {alice.id, boss2.id}
+    assert len(notes_for(boss2, "mention")) == 1
+
+
+def test_suggest_offers_members_to_users_and_everyone_to_admins(app, alice, bob, carol, boss):
+    make_member(alice)
+    cs.create_post(carol, {**QUESTION, "visibility": "private"})  # private-only activity isn't membership
+    assert suggest(app, alice, "b") == []
+    assert suggest(app, alice, "car") == []
+    people = suggest(app, boss, "b")
+    assert [p["name"] for p in people] == ["Bob"]
+    assert set(people[0]) == {"id", "name", "is_admin", "in_thread", "hue"}  # no email
+    assert people[0]["id"] == bob.stable_id
+    make_member(bob)
+    assert [p["name"] for p in suggest(app, alice, "ob")] == ["Bob"]
+    assert suggest(app, alice, "Alice") == []  # never yourself
+
+
+def test_suggest_puts_thread_people_first_and_empty_query_lists_them(app, alice, bob, boss):
+    zed = make_user("zed@example.com", name="Bobby Zed")
+    make_member(zed)
+    post = make_member(alice)
+    cs.add_comment(post, bob, "Check the match settings page, it has the rain toggle.")
+    people = suggest(app, alice, "bob", post=post.public_id)
+    assert [p["name"] for p in people] == ["Bob", "Bobby Zed"]
+    assert people[0]["in_thread"] and not people[1]["in_thread"]
+    assert [p["name"] for p in suggest(app, alice, "", post=post.public_id)] == ["Bob"]
+
+
+def test_private_post_tags_only_people_who_can_see_it(app, alice, bob, boss):
+    boss2 = make_user("boss2@example.com", name="Deputy", admin=True)
+    make_member(bob)
+    pid = create(app, alice, body="My saved teams vanished after the update, can @Bob confirm?",
+                 visibility="private", mentions=[bob.stable_id]).get_json()["post"]["id"]
+    post = CommunityPost.query.filter_by(public_id=pid).one()
+    assert tagged_ids(post_id=post.id) == set()
+    assert suggest(app, alice, "", post=pid) == []
+    assert suggest(app, alice, "b", private="1") == []
+    assert {p["name"] for p in suggest(app, boss, "", post=pid)} == {"Alice"}
+    assert {p["name"] for p in suggest(app, boss, "e", post=pid)} == {"Alice", "Deputy"}
+
+    resp = as_user(app, boss).post(f"/api/community/posts/{pid}/comments", json={
+        "body": "@Alice looking now. @Deputy and @Bob fyi.",
+        "mentions": [alice.stable_id, boss2.stable_id, bob.stable_id]})
+    cid = resp.get_json()["comment"]["id"]
+    assert tagged_ids(comment_id=cid) == {alice.id, boss2.id}
+    # An explicit mention takes priority over thread-author activity.
+    assert [n.kind for n in notes_for(alice) if n.comment_id == cid] == ["mention"]
+    assert not notes_for(bob)
+
+
+def test_tag_rules_name_in_text_self_and_cap(app, alice, bob):
+    make_member(bob)
+    post = cs.create_post(alice, {**QUESTION, "mentions": [bob.stable_id, alice.stable_id]})
+    assert tagged_ids(post_id=post.id) == set()  # @Bob not written; self never
+
+    fans = []
+    for i in range(12):
+        fan = make_user(f"fan{i}@example.com", name=f"Fan{chr(65 + i)}")
+        make_member(fan)
+        fans.append(fan)
+    body = "Question for " + " ".join(f"@{f.display_name}" for f in fans) + " about the rain settings."
+    post = cs.create_post(alice, {**QUESTION, "body": body, "mentions": [f.stable_id for f in fans]})
+    assert len(tagged_ids(post_id=post.id)) == cs.MAX_MENTIONS
+
+
+def test_tagged_name_does_not_fail_english_check(app, alice):
+    odd = make_user("odd@example.com", name="chintu pintoo wala")
+    make_member(odd)
+    post = cs.create_post(alice, {**QUESTION})
+    body = "thanks @chintu pintoo wala for the help"
+    with pytest.raises(cs.CommunityError) as exc:
+        cs.add_comment(post, alice, body)  # not a tag -> judged as text
+    assert exc.value.code == "not_english"
+    comment = cs.add_comment(post, alice, body, mentions=[odd.stable_id])
+    assert tagged_ids(comment_id=comment.id) == {odd.id}
+
+
+def test_edit_comment_notifies_only_new_tags_and_drops_removed(app, alice, bob, carol):
+    make_member(bob)
+    make_member(carol)
+    post = make_member(alice)
+    client = as_user(app, alice)
+    cid = client.post(f"/api/community/posts/{post.public_id}/comments",
+                      json={"body": "@Bob have a look at this please", "mentions": [bob.stable_id]}
+                      ).get_json()["comment"]["id"]
+    resp = client.patch(f"/api/community/comments/{cid}",
+                        json={"body": "@Bob and @Carol have a look at this please", "mentions": [carol.stable_id]})
+    assert resp.status_code == 200
+    assert tagged_ids(comment_id=cid) == {bob.id, carol.id}  # Bob kept without resending
+    assert len(notes_for(bob, "mention")) == 1 and len(notes_for(carol, "mention")) == 1
+    client.patch(f"/api/community/comments/{cid}", json={"body": "@Carol have a look at this please"})
+    assert tagged_ids(comment_id=cid) == {carol.id}
+    assert len(notes_for(carol, "mention")) == 1
+
+
+def test_reply_to_reply_tags_the_person_answered_once(app, alice, bob, carol):
+    post = make_member(alice)
+    top = cs.add_comment(post, bob, "Open the match settings page first.")
+    reply = cs.add_comment(post, carol, "Which tab is it on?", parent_id=top.id)
+    deeper = cs.add_comment(post, alice, "It is under the weather tab.", parent_id=reply.id)
+    assert deeper.body.startswith("@Carol ")
+    assert tagged_ids(comment_id=deeper.id) == {carol.id}
+    per_user = {}
+    for n in CommunityNotification.query.filter_by(comment_id=deeper.id):
+        per_user.setdefault(n.user_id, []).append(n.kind)
+    assert per_user == {carol.id: ["reply"]}
+
+
+def test_reply_to_admin_reply_stays_plain_but_notifies(app, alice, bob, boss):
+    post = make_member(alice)
+    top = cs.add_comment(post, bob, "Open the match settings page first.")
+    reply = cs.add_comment(post, boss, "The setting moved in the last update.", parent_id=top.id)
+    deeper = cs.add_comment(post, bob, "Thanks, found it now.", parent_id=reply.id)
+    assert deeper.body.startswith("@Boss ")
+    assert tagged_ids(comment_id=deeper.id) == set()
+    assert [n.kind for n in notes_for(boss) if n.comment_id == deeper.id] == ["reply"]
+
+
+def test_tags_in_bug_fields_render(app, alice, bob):
+    make_member(bob)
+    steps = ["Start a T20 match with rain enabled", "Ask @Bob to open the scorecard", "Compare the bowlers"]
+    pid = create(app, alice, BUG, steps=steps, mentions=[bob.stable_id]).get_json()["post"]["id"]
+    assert tagged_ids(post_id=CommunityPost.query.filter_by(public_id=pid).one().id) == {bob.id}
+    html = as_user(app, alice).get(f"/community/p/{pid}").get_data(as_text=True)
+    assert 'Ask <span class="cm-mention">@Bob</span> to open the scorecard' in html
+
+
+def test_mentions_filter_lists_posts_where_you_are_tagged(app, alice, bob, carol):
+    make_member(bob)
+    tagged = cs.create_post(alice, {**QUESTION, "title": "Tagged in the post itself",
+                                    "body": "Hey @Bob, how do I enable rain in a T20 match?",
+                                    "mentions": [bob.stable_id]})
+    other = cs.create_post(carol, {**QUESTION, "title": "Tagged in a comment that is gone"})
+    gone = cs.add_comment(other, alice, "@Bob might know this one", mentions=[bob.stable_id])
+    cs.soft_delete_comment(gone, alice)
+    untouched = cs.create_post(carol, {**QUESTION, "title": "Nobody tagged anybody here"})
+    html = as_user(app, bob).get("/community?mentions=1").get_data(as_text=True)
+    assert tagged.public_id in html
+    assert other.public_id not in html and untouched.public_id not in html
+    html = as_user(app, carol).get("/community?mentions=1&partial=1").get_data(as_text=True)
+    assert "Nobody has tagged you yet" in html
+
+
+def test_linkify_mentions_are_escaped_and_never_touch_urls():
+    from routes.community_routes import linkify
+    out = str(linkify("hi @<b>x</b> and @<b>x</b>y see https://a.b/@<b>x</b>", [{"name": "<b>x</b>"}]))
+    assert "<b>" not in out
+    assert out.count('<span class="cm-mention">@&lt;b&gt;x&lt;/b&gt;</span>') == 1
+    assert '<a href="https://a.b/@&lt;b&gt;x' in out and out.count("cm-mention") == 1
+    assert str(linkify("mail me at me@Bob.com", [{"name": "Bob"}])).count("cm-mention") == 0
+
+
+def test_add_community_mentions_migration_dry_run_apply_and_prerequisites(app, capsys):
+    from migrations.add_community_mentions import run_migration
+
+    def tables():
+        with db.engine.connect() as conn:
+            return {r[0] for r in conn.execute(text("SELECT name FROM sqlite_master"))}
+
+    with db.engine.begin() as conn:
+        conn.execute(text("DROP TABLE community_mentions"))
+    run_migration(db, app)  # dry run
+    assert "DRY RUN" in capsys.readouterr().out and "community_mentions" not in tables()
+    run_migration(db, app, apply=True)
+    assert {"community_mentions", "ix_community_mentions_user", "ix_community_mentions_target"} <= tables()
+    capsys.readouterr()
+    run_migration(db, app, apply=True)  # idempotent
+    assert "Nothing to do" in capsys.readouterr().out
+
+    with db.engine.begin() as conn:
+        conn.execute(text("PRAGMA foreign_keys=OFF"))
+        conn.execute(text("DROP TABLE community_mentions"))
+        conn.execute(text("DROP TABLE community_comments"))
+    with pytest.raises(SystemExit):
+        run_migration(db, app, apply=True)
+    assert "BLOCKED" in capsys.readouterr().out and "community_mentions" not in tables()

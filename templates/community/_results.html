@@ -18,6 +18,7 @@
   <div class="cm-empty">
     <i class="fas fa-{{ 'magnifying-glass' if filters.q else 'comments' }}" aria-hidden="true"></i>
     {% if filters.q %}Nothing matches that search. <a href="{{ url_for('community_new') }}">Start a new post</a>
+    {% elif filters.mentions %}Nobody has tagged you yet. When someone writes @your name in a post or comment, it shows up here.
     {% else %}No posts here yet. <a href="{{ url_for('community_new') }}">Be the first to post</a>{% endif %}
   </div>
   {% endif %}
@@ -25,6 +26,6 @@
 
 {% if next_cursor %}
 <div class="cm-more">
-  <a class="cm-btn" href="{{ url_for('community_index', cursor=next_cursor, sort=filters.sort, flair=filters.flair, status=filters.status, mine='1' if filters.mine else None) }}">Older posts <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+  <a class="cm-btn" href="{{ url_for('community_index', cursor=next_cursor, sort=filters.sort, flair=filters.flair, status=filters.status, mine='1' if filters.mine else None, mentions='1' if filters.mentions else None) }}">Older posts <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
 </div>
 {% endif %}
