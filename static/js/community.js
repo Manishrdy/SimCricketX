@@ -44,6 +44,238 @@
   if (cfg.mode === 'new' || cfg.mode === 'edit') initComposer();
   if (cfg.mode === 'post') initPost();
   if (cfg.mode === 'index' || cfg.mode === 'post') initVoting();
+  if (cfg.mode === 'index') initSearch();
+
+  // ── Live search + autocomplete (index page) ───────────────────────────────
+  // Suggestions come from /api/community/search on every keystroke (FTS5
+  // prefix match, so half-typed words already hit). The results list below
+  // is re-rendered server-side (?partial=1) a moment later. Newer keystrokes
+  // abort older requests, so a slow response never overwrites a newer one.
+  function initSearch() {
+    const form = document.getElementById('cm-search');
+    const input = document.getElementById('cm-q');
+    const box = document.getElementById('cm-suggest');
+    const results = document.getElementById('cm-results');
+    if (!form || !input || !box || !results) return;
+    const browse = [document.getElementById('cm-browse-controls'), document.getElementById('cm-browse-chips')];
+    const baseParams = new URLSearchParams(location.search);
+    baseParams.delete('q'); baseParams.delete('cursor');
+    let suggestTimer = null, resultsTimer = null, suggestCtrl = null, resultsCtrl = null;
+    let items = [], active = -1, lastQuery = input.value.trim(), terms = [], composing = false;
+
+    const escapeRe = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    function highlight(text, words) {
+      const frag = document.createDocumentFragment();
+      const list = (words || []).filter(Boolean);
+      if (!list.length) { frag.appendChild(document.createTextNode(text)); return frag; }
+      const re = new RegExp('\\b(' + list.map(escapeRe).join('|') + ')[\\w\']*', 'gi');
+      let last = 0, m;
+      while ((m = re.exec(text))) {
+        if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+        const mark = document.createElement('mark'); mark.textContent = m[0]; frag.appendChild(mark);
+        last = m.index + m[0].length;
+        if (!m[0].length) re.lastIndex++;
+      }
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      return frag;
+    }
+    function highlightResults(words) {
+      results.querySelectorAll('.cm-card__link').forEach(a => {
+        const text = a.textContent;
+        a.replaceChildren(highlight(text, words));
+      });
+    }
+    const queryTerms = q => (q.toLowerCase().match(/[a-z0-9]{2,}/g) || []);
+
+    function open(isOpen) {
+      box.hidden = !isOpen;
+      input.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      if (!isOpen) { active = -1; input.removeAttribute('aria-activedescendant'); }
+    }
+    function setActive(i) {
+      items.forEach(el => el.classList.remove('is-active'));
+      active = items.length ? (i + items.length) % items.length : -1;
+      if (active >= 0) {
+        items[active].classList.add('is-active');
+        input.setAttribute('aria-activedescendant', items[active].id);
+        items[active].scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    function renderSuggestions(data) {
+      box.replaceChildren();
+      items = [];
+      const q = data.query;
+      if (data.suggestions.length) {
+        const label = document.createElement('div');
+        label.className = 'cm-suggest__label';
+        label.textContent = data.total > data.suggestions.length ? `Top matches · ${data.total} posts` : 'Matching posts';
+        box.appendChild(label);
+      }
+      data.suggestions.forEach((p, i) => {
+        const a = document.createElement('a');
+        a.className = 'cm-suggest__item'; a.href = p.url; a.id = `cm-sg-${i}`;
+        a.setAttribute('role', 'option');
+        const icon = document.createElement('span');
+        icon.className = `cm-suggest__icon cm-flair--${p.flair}`;
+        icon.innerHTML = `<i class="fas ${p.flair_icon.replace(/[^\w-]/g, '')}" aria-hidden="true"></i>`;
+        const title = document.createElement('span');
+        title.className = 'cm-suggest__title';
+        title.appendChild(highlight(p.title, data.terms));
+        const meta = document.createElement('span');
+        meta.className = 'cm-suggest__meta';
+        const bit = (icon, text) => {
+          const span = document.createElement('span');
+          if (icon) { const i = document.createElement('i'); i.className = icon; i.setAttribute('aria-hidden', 'true'); span.append(i, ' '); }
+          span.append(String(text));
+          return span;
+        };
+        meta.append(bit('', p.status === 'open' ? p.flair_label : p.status_label),
+                    bit('fas fa-arrow-up', p.score), bit('far fa-comment', p.comment_count));
+        if (p.visibility === 'private') meta.append(bit('fas fa-lock', ''));
+        a.append(icon, title, meta);
+        if (p.snippet) {
+          const sn = document.createElement('span');
+          sn.className = 'cm-suggest__snippet';
+          sn.appendChild(highlight(p.snippet, data.terms));
+          a.appendChild(sn);
+        }
+        box.appendChild(a);
+        items.push(a);
+      });
+      if (!data.suggestions.length) {
+        const empty = document.createElement('div');
+        empty.className = 'cm-suggest__empty';
+        if (data.did_you_mean) {
+          empty.append('No matches. Did you mean ');
+          const b = document.createElement('button');
+          b.type = 'button'; b.textContent = data.did_you_mean;
+          b.addEventListener('mousedown', ev => { ev.preventDefault(); input.value = data.did_you_mean; onInput(true); });
+          empty.append(b, '?');
+        } else {
+          empty.textContent = 'No posts match yet.';
+        }
+        box.appendChild(empty);
+      }
+      const foot = document.createElement('a');
+      foot.id = 'cm-sg-foot';
+      foot.setAttribute('role', 'option');
+      if (data.suggestions.length) {
+        foot.className = 'cm-suggest__foot';
+        foot.href = `${cfg.endpoints.results}?q=${encodeURIComponent(q)}`;
+        foot.innerHTML = '<i class="fas fa-magnifying-glass" aria-hidden="true"></i><span></span><kbd>Enter</kbd>';
+        foot.querySelector('span').textContent = `See all results for “${q}”`;
+        foot.addEventListener('click', ev => { ev.preventDefault(); commit(); });
+      } else {
+        foot.className = 'cm-suggest__foot';
+        foot.href = cfg.endpoints.new;
+        foot.innerHTML = '<i class="fas fa-pen-to-square" aria-hidden="true"></i><span>Nothing here? Start a new post</span>';
+      }
+      box.appendChild(foot);
+      items.push(foot);
+      open(true);
+    }
+
+    async function fetchSuggestions(q) {
+      if (suggestCtrl) suggestCtrl.abort();
+      if (q.length < 2) { open(false); return; }
+      suggestCtrl = new AbortController();
+      form.classList.add('is-loading');
+      try {
+        const res = await fetch(`${cfg.endpoints.search}?q=${encodeURIComponent(q)}`, { signal: suggestCtrl.signal, credentials: 'same-origin' });
+        if (!res.ok) throw new Error(res.status);
+        const data = await res.json();
+        if (input.value.trim() !== q) return;  // user kept typing
+        terms = data.terms || queryTerms(q);
+        renderSuggestions(data);
+      } catch (e) {
+        if (e.name !== 'AbortError') open(false);
+      } finally {
+        form.classList.remove('is-loading');
+      }
+    }
+
+    async function fetchResults(q) {
+      if (resultsCtrl) resultsCtrl.abort();
+      resultsCtrl = new AbortController();
+      const params = q ? new URLSearchParams({ q }) : new URLSearchParams(baseParams);
+      const pageUrl = `${cfg.endpoints.results}${params.toString() ? '?' + params : ''}`;
+      params.set('partial', '1');
+      results.setAttribute('aria-busy', 'true');
+      try {
+        const res = await fetch(`${cfg.endpoints.results}?${params}`, { signal: resultsCtrl.signal, credentials: 'same-origin' });
+        if (!res.ok) throw new Error(res.status);
+        const html = await res.text();
+        if (input.value.trim() !== q) return;
+        results.innerHTML = html;  // server-rendered by Jinja (autoescaped)
+        if (q) highlightResults(queryTerms(q));
+        browse.forEach(el => { if (el) el.hidden = !!q; });
+        history.replaceState(null, '', pageUrl);
+        lastQuery = q;
+      } catch (e) {
+        if (e.name !== 'AbortError') toast('Search failed. Check your connection.');
+      } finally {
+        results.setAttribute('aria-busy', 'false');
+      }
+    }
+
+    function onInput(immediate) {
+      const q = input.value.trim();
+      form.classList.toggle('has-value', !!input.value);
+      clearTimeout(suggestTimer); clearTimeout(resultsTimer);
+      suggestTimer = setTimeout(() => fetchSuggestions(q), immediate ? 0 : 120);
+      if (q === lastQuery) return;
+      if (q.length === 1) return;  // one letter is noise; keep the current list
+      resultsTimer = setTimeout(() => fetchResults(q), immediate ? 0 : 350);
+    }
+
+    function commit() {
+      clearTimeout(resultsTimer);
+      open(false);
+      const q = input.value.trim();
+      if (q !== lastQuery) fetchResults(q);
+    }
+
+    input.addEventListener('compositionstart', () => { composing = true; });
+    input.addEventListener('compositionend', () => { composing = false; onInput(false); });
+    input.addEventListener('input', () => { if (!composing) onInput(false); });
+    input.addEventListener('focus', () => { if (items.length && input.value.trim().length >= 2) open(true); });
+    input.addEventListener('keydown', e => {
+      if (e.isComposing) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (box.hidden && items.length) open(true); setActive(active + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active - 1); }
+      else if (e.key === 'Escape') {
+        if (!box.hidden) { e.preventDefault(); open(false); }
+        else if (input.value) { input.value = ''; onInput(true); }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (!box.hidden && active >= 0 && items[active].id !== 'cm-sg-foot') { location.href = items[active].href; return; }
+        if (!box.hidden && active >= 0 && items[active].getAttribute('href') === cfg.endpoints.new) { location.href = cfg.endpoints.new; return; }
+        commit();
+      }
+    });
+    form.addEventListener('submit', e => { e.preventDefault(); commit(); });
+    box.addEventListener('mousedown', e => e.preventDefault());  // keep focus in the input while clicking
+    document.addEventListener('click', e => { if (!form.contains(e.target)) open(false); });
+    results.addEventListener('click', e => {
+      const dym = e.target.closest('[data-dym]');
+      const clear = e.target.closest('[data-clear-search]');
+      if (dym) { e.preventDefault(); input.value = dym.dataset.dym; onInput(true); }
+      else if (clear) { e.preventDefault(); input.value = ''; onInput(true); input.focus(); }
+    });
+    // "/" focuses search from anywhere on the page (GitHub/YouTube style).
+    document.addEventListener('keydown', e => {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target;
+      if (t.closest && t.closest('input, textarea, select, [contenteditable="true"]')) return;
+      e.preventDefault();
+      input.focus();
+      input.select();
+    });
+
+    form.classList.toggle('has-value', !!input.value);
+    if (lastQuery) highlightResults(queryTerms(lastQuery));
+  }
 
   // ── Voting (list arrows and post-page pills share one handler) ───────────
   function initVoting() {

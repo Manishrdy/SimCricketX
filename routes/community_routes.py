@@ -69,6 +69,11 @@ def register_community_routes(app, *, db=db, limiter=None):
             return lambda f: f
         return limiter.limit(rule, key_func=_user_key, methods=["POST", "PATCH", "DELETE"])
 
+    def limit_reads(rule):
+        if limiter is None:
+            return lambda f: f
+        return limiter.limit(rule, key_func=_user_key)
+
     # ── Pages ────────────────────────────────────────────────────────────────
 
     @app.route("/community")
@@ -84,14 +89,17 @@ def register_community_routes(app, *, db=db, limiter=None):
         }
         pinned, posts, next_cursor = cs.list_posts(current_user, cursor=args.get("cursor"), **filters)
         votes = cs.my_votes(pinned + posts, current_user)
-        return render_template(
-            "community/index.html",
+        context = dict(
             pinned=[cs.serialize_post(p, current_user, vote=votes.get(p.id, 0)) for p in pinned],
             posts=[cs.serialize_post(p, current_user, vote=votes.get(p.id, 0)) for p in posts],
             next_cursor=next_cursor, filters=filters,
             flairs=cs.FLAIRS, statuses=cs.STATUSES,
-            block=cs.posting_block_reason(current_user),
+            did_you_mean=cs.did_you_mean(filters["q"]) if filters["q"] and not posts else None,
         )
+        # Live search swaps just the results block in place as you type.
+        if args.get("partial") == "1":
+            return render_template("community/_results.html", **context)
+        return render_template("community/index.html", block=cs.posting_block_reason(current_user), **context)
 
     @app.route("/community/new")
     @login_required
@@ -219,6 +227,32 @@ def register_community_routes(app, *, db=db, limiter=None):
             db.session.rollback()
             return _error(exc)
         return jsonify({"vote": mine, "up": post.vote_count, "down": post.downvote_count, "score": post.score})
+
+    @app.route("/api/community/search")
+    @login_required
+    @limit_reads("240 per minute")
+    def community_api_search():
+        """Autocomplete: best matches for a half-typed query, with a snippet
+        showing where the words matched. Cheap enough to call per keystroke
+        (FTS5 prefix query + one visibility-filtered fetch)."""
+        q = (request.args.get("q") or "").strip()[:100]
+        if len(q) < 2:
+            return jsonify({"query": q, "suggestions": [], "total": 0, "did_you_mean": None})
+        rows, total = cs.search_suggestions(current_user, q, limit=8)
+        return jsonify({
+            "query": q,
+            "total": total,
+            "terms": cs.community_search.query_terms(q),
+            "did_you_mean": None if rows else cs.did_you_mean(q),
+            "suggestions": [{
+                "id": p.public_id, "url": url_for("community_post", public_id=p.public_id),
+                "title": p.title, "snippet": snippet,
+                "flair": p.flair, "flair_label": cs.FLAIRS.get(p.flair, {}).get("label", p.flair),
+                "flair_icon": cs.FLAIRS.get(p.flair, {}).get("icon", "fa-circle"),
+                "status": p.status, "status_label": cs.STATUSES.get(p.status, p.status),
+                "score": p.score, "comment_count": p.comment_count, "visibility": p.visibility,
+            } for p, snippet in rows],
+        })
 
     @app.route("/api/community/similar")
     @login_required
