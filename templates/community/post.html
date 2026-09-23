@@ -1,0 +1,194 @@
+{% extends "layout.html" %}
+{% from "community/_macros.html" import badges, author, post_card, block_notice %}
+{% block title %}{{ post.title }} | Community | SimCricketX{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/community.css') }}">{% endblock %}
+
+{% macro comment_block(c, is_reply=False) -%}
+<article class="cm-comment{% if c.is_official and not c.deleted %} cm-comment--official{% endif %}{% if c.deleted %} cm-comment--deleted{% endif %}" id="c{{ c.id }}" data-comment-id="{{ c.id }}">
+  <div class="cm-comment__head">
+    <span class="cm-avatar" aria-hidden="true">{{ c.author.name[:1]|upper }}</span>
+    <strong>{{ author(c.author) }}</strong>
+    <a href="#c{{ c.id }}" style="color:inherit;text-decoration:none" title="{{ c.created_at }}">{{ c.created_at|cm_ago }}</a>
+    {% if c.edited_at %}<span>· edited</span>{% endif %}
+    {% if c.is_official and not c.deleted %}<span class="cm-official-tag"><i class="fas fa-circle-check" aria-hidden="true"></i> {{ 'Official answer' if c.author.is_admin else 'Accepted answer' }}</span>{% endif %}
+    {% if c.deleted and c.can.moderate %}<span class="cm-tag cm-tag--private">Deleted{% if c.delete_reason %}: {{ c.delete_reason }}{% endif %}</span>{% endif %}
+  </div>
+  <div class="cm-comment__body" data-role="body">{% if c.deleted and not c.can.moderate %}[deleted]{% else %}{{ c.body|cm_linkify }}{% endif %}</div>
+  <div class="cm-comment__tools">
+    {% if not c.deleted and post.can.comment %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="reply" data-parent="{{ c.parent_id or c.id }}" data-name="{{ c.author.name }}"><i class="fas fa-reply" aria-hidden="true"></i>Reply</button>{% endif %}
+    {% if c.can.edit %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="edit-comment">Edit</button>{% endif %}
+    {% if c.can.delete %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="delete-comment">Delete</button>{% endif %}
+    {% if not c.deleted and not c.can.edit and not c.can.moderate %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="report" data-comment="{{ c.id }}">Report</button>{% endif %}
+    {% if c.can.moderate %}
+      {% if not is_reply and not c.deleted %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="mod-comment" data-op="{{ 'unofficial' if c.is_official else 'official' }}">{{ 'Unmark answer' if c.is_official else 'Mark as answer' }}</button>{% endif %}
+      {% if c.deleted %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="mod-comment" data-op="restore">Restore</button>
+      <button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="mod-comment" data-op="purge" data-confirm="Permanently delete this comment and its replies?">Purge</button>{% endif %}
+      {% if c.author.email and not c.author.is_admin %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="mute" data-email="{{ c.author.email }}" data-name="{{ c.author.name }}">Mute author</button>{% endif %}
+    {% endif %}
+  </div>
+</article>
+{%- endmacro %}
+
+{% block content %}
+<div class="cm-wrap cm-wrap--narrow">
+  <a class="cm-crumb" href="{{ url_for('community_index') }}"><i class="fas fa-arrow-left" aria-hidden="true"></i>Community</a>
+
+  {% if post.duplicate_of %}
+  <div class="cm-notice"><i class="fas fa-code-merge" aria-hidden="true"></i><div>This is a duplicate of <a href="{{ url_for('community_post', public_id=post.duplicate_of.id) }}">{{ post.duplicate_of.title }}</a>. Votes were moved there.</div></div>
+  {% endif %}
+  {% if post.deleted %}
+  <div class="cm-notice cm-notice--error"><i class="fas fa-trash" aria-hidden="true"></i><div>Deleted{% if post.delete_reason %}: {{ post.delete_reason }}{% endif %}. Only admins can see this.</div></div>
+  {% endif %}
+
+  <article class="cm-post" id="cm-post">
+    {{ badges(post) }}
+    <h1>{{ post.title }}</h1>
+    <div class="cm-meta">
+      {{ author(post.author) }}
+      <span title="{{ post.created_at }}">{{ post.created_at|cm_ago }}</span>
+      {% if post.edited_at %}<span>edited {{ post.edited_at|cm_ago }}</span>{% endif %}
+    </div>
+
+    {% if post.flair == 'bug' and post.steps %}
+    <div class="cm-section">
+      <h3>Steps to reproduce</h3>
+      <ol class="cm-steps">{% for s in post.steps %}<li>{{ s|cm_linkify }}</li>{% endfor %}</ol>
+    </div>
+    <div class="cm-section cm-bug-grid">
+      <div><h3>Expected</h3><p>{{ post.expected|cm_linkify }}</p></div>
+      <div><h3>Actual</h3><p>{{ post.actual|cm_linkify }}</p></div>
+    </div>
+    {% if post.match_format_label %}<div class="cm-section"><h3>Format</h3><span class="cm-tag">{{ post.match_format_label }}</span></div>{% endif %}
+    {% endif %}
+
+    {% if post.body %}
+    {% if post.flair == 'bug' %}<div class="cm-section"><h3>More details</h3></div>{% endif %}
+    <div class="cm-body">{{ post.body|cm_linkify }}</div>
+    {% endif %}
+
+    {% if post.images %}
+    <div class="cm-gallery">
+      {% for img in post.images %}
+      {% if img.expired %}<span class="cm-tag">Image expired</span>
+      {% else %}<a href="{{ img.url }}" target="_blank" rel="noopener"><img src="{{ img.thumb_url }}" alt="Screenshot {{ loop.index }}" loading="lazy" width="160" height="110"></a>{% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="cm-actions">
+      {% if post.can.vote %}
+      <button type="button" class="cm-vote{% if post.voted %} is-on{% endif %}" id="cm-vote" aria-pressed="{{ 'true' if post.voted else 'false' }}">
+        <i class="fas {{ 'fa-check' if post.voted else 'fa-arrow-up' }}" aria-hidden="true"></i><span>{{ post.vote_label }}</span>
+        <span class="cm-vote__count" id="cm-vote-count">{{ post.vote_count }}</span>
+      </button>
+      {% elif post.visibility == 'public' %}
+      <span class="cm-vote" style="cursor:default"><span>{{ post.vote_label }}</span><span class="cm-vote__count">{{ post.vote_count }}</span></span>
+      {% endif %}
+      <span class="cm-spacer"></span>
+      {% if post.can.edit and not post.deleted %}<a class="cm-btn cm-btn--sm" href="{{ url_for('community_edit', public_id=post.id) }}"><i class="fas fa-pen" aria-hidden="true"></i>Edit</a>{% endif %}
+      {% if post.can.delete and not post.deleted %}<button type="button" class="cm-btn cm-btn--sm cm-btn--danger" data-action="delete-post"><i class="fas fa-trash" aria-hidden="true"></i>Delete</button>{% endif %}
+      {% if not post.is_mine and not post.can.moderate %}<button type="button" class="cm-btn cm-btn--sm" data-action="report"><i class="fas fa-flag" aria-hidden="true"></i>Report</button>{% endif %}
+    </div>
+
+    {% if post.can.moderate %}
+    <div class="cm-modbar" aria-label="Moderation">
+      <h4><i class="fas fa-shield-halved" aria-hidden="true"></i> Moderation</h4>
+      <div class="cm-modbar__row">
+        <label class="sr-only" for="cm-mod-status" style="position:absolute;left:-9999px">Status</label>
+        <select id="cm-mod-status" class="cm-select" data-mod="status">
+          {% for key, label in statuses.items() %}<option value="{{ key }}" {% if post.status == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <select class="cm-select" data-mod="flair" aria-label="Flair">
+          {% for key, f in flairs.items() %}<option value="{{ key }}" {% if post.flair == key %}selected{% endif %}>{{ f.label }}</option>{% endfor %}
+        </select>
+        <button type="button" class="cm-btn cm-btn--sm" data-mod-action="{{ 'unlock' if post.is_locked else 'lock' }}">{{ 'Unlock' if post.is_locked else 'Lock' }}</button>
+        <button type="button" class="cm-btn cm-btn--sm" data-mod-action="{{ 'unpin' if post.is_pinned else 'pin' }}">{{ 'Unpin' if post.is_pinned else 'Pin' }}</button>
+        <button type="button" class="cm-btn cm-btn--sm" data-action="duplicate">Mark duplicate…</button>
+        {% if post.deleted %}
+        <button type="button" class="cm-btn cm-btn--sm" data-mod-action="restore">Restore</button>
+        <button type="button" class="cm-btn cm-btn--sm cm-btn--danger" data-mod-action="purge" data-confirm="Permanently delete this post, its comments and images? This cannot be undone.">Purge</button>
+        {% endif %}
+        {% if post.author.email and not post.author.is_admin %}
+        <button type="button" class="cm-btn cm-btn--sm" data-action="mute" data-email="{{ post.author.email }}" data-name="{{ post.author.name }}">{{ 'Change mute' if post.author.muted_until else 'Mute author' }}</button>
+        {% endif %}
+      </div>
+      <dl>
+        {% if post.author.email %}<dt>Author</dt><dd>{{ post.author.email }}{% if post.author.muted_until %} (muted until {{ post.author.muted_until }}){% endif %}</dd>{% endif %}
+        {% if post.page_url %}<dt>From page</dt><dd>{{ post.page_url }}</dd>{% endif %}
+        {% if post.app_version %}<dt>App version</dt><dd>{{ post.app_version }}</dd>{% endif %}
+        {% if post.user_agent %}<dt>Browser</dt><dd>{{ post.user_agent }}</dd>{% endif %}
+        <dt>Needs admin</dt><dd>{{ 'Yes' if post.needs_admin else 'No' }}</dd>
+      </dl>
+    </div>
+    {% endif %}
+  </article>
+
+  <section class="cm-comments" aria-labelledby="cm-comments-h">
+    <h2 id="cm-comments-h">{{ post.comment_count }} comment{{ '' if post.comment_count == 1 else 's' }}</h2>
+
+    {% if post.can.comment %}
+    <form class="cm-composer" id="cm-comment-form" data-parent="">
+      <label for="cm-comment-body" style="position:absolute;left:-9999px">Write a comment</label>
+      <textarea id="cm-comment-body" class="cm-textarea" maxlength="{{ comment_max }}" placeholder="Add a comment in English…" required></textarea>
+      <div class="cm-composer__foot">
+        <span id="cm-reply-to" hidden>Replying to <strong></strong> · <button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" id="cm-reply-cancel">cancel</button></span>
+        <span class="cm-spacer"></span>
+        <button type="submit" class="cm-btn cm-btn--primary cm-btn--sm">Comment</button>
+      </div>
+      <p class="cm-inline-error" id="cm-comment-error" hidden></p>
+    </form>
+    {% elif post.is_locked or post.status in ['fixed','wont_fix','duplicate','closed'] %}
+    <div class="cm-notice"><i class="fas fa-lock" aria-hidden="true"></i><div>This thread is {{ 'locked' if post.is_locked else post.status_label|lower }}, so new comments are closed.</div></div>
+    {% else %}
+    {{ block_notice(block, new_account) }}
+    {% endif %}
+
+    <div id="cm-thread">
+      {% for top, replies in threads %}
+      <div class="cm-thread-item" data-top="{{ top.id }}">
+        {{ comment_block(top) }}
+        {% if replies %}<div class="cm-replies">{% for r in replies %}{{ comment_block(r, is_reply=True) }}{% endfor %}</div>{% endif %}
+      </div>
+      {% endfor %}
+      {% if not threads %}<p style="color:var(--fg-secondary);font-size:.88rem" id="cm-no-comments">No comments yet.</p>{% endif %}
+    </div>
+  </section>
+
+  {% if similar %}
+  <section class="cm-comments" aria-labelledby="cm-similar-h">
+    <h2 id="cm-similar-h">Related posts</h2>
+    <div class="cm-list">{% for p in similar %}{{ post_card(p) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+</div>
+
+<dialog class="cm-dialog" id="cm-report-dialog">
+  <form method="dialog" id="cm-report-form">
+    <h3>Report</h3>
+    <label class="cm-field"><span class="cm-label">Reason</span>
+      <select class="cm-select" name="reason" required>
+        {% for key, label in report_reasons.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+      </select></label>
+    <label class="cm-field"><span class="cm-label">Details (optional)</span>
+      <textarea class="cm-textarea" name="details" maxlength="500" style="min-height:70px"></textarea></label>
+    <div class="cm-dialog__foot"><button class="cm-btn" value="cancel" formnovalidate>Cancel</button><button class="cm-btn cm-btn--primary" value="ok">Send report</button></div>
+  </form>
+</dialog>
+
+<script type="application/json" id="cm-config">{{ {
+  'mode': 'post',
+  'post_id': post.id,
+  'is_admin': post.can.moderate,
+  'endpoints': {
+    'vote': url_for('community_api_vote', public_id=post.id),
+    'comments': url_for('community_api_comment', public_id=post.id),
+    'comment': url_for('community_api_edit_comment', comment_id=0),
+    'post': url_for('community_api_delete', public_id=post.id),
+    'report': url_for('community_api_report'),
+    'moderate': url_for('admin_community_moderate_post', public_id=post.id),
+    'moderate_comment': url_for('admin_community_moderate_comment', comment_id=0),
+    'mute': url_for('admin_community_mute'),
+  }
+}|tojson }}</script>
+{% endblock %}
+{% block extra_js %}<script src="{{ url_for('static', filename='js/community.js') }}"></script>{% endblock %}

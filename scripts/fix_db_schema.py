@@ -33,8 +33,7 @@ def ensure_schema(engine, db_obj=None):
         "blocked_ips", "active_sessions", "site_counters",
         "login_history", "ip_whitelist", "announcement_banner",
         "user_banner_dismissals", "auth_event_log", "exception_log",
-        "issue_webhook_event", "support_conversation", "support_message",
-        "support_conversation_read_state",
+        "issue_webhook_event",
     )
     missing = [t for t in all_required_tables if t not in tables]
     if missing and db_obj is not None:
@@ -44,8 +43,7 @@ def ensure_schema(engine, db_obj=None):
             FailedLoginAttempt, BlockedIP, ActiveSession, SiteCounter,
             LoginHistory, IPWhitelistEntry, AnnouncementBanner,
             UserBannerDismissal, AuthEventLog, ExceptionLog,
-            IssueWebhookEvent, SupportConversation, SupportMessage,
-            SupportConversationReadState,
+            IssueWebhookEvent,
         )
         db_obj.create_all()
         inspector = inspect(engine)

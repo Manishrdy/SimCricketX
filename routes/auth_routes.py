@@ -15,6 +15,7 @@ from utils.email_service import (
     send_account_deletion_email,
 )
 from utils.exception_tracker import log_exception
+from utils.display_name_rules import RESERVED_NAME_MESSAGE, is_reserved_display_name
 
 # Resend-verification rate-limit constants
 _RESEND_MAX = 3
@@ -135,6 +136,8 @@ def register_auth_routes(
                     "register.html",
                     error="Display name must be 50 characters or fewer",
                 )
+            if is_reserved_display_name(display_name):
+                return render_template("register.html", error=RESERVED_NAME_MESSAGE)
             if not password:
                 return render_template("register.html", error="Password required")
             if password != confirm_password:
@@ -457,6 +460,8 @@ def register_auth_routes(
                 "set_display_name.html",
                 error="Display name must be less than 50 characters",
             )
+        if is_reserved_display_name(display_name) and not current_user.is_admin:
+            return render_template("set_display_name.html", error=RESERVED_NAME_MESSAGE)
 
         try:
             current_user.display_name = display_name
@@ -895,6 +900,9 @@ def register_auth_routes(
             return redirect(url_for("account_settings"))
         if len(new_name) > 50:
             flash("Display name must be 50 characters or fewer.", "danger")
+            return redirect(url_for("account_settings"))
+        if is_reserved_display_name(new_name) and not current_user.is_admin:
+            flash(RESERVED_NAME_MESSAGE, "danger")
             return redirect(url_for("account_settings"))
         try:
             current_user.display_name = new_name

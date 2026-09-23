@@ -104,11 +104,8 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # Dry-run on boot (report only); apply via the CLI / standalone prod script.
     ("rebuild_tournament_player_stats_cache",
      _loader("migrations.rebuild_tournament_player_stats_cache")),
-    # In-app user -> admin support messaging. Manual user reports no longer
-    # flow to GitHub; exception automation remains separate.
-    ("add_support_messaging",    _loader("migrations.add_support_messaging")),
-    # Remove the retired manual issue-report storage after support messaging
-    # is in place.
+    # Remove the retired manual issue-report storage (replaced first by the
+    # support chat, now by the community board).
     ("drop_issue_reports",       _loader("migrations.drop_issue_reports")),
     # Explicit discriminator for super-over career-stat scorecard rows
     # (previously only distinguishable by the magic innings_number=3).
@@ -180,6 +177,13 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # teams.updated_at — last-edit timestamp so /teams/manage can show
     # "Last updated ..." instead of the creation date for teams that changed.
     ("add_team_updated_at",      _loader("migrations.add_team_updated_at")),
+    # Community board (replaces the 1:1 support chat): posts, comments, votes,
+    # images, notifications, reports, FTS5 index, users.community_muted_until.
+    ("add_community",            _loader("migrations.add_community")),
+    # The 1:1 support chat it replaces: tables dropped, history discarded by
+    # the owner's choice. (add_support_messaging is no longer registered, or
+    # it would recreate the tables on every boot.)
+    ("drop_support_messaging",   _loader("migrations.drop_support_messaging")),
 ]
 
 
