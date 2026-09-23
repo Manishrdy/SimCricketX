@@ -43,6 +43,40 @@
 
   if (cfg.mode === 'new' || cfg.mode === 'edit') initComposer();
   if (cfg.mode === 'post') initPost();
+  if (cfg.mode === 'index' || cfg.mode === 'post') initVoting();
+
+  // ── Voting (list arrows and post-page pills share one handler) ───────────
+  function initVoting() {
+    document.addEventListener('click', async e => {
+      const btn = e.target.closest('[data-vote]');
+      if (!btn || btn.disabled) return;
+      const box = btn.closest('[data-vote-post]');
+      if (!box) return;
+      e.preventDefault();
+      const buttons = box.querySelectorAll('[data-vote]');
+      buttons.forEach(b => { b.disabled = true; });
+      const r = await api(cfg.endpoints.vote.replace('__ID__', box.dataset.votePost), 'POST', { value: Number(btn.dataset.vote) });
+      buttons.forEach(b => { b.disabled = false; });
+      if (!r.ok) { toast(r.data.error || 'Could not vote.'); return; }
+      const d = r.data;
+      buttons.forEach(b => {
+        const on = Number(b.dataset.vote) === d.vote;
+        b.classList.toggle('is-on', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      const score = box.querySelector('[data-role="score"]');
+      if (score) {
+        score.textContent = d.score;
+        score.title = `${d.up} up · ${d.down} down`;
+        score.classList.toggle('is-up', d.vote === 1);
+        score.classList.toggle('is-down', d.vote === -1);
+      }
+      const up = box.querySelector('[data-role="up"]');
+      const down = box.querySelector('[data-role="down"]');
+      if (up) up.textContent = d.up;
+      if (down) down.textContent = d.down;
+    });
+  }
 
   // ── Composer ────────────────────────────────────────────────────────────
   function initComposer() {
@@ -138,7 +172,7 @@
               const t = document.createElement('span'); t.textContent = p.title;
               const v = document.createElement('span');
               v.style.cssText = 'margin-left:auto;color:var(--fg-secondary);font-size:.76rem;white-space:nowrap';
-              v.textContent = `${p.vote_count} · ${p.status_label}`;
+              v.textContent = `${p.score > 0 ? '+' : ''}${p.score} · ${p.status_label}`;
               a.append(b, t, v);
               list.appendChild(a);
             });
@@ -270,18 +304,6 @@
     const ep = cfg.endpoints;
     const commentUrl = id => ep.comment.replace(/\/0$/, '/' + id);
     const modCommentUrl = id => ep.moderate_comment.replace('/0/', '/' + id + '/');
-
-    const vote = document.getElementById('cm-vote');
-    if (vote) vote.addEventListener('click', async () => {
-      vote.disabled = true;
-      const r = await api(ep.vote, 'POST', {});
-      vote.disabled = false;
-      if (!r.ok) { toast(r.data.error || 'Could not vote.'); return; }
-      vote.classList.toggle('is-on', r.data.voted);
-      vote.setAttribute('aria-pressed', r.data.voted ? 'true' : 'false');
-      vote.querySelector('i').className = 'fas ' + (r.data.voted ? 'fa-check' : 'fa-arrow-up');
-      document.getElementById('cm-vote-count').textContent = r.data.vote_count;
-    });
 
     // Comment composer — moves under the comment being replied to.
     const form = document.getElementById('cm-comment-form');

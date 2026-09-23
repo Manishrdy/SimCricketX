@@ -285,7 +285,7 @@ def test_new_account_can_still_vote(app, alice):
     pid = create(app, alice).get_json()["post"]["id"]
     newbie = make_user("newbie@example.com", name="Newbie", age_days=0)
     resp = as_user(app, newbie).post(f"/api/community/posts/{pid}/vote")
-    assert resp.status_code == 200 and resp.get_json()["voted"] is True
+    assert resp.status_code == 200 and resp.get_json()["vote"] == 1
 
 
 # ── Visibility ───────────────────────────────────────────────────────────────
@@ -346,10 +346,51 @@ def test_non_admin_cannot_edit_others_post(app, alice, bob):
 def test_vote_toggle_and_own_post(app, alice, bob):
     pid = create(app, alice, BUG).get_json()["post"]["id"]
     bob_client = as_user(app, bob)
-    assert bob_client.post(f"/api/community/posts/{pid}/vote").get_json() == {"voted": True, "vote_count": 1}
-    assert bob_client.post(f"/api/community/posts/{pid}/vote").get_json() == {"voted": False, "vote_count": 0}
+    assert bob_client.post(f"/api/community/posts/{pid}/vote").get_json() == {"vote": 1, "up": 1, "down": 0, "score": 1}
+    assert bob_client.post(f"/api/community/posts/{pid}/vote").get_json() == {"vote": 0, "up": 0, "down": 0, "score": 0}
     own = as_user(app, alice).post(f"/api/community/posts/{pid}/vote")
     assert own.status_code == 400
+
+
+def test_downvote_switch_and_clear(app, alice, bob):
+    pid = create(app, alice, BUG).get_json()["post"]["id"]
+    carol = make_user("carol@example.com", name="Carol")
+    as_user(app, carol).post(f"/api/community/posts/{pid}/vote", json={"value": 1})
+    bob_client = as_user(app, bob)
+    url = f"/api/community/posts/{pid}/vote"
+    assert bob_client.post(url, json={"value": -1}).get_json() == {"vote": -1, "up": 1, "down": 1, "score": 0}
+    assert bob_client.post(url, json={"value": 1}).get_json() == {"vote": 1, "up": 2, "down": 0, "score": 2}
+    assert bob_client.post(url, json={"value": -1}).get_json()["score"] == 0
+    assert bob_client.post(url, json={"value": -1}).get_json() == {"vote": 0, "up": 1, "down": 0, "score": 1}
+    assert bob_client.post(url, json={"value": 5}).status_code == 400
+    assert CommunityVote.query.count() == 1
+
+
+def test_top_sort_uses_score(app, alice, bob):
+    carol = make_user("carol@example.com", name="Carol")
+    liked = create(app, alice, title="A post everyone agrees with here").get_json()["post"]["id"]
+    disliked = create(app, alice, title="A post everyone disagrees with here").get_json()["post"]["id"]
+    for user in (bob, carol):
+        c = as_user(app, user)
+        c.post(f"/api/community/posts/{disliked}/vote", json={"value": -1})
+        c.post(f"/api/community/posts/{liked}/vote", json={"value": 1})
+    page = as_user(app, bob).get("/community?sort=top").get_data(as_text=True)
+    assert page.index("agrees with") < page.index("disagrees with")
+    assert 'aria-pressed="true"' in page  # the viewer's own votes are highlighted in the list
+
+
+def test_duplicate_merge_ignores_downvotes_and_fixed_notifies_upvoters_only(app, alice, bob, boss):
+    carol = make_user("carol@example.com", name="Carol")
+    original = create(app, alice, BUG).get_json()["post"]["id"]
+    dupe = create(app, alice, BUG, title="Wrong bowler listed after the rain break").get_json()["post"]["id"]
+    as_user(app, carol).post(f"/api/community/posts/{dupe}/vote", json={"value": -1})
+    as_user(app, bob).post(f"/api/community/posts/{original}/vote", json={"value": -1})
+    admin = as_user(app, boss)
+    admin.post(f"/api/admin/community/posts/{dupe}/moderate", json={"action": "duplicate", "value": original})
+    orig = CommunityPost.query.filter_by(public_id=original).one()
+    assert {(v.user_id, v.value) for v in CommunityVote.query.filter_by(post_id=orig.id)} == {("bob@example.com", -1)}
+    admin.post(f"/api/admin/community/posts/{original}/moderate", json={"action": "status", "value": "fixed"})
+    assert CommunityNotification.query.filter_by(user_id="bob@example.com", kind="status_change").count() == 0
 
 
 # ── Comments ─────────────────────────────────────────────────────────────────

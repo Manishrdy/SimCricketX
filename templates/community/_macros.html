@@ -3,33 +3,48 @@
   <span class="cm-flair cm-flair--{{ p.flair }}"><i class="fas {{ p.flair_icon }}" aria-hidden="true"></i>{{ p.flair_label }}</span>
   {% if show_status and p.status != 'open' %}<span class="cm-status cm-status--{{ p.status }}">{{ p.status_label }}</span>{% endif %}
   {% if p.visibility == 'private' %}<span class="cm-tag cm-tag--private"><i class="fas fa-lock" aria-hidden="true"></i>Private</span>{% endif %}
-  {% if p.is_pinned %}<span class="cm-tag"><i class="fas fa-thumbtack" aria-hidden="true"></i>Pinned</span>{% endif %}
-  {% if p.is_locked %}<span class="cm-tag"><i class="fas fa-comment-slash" aria-hidden="true"></i>Locked</span>{% endif %}
-  {% if p.deleted %}<span class="cm-tag cm-tag--private"><i class="fas fa-trash" aria-hidden="true"></i>Deleted</span>{% endif %}
+  {% if p.is_locked %}<span class="cm-tag"><i class="fas fa-lock" aria-hidden="true"></i>Locked</span>{% endif %}
+  {% if p.deleted %}<span class="cm-tag cm-tag--danger"><i class="fas fa-trash" aria-hidden="true"></i>Deleted</span>{% endif %}
 </span>
 {%- endmacro %}
 
-{% macro author(a) -%}
-<span>{{ a.name }}{% if a.is_admin %} <span class="cm-admin-badge"><i class="fas fa-shield-halved" aria-hidden="true"></i>Admin</span>{% endif %}</span>
+{% macro avatar(a, size='') -%}
+<span class="cm-avatar{% if size %} cm-avatar--{{ size }}{% endif %}{% if a.is_admin %} cm-avatar--admin{% endif %}" style="--h: {{ a.name|cm_hue }}" aria-hidden="true">{{ a.name[:1]|upper }}</span>
+{%- endmacro %}
+
+{% macro author(a, with_avatar=True) -%}
+<span class="cm-who">{% if with_avatar %}{{ avatar(a) }}{% endif %}{{ a.name }}{% if a.is_admin %} <span class="cm-admin-badge"><i class="fas fa-shield-halved" aria-hidden="true"></i>Admin</span>{% endif %}</span>
+{%- endmacro %}
+
+{% macro vote_rail(p) -%}
+<div class="cm-rail" data-vote-post="{{ p.id }}">
+  <button type="button" class="cm-arrow cm-arrow--up{% if p.my_vote == 1 %} is-on{% endif %}" data-vote="1"
+    aria-label="{{ p.vote_label }}" aria-pressed="{{ 'true' if p.my_vote == 1 else 'false' }}" title="{{ p.vote_label if p.can_vote else 'You can’t vote on this post' }}"
+    {% if not p.can_vote %}disabled{% endif %}><i class="fas fa-arrow-up" aria-hidden="true"></i></button>
+  <span class="cm-score{% if p.my_vote == 1 %} is-up{% elif p.my_vote == -1 %} is-down{% endif %}" data-role="score"
+    title="{{ p.vote_count }} up · {{ p.downvote_count }} down">{{ p.score }}</span>
+  <button type="button" class="cm-arrow cm-arrow--down{% if p.my_vote == -1 %} is-on{% endif %}" data-vote="-1"
+    aria-label="{{ p.down_label }}" aria-pressed="{{ 'true' if p.my_vote == -1 else 'false' }}" title="{{ p.down_label if p.can_vote else 'You can’t vote on this post' }}"
+    {% if not p.can_vote %}disabled{% endif %}><i class="fas fa-arrow-down" aria-hidden="true"></i></button>
+</div>
 {%- endmacro %}
 
 {% macro post_card(p, pinned=False) -%}
-<a class="cm-card{% if pinned %} cm-card--pinned{% endif %}" href="{{ url_for('community_post', public_id=p.id) }}">
-  <div class="cm-card__votes" aria-label="{{ p.vote_count }} {{ p.vote_label }}">
-    <strong>{{ p.vote_count }}</strong><span>{{ p.vote_label }}</span>
-  </div>
-  <div>
+<article class="cm-card cm-card--{{ p.flair }}">
+  {{ vote_rail(p) }}
+  <div class="cm-card__main">
     {{ badges(p) }}
-    <h2 class="cm-card__title">{{ p.title }}</h2>
+    <h2 class="cm-card__title"><a class="cm-card__link" href="{{ url_for('community_post', public_id=p.id) }}">{{ p.title }}</a></h2>
     <div class="cm-meta">
       {{ author(p.author) }}
       <span title="{{ p.created_at }}">{{ p.created_at|cm_ago }}</span>
-      <span><i class="far fa-comment" aria-hidden="true"></i>{{ p.comment_count }}</span>
-      {% if p.image_count %}<span><i class="far fa-image" aria-hidden="true"></i>{{ p.image_count }}</span>{% endif %}
+      <span><i class="far fa-comment" aria-hidden="true"></i>{{ p.comment_count }}<span class="cm-sr"> comments</span></span>
+      {% if p.image_count %}<span><i class="far fa-image" aria-hidden="true"></i>{{ p.image_count }}<span class="cm-sr"> images</span></span>{% endif %}
       {% if p.last_activity_at != p.created_at %}<span>active {{ p.last_activity_at|cm_ago }}</span>{% endif %}
     </div>
   </div>
-</a>
+  {% if pinned %}<i class="fas fa-thumbtack cm-pin" title="Pinned" aria-label="Pinned"></i>{% endif %}
+</article>
 {%- endmacro %}
 
 {% macro block_notice(block, new_account=None) -%}

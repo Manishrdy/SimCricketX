@@ -7,15 +7,15 @@
 {% endblock %}
 
 {% block admin_content %}
-<div style="max-width:1000px">
+<div class="cm-wrap" style="margin:0;padding:0;max-width:1000px">
   <div class="cm-head">
     <div><h1>Community moderation</h1><p>Private posts are the old support inbox. Reports and unanswered posts are below.</p></div>
     <a class="cm-btn" href="{{ url_for('community_index') }}"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>Open board</a>
   </div>
 
   <div class="cm-stats">
-    <div class="cm-stat"><strong>{{ private|length }}</strong><span>Private posts awaiting reply</span></div>
-    <div class="cm-stat"><strong>{{ reports|length }}</strong><span>Open reports</span></div>
+    <div class="cm-stat{% if private %} cm-stat--alert{% endif %}"><strong>{{ private|length }}</strong><span>Private posts awaiting reply</span></div>
+    <div class="cm-stat{% if reports %} cm-stat--alert{% endif %}"><strong>{{ reports|length }}</strong><span>Open reports</span></div>
     <div class="cm-stat"><strong>{{ stats.open_bugs }}</strong><span>Open bugs</span></div>
     <div class="cm-stat"><strong>{{ stats.this_week }}</strong><span>Posts this week</span></div>
     <div class="cm-stat"><strong>{{ stats.total }}</strong><span>Live posts</span></div>
@@ -50,7 +50,7 @@
     <h2><i class="fas fa-circle-question" aria-hidden="true"></i>Public: no admin reply yet <span>{{ unanswered|length }}</span></h2>
     {% for p in unanswered %}
     <div class="cm-row"><div>{{ badges(p) }}<div><a href="{{ url_for('community_post', public_id=p.id) }}">{{ p.title }}</a></div>
-      <div class="cm-row__excerpt">{{ p.author.name }} · {{ p.vote_count }} {{ p.vote_label|lower }} · {{ p.comment_count }} comments · {{ p.created_at|cm_ago }}</div></div></div>
+      <div class="cm-row__excerpt">{{ p.author.name }} · score {{ p.score }} (▲{{ p.vote_count }} ▼{{ p.downvote_count }}) · {{ p.comment_count }} comments · {{ p.created_at|cm_ago }}</div></div></div>
     {% else %}<p class="cm-row__excerpt">Nothing waiting.</p>{% endfor %}
   </section>
 
