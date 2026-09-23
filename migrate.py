@@ -51,7 +51,8 @@ def _import_all_models():
         ActiveSession, SiteCounter, LoginHistory, IPWhitelistEntry,
         UserGroundConfig, AnnouncementBanner, UserBannerDismissal,
         AuthEventLog, ExceptionLog, IssueWebhookEvent,
-        SupportConversation, SupportMessage, SupportConversationReadState,
+        CommunityPost, CommunityComment, CommunityVote, CommunityImage,
+        CommunityNotification, CommunityReport,
     )
 
 

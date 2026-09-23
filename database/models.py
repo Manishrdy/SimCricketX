@@ -68,6 +68,9 @@ class User(UserMixin, db.Model):
     pw_change_otp_expires = db.Column(db.DateTime, nullable=True)
     pw_change_pending_hash = db.Column(db.String(200), nullable=True)
 
+    # Community board mute (read-only on the board, rest of the site unaffected)
+    community_muted_until = db.Column(db.DateTime, nullable=True)
+
     # Relationships — cascade so deleting a User removes all owned data
     teams = relationship('Team', backref='owner', lazy=True, cascade="all, delete-orphan")
     matches = relationship('Match', backref='user', lazy=True, cascade="all, delete-orphan")
@@ -1284,88 +1287,157 @@ class IssueWebhookEvent(db.Model):
     received_at         = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 
-class SupportConversation(db.Model):
-    """One-to-one support thread between a user and the admin team."""
-    __tablename__ = 'support_conversation'
+class CommunityPost(db.Model):
+    """A community board thread (question, bug, feature request, ...).
+
+    author_id is SET NULL on account deletion so public threads survive as
+    "[deleted user]"; the account-deletion path removes private posts itself.
+    """
+    __tablename__ = 'community_posts'
 
     id = db.Column(db.Integer, primary_key=True)
-    public_id = db.Column(db.String(16), nullable=False, unique=True, index=True)
-    user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
-    assigned_admin_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    public_id = db.Column(db.String(12), nullable=False, unique=True, index=True)
+    author_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
 
-    status = db.Column(db.String(20), nullable=False, default='open', index=True)
-    priority = db.Column(db.String(20), nullable=False, default='normal')
-    subject = db.Column(db.String(200), nullable=True)
-
-    source_page_url = db.Column(db.String(500), nullable=True)
+    flair = db.Column(db.String(20), nullable=False, index=True)
+    title = db.Column(db.String(120), nullable=False)
+    body = db.Column(db.Text, nullable=False, default='')
+    # Bug-only structure
+    steps_json = db.Column(db.Text, nullable=True)
+    expected = db.Column(db.Text, nullable=True)
+    actual = db.Column(db.Text, nullable=True)
+    match_format = db.Column(db.String(10), nullable=True)
+    # Auto-captured context
+    page_url = db.Column(db.String(500), nullable=True)
     app_version = db.Column(db.String(50), nullable=True)
-    user_agent = db.Column(db.String(500), nullable=True)
+    user_agent = db.Column(db.String(300), nullable=True)
 
-    last_message_at = db.Column(db.DateTime, nullable=True, index=True)
-    last_user_message_at = db.Column(db.DateTime, nullable=True)
-    last_admin_message_at = db.Column(db.DateTime, nullable=True)
+    visibility = db.Column(db.String(10), nullable=False, default='public', index=True)
+    status = db.Column(db.String(20), nullable=False, default='open', index=True)
+    status_changed_at = db.Column(db.DateTime, nullable=True)
+    is_locked = db.Column(db.Boolean, nullable=False, default=False)
+    is_pinned = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    duplicate_of_id = db.Column(db.Integer, db.ForeignKey('community_posts.id', ondelete='SET NULL'), nullable=True)
+    # True while the latest word on the thread is not an admin's
+    needs_admin = db.Column(db.Boolean, nullable=False, default=True, index=True)
 
-    retention_eligible_at = db.Column(db.DateTime, nullable=True, index=True)
-    hard_delete_at = db.Column(db.DateTime, nullable=True, index=True)
+    vote_count = db.Column(db.Integer, nullable=False, default=0)
+    comment_count = db.Column(db.Integer, nullable=False, default=0)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-    closed_at = db.Column(db.DateTime, nullable=True)
-    closed_by = db.Column(db.String(120), nullable=True)
+    last_activity_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    edited_at = db.Column(db.DateTime, nullable=True)
+    edited_by = db.Column(db.String(120), nullable=True)
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)
+    deleted_by = db.Column(db.String(120), nullable=True)
+    delete_reason = db.Column(db.String(200), nullable=True)
 
-    user = relationship('User', foreign_keys=[user_id], backref=db.backref('support_conversations', cascade='all, delete-orphan', passive_deletes=True))
-    assigned_admin = relationship('User', foreign_keys=[assigned_admin_id])
-    messages = relationship('SupportMessage', back_populates='conversation', cascade='all, delete-orphan', passive_deletes=True)
-    read_states = relationship('SupportConversationReadState', back_populates='conversation', cascade='all, delete-orphan', passive_deletes=True)
+    author = relationship('User', foreign_keys=[author_id])
+    comments = relationship('CommunityComment', back_populates='post', cascade='all, delete-orphan', passive_deletes=True)
+    images = relationship('CommunityImage', back_populates='post', passive_deletes=True)
 
     __table_args__ = (
-        db.Index('ix_support_conversation_status_last', 'status', 'last_message_at'),
-        db.Index('ix_support_conversation_user_status', 'user_id', 'status'),
+        db.Index('ix_community_posts_list', 'deleted_at', 'visibility', 'last_activity_at'),
     )
 
 
-class SupportMessage(db.Model):
-    """Persisted support chat message."""
-    __tablename__ = 'support_message'
+class CommunityComment(db.Model):
+    """Comment on a community post. One level of nesting: parent_id always
+    points at a top-level comment."""
+    __tablename__ = 'community_comments'
 
     id = db.Column(db.Integer, primary_key=True)
-    conversation_id = db.Column(db.Integer, db.ForeignKey('support_conversation.id', ondelete='CASCADE'), nullable=False, index=True)
-    sender_type = db.Column(db.String(20), nullable=False)  # user | admin | system
-    sender_id = db.Column(db.String(120), nullable=True, index=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('community_posts.id', ondelete='CASCADE'), nullable=False, index=True)
+    author_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    parent_id = db.Column(db.Integer, db.ForeignKey('community_comments.id', ondelete='CASCADE'), nullable=True, index=True)
     body = db.Column(db.Text, nullable=False)
-    message_type = db.Column(db.String(20), nullable=False, default='text')
-    client_nonce = db.Column(db.String(80), nullable=True)
-    metadata_json = db.Column(db.Text, nullable=True)
+    is_official = db.Column(db.Boolean, nullable=False, default=False)
+
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
     edited_at = db.Column(db.DateTime, nullable=True)
-    deleted_at = db.Column(db.DateTime, nullable=True)
+    edited_by = db.Column(db.String(120), nullable=True)
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)
+    deleted_by = db.Column(db.String(120), nullable=True)
+    delete_reason = db.Column(db.String(200), nullable=True)
 
-    conversation = relationship('SupportConversation', back_populates='messages')
-
-    __table_args__ = (
-        db.Index('ix_support_message_conversation_created', 'conversation_id', 'created_at'),
-        db.UniqueConstraint('conversation_id', 'sender_id', 'client_nonce', name='uq_support_message_client_nonce'),
-    )
+    post = relationship('CommunityPost', back_populates='comments')
+    author = relationship('User', foreign_keys=[author_id])
 
 
-class SupportConversationReadState(db.Model):
-    """Read cursor per user/admin for a support conversation."""
-    __tablename__ = 'support_conversation_read_state'
+class CommunityVote(db.Model):
+    """One "me too" / "I want this" per user per post."""
+    __tablename__ = 'community_votes'
 
     id = db.Column(db.Integer, primary_key=True)
-    conversation_id = db.Column(db.Integer, db.ForeignKey('support_conversation.id', ondelete='CASCADE'), nullable=False, index=True)
-    reader_type = db.Column(db.String(20), nullable=False)  # user | admin
-    reader_id = db.Column(db.String(120), nullable=False, index=True)
-    last_read_message_id = db.Column(db.Integer, db.ForeignKey('support_message.id', ondelete='SET NULL'), nullable=True)
-    last_read_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-
-    conversation = relationship('SupportConversation', back_populates='read_states')
-    last_read_message = relationship('SupportMessage', foreign_keys=[last_read_message_id])
+    post_id = db.Column(db.Integer, db.ForeignKey('community_posts.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     __table_args__ = (
-        db.UniqueConstraint('conversation_id', 'reader_type', 'reader_id', name='uq_support_read_state_reader'),
-        db.Index('ix_support_read_state_reader', 'reader_type', 'reader_id'),
+        db.UniqueConstraint('post_id', 'user_id', name='uq_community_vote_post_user'),
     )
+
+
+class CommunityImage(db.Model):
+    """Compressed WebP attached to a post. post_id is NULL between upload and
+    post submission; unattached rows are purged after 24h."""
+    __tablename__ = 'community_images'
+
+    id = db.Column(db.Integer, primary_key=True)
+    public_id = db.Column(db.String(32), nullable=False, unique=True, index=True)
+    uploader_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('community_posts.id', ondelete='SET NULL'), nullable=True, index=True)
+    path = db.Column(db.String(200), nullable=False)
+    thumb_path = db.Column(db.String(200), nullable=False)
+    bytes = db.Column(db.Integer, nullable=False, default=0)
+    thumb_bytes = db.Column(db.Integer, nullable=False, default=0)
+    width = db.Column(db.Integer, nullable=False, default=0)
+    height = db.Column(db.Integer, nullable=False, default=0)
+    sha256 = db.Column(db.String(64), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    purged_at = db.Column(db.DateTime, nullable=True)
+
+    post = relationship('CommunityPost', back_populates='images')
+
+
+class CommunityNotification(db.Model):
+    """In-app bell entry."""
+    __tablename__ = 'community_notifications'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    kind = db.Column(db.String(20), nullable=False)  # reply | comment | admin_response | status_change
+    post_id = db.Column(db.Integer, db.ForeignKey('community_posts.id', ondelete='CASCADE'), nullable=False)
+    comment_id = db.Column(db.Integer, db.ForeignKey('community_comments.id', ondelete='CASCADE'), nullable=True)
+    actor_name = db.Column(db.String(100), nullable=True)
+    detail = db.Column(db.String(120), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    read_at = db.Column(db.DateTime, nullable=True)
+
+    post = relationship('CommunityPost')
+
+    __table_args__ = (
+        db.Index('ix_community_notifications_user_read', 'user_id', 'read_at'),
+    )
+
+
+class CommunityReport(db.Model):
+    """User report against a post or comment, triaged by an admin."""
+    __tablename__ = 'community_reports'
+
+    id = db.Column(db.Integer, primary_key=True)
+    reporter_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('community_posts.id', ondelete='CASCADE'), nullable=False, index=True)
+    comment_id = db.Column(db.Integer, db.ForeignKey('community_comments.id', ondelete='CASCADE'), nullable=True)
+    reason = db.Column(db.String(30), nullable=False)
+    details = db.Column(db.String(500), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    resolved_at = db.Column(db.DateTime, nullable=True, index=True)
+    resolved_by = db.Column(db.String(120), nullable=True)
+    resolution = db.Column(db.String(30), nullable=True)
+
+    post = relationship('CommunityPost')
+    comment = relationship('CommunityComment')
 
 
 class MatchDiagnosticEvent(db.Model):

@@ -265,6 +265,11 @@ def update_user_email(old_email: str, new_email: str, admin_email: str = None) -
         db.session.execute(text("UPDATE login_history SET user_id = :new WHERE user_id = :old"), {"new": new_email, "old": old_email})
         # auth_event_log.user_id has ondelete='SET NULL' so we update it explicitly
         db.session.execute(text("UPDATE auth_event_log SET user_id = :new WHERE user_id = :old"), {"new": new_email, "old": old_email})
+        # Community board rows reference users.id too.
+        for table, col in (("community_posts", "author_id"), ("community_comments", "author_id"),
+                           ("community_votes", "user_id"), ("community_images", "uploader_id"),
+                           ("community_notifications", "user_id"), ("community_reports", "reporter_id")):
+            db.session.execute(text(f"UPDATE {table} SET {col} = :new WHERE {col} = :old"), {"new": new_email, "old": old_email})
 
         # Update the primary key last
         db.session.execute(text("UPDATE users SET id = :new WHERE id = :old"), {"new": new_email, "old": old_email})

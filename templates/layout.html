@@ -1238,6 +1238,10 @@
             {% block navbar_items %}
             {% if current_user.is_authenticated %}
             <a href="{{ url_for('home') }}" class="theme-toggle nav-home-link" title="Home"><i class="fas fa-home"></i></a>
+            <a href="{{ url_for('community_index') }}" class="theme-toggle cm-bell" id="cmNavBell" title="Community" aria-label="Community">
+                <i class="fas fa-comments"></i>
+                <span class="cm-bell__dot" id="cmNavBellDot" hidden></span>
+            </a>
             {% if current_user.is_admin %}
             <a href="{{ url_for('admin_dashboard') }}" class="theme-toggle admin-nav-shield" id="adminNavShield" title="Admin Panel"
                 style="background: var(--accent-light); color: var(--accent); border-color: var(--accent); position: relative;">
@@ -1337,6 +1341,10 @@
 
                     <!-- Quick Actions -->
                     <div class="profile-actions">
+                        <a href="{{ url_for('community_index') }}" class="profile-action-item">
+                            <i class="fas fa-comments"></i>
+                            <span>Community &amp; Help</span>
+                        </a>
                         <a href="{{ url_for('my_analytics') }}" class="profile-action-item">
                             <i class="fas fa-chart-bar"></i>
                             <span>My Analytics</span>
@@ -1702,7 +1710,7 @@
 
     {% block extra_js %}{% endblock %}
 
-    {% include '_support_widget.html' ignore missing %}
+    {% include 'community/_help_button.html' %}
 
     {% if current_user.is_authenticated and current_user.is_admin %}
     <style>
@@ -1731,70 +1739,25 @@
             var shieldEl = document.getElementById('adminNavShield');
             if (!dotEl || !shieldEl) return;
 
-            var refreshTimer = null;
-            var socket = null;
-
             function setDot(count) {
                 count = Number(count || 0);
-                if (count > 0) {
-                    dotEl.hidden = false;
-                    shieldEl.title = 'Admin Panel · ' + count + ' unread support message' + (count === 1 ? '' : 's');
-                } else {
-                    dotEl.hidden = true;
-                    shieldEl.title = 'Admin Panel';
-                }
+                dotEl.hidden = count <= 0;
+                shieldEl.title = count > 0
+                    ? 'Admin Panel · ' + count + ' community item' + (count === 1 ? '' : 's') + ' waiting'
+                    : 'Admin Panel';
             }
 
             function fetchCount() {
-                fetch('/api/admin/support/unread-count', { credentials: 'same-origin' })
+                if (document.hidden) return;
+                fetch('/api/admin/community/pending-count', { credentials: 'same-origin' })
                     .then(function (r) { return r.ok ? r.json() : { count: 0 }; })
                     .then(function (body) { setDot(body && body.count); })
                     .catch(function () {});
             }
 
-            function scheduleRefresh() {
-                if (refreshTimer) return;
-                refreshTimer = window.setTimeout(function () {
-                    refreshTimer = null;
-                    fetchCount();
-                }, 250);
-            }
-
-            function loadSocketIo() {
-                return new Promise(function (resolve) {
-                    if (typeof io !== 'undefined') return resolve(true);
-                    var existing = document.querySelector('script[data-socket-io]');
-                    if (existing) {
-                        existing.addEventListener('load', function () { resolve(true); });
-                        existing.addEventListener('error', function () { resolve(false); });
-                        return;
-                    }
-                    var s = document.createElement('script');
-                    s.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
-                    s.crossOrigin = 'anonymous';
-                    s.dataset.socketIo = '1';
-                    s.onload = function () { resolve(true); };
-                    s.onerror = function () { resolve(false); };
-                    document.head.appendChild(s);
-                });
-            }
-
-            function initSocket() {
-                if (typeof io === 'undefined') return;
-                socket = io('/support', { transports: ['websocket', 'polling'] });
-                socket.on('connect', fetchCount);
-                socket.on('support:conversation:new',    scheduleRefresh);
-                socket.on('support:conversation:update', scheduleRefresh);
-                socket.on('support:message:new',         scheduleRefresh);
-                socket.on('support:admin:refresh',       scheduleRefresh);
-            }
-
-            document.addEventListener('visibilitychange', function () {
-                if (!document.hidden) fetchCount();
-            });
-
+            document.addEventListener('visibilitychange', fetchCount);
             fetchCount();
-            loadSocketIo().then(function (ok) { if (ok) initSocket(); });
+            window.setInterval(fetchCount, 60000);
         })();
     </script>
     {% endif %}

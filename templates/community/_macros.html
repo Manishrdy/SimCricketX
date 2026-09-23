@@ -1,0 +1,47 @@
+{% macro badges(p, show_status=True) -%}
+<span class="cm-badges">
+  <span class="cm-flair cm-flair--{{ p.flair }}"><i class="fas {{ p.flair_icon }}" aria-hidden="true"></i>{{ p.flair_label }}</span>
+  {% if show_status and p.status != 'open' %}<span class="cm-status cm-status--{{ p.status }}">{{ p.status_label }}</span>{% endif %}
+  {% if p.visibility == 'private' %}<span class="cm-tag cm-tag--private"><i class="fas fa-lock" aria-hidden="true"></i>Private</span>{% endif %}
+  {% if p.is_pinned %}<span class="cm-tag"><i class="fas fa-thumbtack" aria-hidden="true"></i>Pinned</span>{% endif %}
+  {% if p.is_locked %}<span class="cm-tag"><i class="fas fa-comment-slash" aria-hidden="true"></i>Locked</span>{% endif %}
+  {% if p.deleted %}<span class="cm-tag cm-tag--private"><i class="fas fa-trash" aria-hidden="true"></i>Deleted</span>{% endif %}
+</span>
+{%- endmacro %}
+
+{% macro author(a) -%}
+<span>{{ a.name }}{% if a.is_admin %} <span class="cm-admin-badge"><i class="fas fa-shield-halved" aria-hidden="true"></i>Admin</span>{% endif %}</span>
+{%- endmacro %}
+
+{% macro post_card(p, pinned=False) -%}
+<a class="cm-card{% if pinned %} cm-card--pinned{% endif %}" href="{{ url_for('community_post', public_id=p.id) }}">
+  <div class="cm-card__votes" aria-label="{{ p.vote_count }} {{ p.vote_label }}">
+    <strong>{{ p.vote_count }}</strong><span>{{ p.vote_label }}</span>
+  </div>
+  <div>
+    {{ badges(p) }}
+    <h2 class="cm-card__title">{{ p.title }}</h2>
+    <div class="cm-meta">
+      {{ author(p.author) }}
+      <span title="{{ p.created_at }}">{{ p.created_at|cm_ago }}</span>
+      <span><i class="far fa-comment" aria-hidden="true"></i>{{ p.comment_count }}</span>
+      {% if p.image_count %}<span><i class="far fa-image" aria-hidden="true"></i>{{ p.image_count }}</span>{% endif %}
+      {% if p.last_activity_at != p.created_at %}<span>active {{ p.last_activity_at|cm_ago }}</span>{% endif %}
+    </div>
+  </div>
+</a>
+{%- endmacro %}
+
+{% macro block_notice(block, new_account=None) -%}
+{% if block %}
+<div class="cm-notice" role="status"><i class="fas fa-circle-info" aria-hidden="true"></i>
+  <div>{{ block[1] }}
+  {% if block[0] == 'no_display_name' %} <a href="{{ url_for('set_display_name') }}">Set it now</a>
+  {% elif block[0] == 'reserved_name' %} <a href="{{ url_for('account_settings') }}">Account settings</a>
+  {% elif block[0] == 'unverified' %} <a href="{{ url_for('verify_email_pending') }}">Verify email</a>{% endif %}
+  </div>
+</div>
+{% elif new_account %}
+<div class="cm-notice" role="status"><i class="fas fa-hourglass-half" aria-hidden="true"></i><div>{{ new_account }}</div></div>
+{% endif %}
+{%- endmacro %}
