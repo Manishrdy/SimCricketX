@@ -1,0 +1,20 @@
+/* Shared navigation, styled with the application's existing theme. */
+.scx-nav.navbar { padding: 0 max(24px, calc((100vw - 1136px) / 2)); gap: 24px; background: linear-gradient(180deg, color-mix(in srgb, var(--bg-raised) 30%, transparent), transparent), var(--bg-glass); backdrop-filter: blur(18px); border-bottom: 1px solid var(--border-light); box-shadow: 0 4px 22px -16px var(--brand-primary), inset 0 1px 0 var(--bg-raised); }
+.scx-nav .nav-brand { display: flex; align-items: center; gap: 10px; font-size: 1.15rem; flex-shrink: 0; letter-spacing: -.04em; }
+.scx-nav .nav-brand-mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; background: var(--brand-gradient); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bg-raised) 55%, transparent), var(--shadow-sm); }
+.scx-nav .nav-brand-mark i { color: var(--text-on-accent); font-size: 1rem; }
+.scx-nav .nav-logo-text { color: var(--text-main); background: none; -webkit-text-fill-color: currentColor; }
+.scx-nav .nav-items { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.scx-nav .nav-control { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; min-width: 40px; padding: 0 11px; color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: 10px; font-size: .8rem; position: relative; flex-shrink: 0; cursor: pointer; }
+.scx-nav .nav-control:hover { color: var(--brand-primary); background: var(--accent-light); border-color: var(--border-light); }
+.scx-nav .admin-nav-shield { color: var(--brand-primary); background: var(--accent-light); }
+.scx-nav .profile-dropdown-wrapper { margin-left: 8px; padding-left: 16px; border-left: 1px solid var(--border-light); }
+.scx-nav .profile-trigger { height: 42px; gap: 9px; padding: 4px 8px 4px 4px; background: transparent; border: 1px solid transparent; border-radius: 12px; }
+.scx-nav .profile-trigger:hover, .scx-nav .profile-trigger.active { background: var(--bg-surface); border-color: var(--border-light); }
+.scx-nav .profile-avatar { border-radius: 10px; background: var(--accent-light); color: var(--brand-primary); width: 32px; height: 32px; }
+.scx-nav .profile-name { font-size: .81rem; max-width: 145px; }
+.scx-nav .profile-dropdown { right: 0; border-radius: 16px; border-color: var(--border-light); box-shadow: var(--shadow-lg); max-width: calc(100vw - 24px); }
+.scx-nav a:focus-visible, .scx-nav button:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 3px; }
+@media (max-width: 760px) { .scx-nav.navbar { padding-inline: 16px; gap: 12px; } .scx-nav .profile-name { display: none; } .scx-nav .profile-dropdown-wrapper { padding-left: 8px; margin-left: 2px; } .scx-nav .nav-home-link span { display: none; } }
+@media (max-width: 480px) { .scx-nav.navbar { padding-inline: 12px; gap: 8px; } .scx-nav .nav-brand { font-size: .97rem; gap: 7px; } .scx-nav .nav-brand-mark { width: 29px; height: 29px; border-radius: 9px; } .scx-nav .nav-items { gap: 2px; } .scx-nav .nav-control { min-width: 34px; height: 38px; padding-inline: 8px; } .scx-nav .nav-control-label { display: none; } .scx-nav .profile-dropdown-wrapper { border: 0; margin: 0; padding: 0; } .scx-nav .profile-trigger { padding: 3px; } .scx-nav .profile-trigger > i { display: none; } }
+@media (max-width: 370px) { .scx-nav .nav-brand-mark { display: none; } .scx-nav .nav-control { min-width: 32px; padding-inline: 6px; } .scx-nav .nav-brand { font-size: .9rem; } }

@@ -45,10 +45,10 @@ def _load_ensure_schema():
     return _run
 
 
-def _loader(module_path: str):
+def _loader(module_path: str, entry: str = "run_migration"):
     def _resolve():
-        module = __import__(module_path, fromlist=["run_migration"])
-        return module.run_migration
+        module = __import__(module_path, fromlist=[entry])
+        return getattr(module, entry)
     return _resolve
 
 
@@ -177,13 +177,11 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # teams.updated_at — last-edit timestamp so /teams/manage can show
     # "Last updated ..." instead of the creation date for teams that changed.
     ("add_team_updated_at",      _loader("migrations.add_team_updated_at")),
-    # Community board (replaces the 1:1 support chat): posts, comments, votes,
-    # images, notifications, reports, FTS5 index, users.community_muted_until.
-    ("add_community",            _loader("migrations.add_community")),
-    # The 1:1 support chat it replaces: tables dropped, history discarded by
-    # the owner's choice. (add_support_messaging is no longer registered, or
-    # it would recreate the tables on every boot.)
-    ("drop_support_messaging",   _loader("migrations.drop_support_messaging")),
+    # Community board (replaces the 1:1 support chat). Boot applies only the
+    # additive schema; dropping the old support_* tables needs an explicit
+    # `python -m migrations.community_board --db <path> --apply`.
+    # (add_support_messaging is no longer registered, so nothing recreates them.)
+    ("community_board",          _loader("migrations.community_board", "run_on_boot")),
 ]
 
 

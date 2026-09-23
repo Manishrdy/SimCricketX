@@ -4,6 +4,7 @@
 {% set _cm_path = (request.path or '') %}
 {% set _cm_hide_help = (
     current_user.is_admin
+    or request.endpoint == 'home'
     or _cm_path.startswith('/community')
     or _cm_path.startswith('/admin')
     or _cm_path.startswith('/login') or _cm_path.startswith('/logout') or _cm_path.startswith('/register')
@@ -29,30 +30,13 @@
   <i class="fas fa-circle-question" aria-hidden="true"></i><span>Help</span>
 </a>
 {% endif %}
-<script>
-(function () {
-  'use strict';
-  var bell = document.getElementById('cmNavBell');
-  var dot = document.getElementById('cmNavBellDot');
-  if (!bell || !dot) return;
-  var base = bell.getAttribute('href');
-  function refresh() {
-    if (document.hidden) return;
-    fetch('{{ url_for("community_api_notifications") }}', { credentials: 'same-origin' })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) {
-        if (!d) return;
-        var n = Number(d.unread || 0);
-        dot.hidden = n <= 0;
-        dot.textContent = n > 9 ? '9+' : String(n);
-        bell.setAttribute('href', n > 0 ? '{{ url_for("community_notifications_page") }}' : base);
-        bell.title = n > 0 ? 'Community · ' + n + ' new notification' + (n === 1 ? '' : 's') : 'Community';
-      })
-      .catch(function () {});
-  }
-  document.addEventListener('visibilitychange', refresh);
-  refresh();
-  window.setInterval(refresh, 90000);
-})();
-</script>
+<section id="cmAlerts" class="cm-alerts" aria-label="Notifications" hidden
+  data-list-url="{{ url_for('community_api_notifications') }}" data-read-url="{{ url_for('community_api_notifications_read') }}">
+  <div class="cm-alerts__head"><div><span class="cm-alerts__eyebrow">COMMUNITY</span><div class="cm-alerts__heading">Notifications <span class="cm-alerts__count" data-unread-count>0</span></div></div><button type="button" class="cm-alerts__read" data-notifications-read-all title="Mark all notifications read"><i class="fas fa-check-double" aria-hidden="true"></i><span>Mark all read</span></button></div>
+  <p id="cmAlertStatus" role="status">Loading notifications…</p>
+  <div id="cmAlertItems"></div>
+  <a class="cm-alerts__footer" href="{{ url_for('community_notifications_page') }}">View all notifications <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+</section>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/community_notifications.css') }}">
+<script src="{{ url_for('static', filename='js/community_notifications.js') }}" defer></script>
 {% endif %}

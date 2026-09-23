@@ -9,6 +9,7 @@
   if (!cfgEl) return;
   const cfg = JSON.parse(cfgEl.textContent);
   const csrf = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+  let mentionSeq = 0;  // ids for @-tag dropdowns (declared before the init calls below run)
 
   async function api(url, method, body, isForm) {
     const opts = { method, headers: { 'X-CSRFToken': csrf, 'Accept': 'application/json' }, credentials: 'same-origin' };
@@ -45,6 +46,177 @@
   if (cfg.mode === 'post') initPost();
   if (cfg.mode === 'index' || cfg.mode === 'post') initVoting();
   if (cfg.mode === 'index') initSearch();
+
+  // ── @-tags: autocomplete for any textarea/input ─────────────────────────
+  // Typing '@' offers people from /api/community/mentions/suggest. Picking one
+  // writes '@Display Name ' and remembers their stable id in state.picked; on
+  // submit, collectMentions() sends the ids whose '@name' is still in the
+  // text. The server re-checks every rule, so this is only a convenience.
+  function newMentionState() { return { picked: new Map() }; }
+
+  function collectMentions(state, texts) {
+    const all = texts.filter(Boolean).join('\n').toLowerCase();
+    return [...state.picked].filter(([, name]) => all.includes('@' + name.toLowerCase())).map(([id]) => id);
+  }
+
+  function initMentions(field, state, opts) {
+    const url = cfg.endpoints && cfg.endpoints.mention_suggest;
+    if (!url || !field || field.dataset.mentions) return;
+    field.dataset.mentions = '1';
+    opts = opts || {};
+    const menu = document.createElement('div');
+    menu.className = 'cm-mention-menu';
+    menu.id = 'cm-mention-menu-' + (++mentionSeq);
+    menu.setAttribute('role', 'listbox');
+    menu.setAttribute('aria-label', 'People to tag');
+    menu.hidden = true;
+    (field.closest('.cm-wrap') || document.body).appendChild(menu);
+    field.setAttribute('aria-autocomplete', 'list');
+    field.setAttribute('aria-controls', menu.id);
+    field.setAttribute('aria-expanded', 'false');
+
+    let people = [], active = -1, token = null, ctrl = null, timer = null, composing = false, dead = null;
+
+    // The '@query' just before the caret, or null. Names can contain spaces,
+    // so the query may too (up to 3 words, 30 characters).
+    function currentToken() {
+      const pos = field.selectionStart;
+      if (pos == null || pos !== field.selectionEnd) return null;
+      const before = field.value.slice(0, pos);
+      const at = before.lastIndexOf('@');
+      if (at < 0 || (at > 0 && !/[\s(\[{"']/.test(before[at - 1]))) return null;
+      const q = before.slice(at + 1);
+      if (q.length > 30 || /[\n@]/.test(q) || /^\s|\s{2}/.test(q) || q.split(' ').length > 3) return null;
+      const lq = q.toLowerCase();
+      for (const name of state.picked.values()) {
+        if (lq.startsWith(name.toLowerCase() + ' ')) return null;  // already tagged, now typing on
+      }
+      return { start: at, end: pos, q };
+    }
+
+    function place() {
+      const r = field.getBoundingClientRect();
+      const width = Math.min(r.width, 360);
+      menu.style.width = width + 'px';
+      menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8)) + 'px';
+      const below = window.innerHeight - r.bottom;
+      if (below < 220 && r.top > below) { menu.style.top = ''; menu.style.bottom = (window.innerHeight - r.top + 4) + 'px'; }
+      else { menu.style.bottom = ''; menu.style.top = (r.bottom + 4) + 'px'; }
+    }
+
+    function close() {
+      menu.hidden = true;
+      field.setAttribute('aria-expanded', 'false');
+      field.removeAttribute('aria-activedescendant');
+      people = []; active = -1;
+    }
+
+    function setActive(i) {
+      active = i;
+      [...menu.children].forEach((el, j) => el.classList.toggle('is-active', j === i));
+      if (i >= 0 && menu.children[i]) {
+        field.setAttribute('aria-activedescendant', menu.children[i].id);
+        menu.children[i].scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    function render() {
+      menu.replaceChildren();
+      if (!people.length) { close(); return; }
+      people.forEach((p, i) => {
+        const opt = document.createElement('div');
+        opt.className = 'cm-mention-opt';
+        opt.id = menu.id + '-' + i;
+        opt.setAttribute('role', 'option');
+        const av = document.createElement('span');
+        av.className = 'cm-avatar' + (p.is_admin ? ' cm-avatar--admin' : '');
+        av.style.setProperty('--h', p.hue || 210);
+        av.setAttribute('aria-hidden', 'true');
+        av.textContent = p.name.slice(0, 1).toUpperCase();
+        const name = document.createElement('span');
+        name.className = 'cm-mention-opt__name';
+        name.textContent = p.name;
+        opt.append(av, name);
+        if (p.is_admin) {
+          const b = document.createElement('span');
+          b.className = 'cm-admin-badge';
+          b.innerHTML = '<i class="fas fa-shield-halved" aria-hidden="true"></i>Admin';
+          opt.appendChild(b);
+        } else if (p.in_thread) {
+          const b = document.createElement('span');
+          b.className = 'cm-mention-opt__hint';
+          b.textContent = 'In this thread';
+          opt.appendChild(b);
+        }
+        opt.addEventListener('mousedown', e => { e.preventDefault(); pick(i); });
+        menu.appendChild(opt);
+      });
+      place();
+      menu.hidden = false;
+      field.setAttribute('aria-expanded', 'true');
+      setActive(0);
+    }
+
+    async function fetchPeople(q) {
+      if (ctrl) ctrl.abort();
+      ctrl = new AbortController();
+      const params = new URLSearchParams({ q });
+      const postId = opts.postId ? opts.postId() : null;
+      if (postId) params.set('post', postId);
+      if (opts.isPrivate && opts.isPrivate()) params.set('private', '1');
+      try {
+        const res = await fetch(`${url}?${params}`, { credentials: 'same-origin', signal: ctrl.signal,
+                                                      headers: { 'Accept': 'application/json' } });
+        if (!res.ok) { close(); return; }
+        const data = await res.json();
+        const t = currentToken();
+        if (!t || t.q !== q) return;  // the text moved on while we waited
+        people = data.people || [];
+        // A substring search that found nobody can't find anybody for a longer query.
+        dead = people.length || !q ? null : q.toLowerCase();
+        render();
+      } catch (e) {
+        if (e.name !== 'AbortError') close();
+      }
+    }
+
+    function onInput() {
+      if (composing) return;
+      token = currentToken();
+      clearTimeout(timer);
+      if (!token || (dead && token.q.toLowerCase().startsWith(dead))) { if (ctrl) ctrl.abort(); close(); return; }
+      timer = setTimeout(() => fetchPeople(token.q), 120);
+    }
+
+    function pick(i) {
+      const p = people[i];
+      const t = currentToken() || token;
+      if (!p || !t) return;
+      const insert = '@' + p.name + ' ';
+      field.value = field.value.slice(0, t.start) + insert + field.value.slice(t.end);
+      const caret = t.start + insert.length;
+      field.setSelectionRange(caret, caret);
+      state.picked.set(p.id, p.name);
+      close();
+      field.dispatchEvent(new Event('input', { bubbles: true }));  // counters
+      field.focus();
+    }
+
+    field.addEventListener('input', onInput);
+    field.addEventListener('click', onInput);
+    field.addEventListener('compositionstart', () => { composing = true; });
+    field.addEventListener('compositionend', () => { composing = false; onInput(); });
+    field.addEventListener('blur', () => setTimeout(close, 120));
+    field.addEventListener('keydown', e => {
+      if (menu.hidden || e.isComposing) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive((active + 1) % people.length); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((active - 1 + people.length) % people.length); }
+      else if (e.key === 'Enter' || e.key === 'Tab') { if (active >= 0) { e.preventDefault(); e.stopImmediatePropagation(); pick(active); } }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(); }
+    });
+    window.addEventListener('resize', () => { if (!menu.hidden) place(); });
+    window.addEventListener('scroll', () => { if (!menu.hidden) place(); }, true);
+  }
 
   // ── Live search + autocomplete (index page) ───────────────────────────────
   // Suggestions come from /api/community/search on every keystroke (FTS5
@@ -323,6 +495,10 @@
     const post = cfg.post;
     let images = post ? post.images.filter(i => !i.expired).map(i => ({ id: i.id, thumb: i.thumb_url, fresh: false })) : [];
     let submitting = false;
+    const tags = newMentionState();
+    const privateBox = document.getElementById('cm-private');
+    const tagOpts = { postId: () => (post ? post.id : null), isPrivate: () => !!(privateBox && privateBox.checked) };
+    ['cm-body', 'cm-expected', 'cm-actual'].forEach(id => initMentions(document.getElementById(id), tags, tagOpts));
 
     const flair = () => (form.querySelector('input[name="flair"]:checked') || {}).value || '';
 
@@ -348,6 +524,7 @@
       input.maxLength = limits.step[1];
       input.value = value || '';
       input.setAttribute('aria-label', 'Step');
+      initMentions(input, tags, tagOpts);  // before the Enter-adds-a-step handler, so picking wins
       const rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'cm-btn cm-btn--ghost cm-btn--sm';
@@ -511,6 +688,7 @@
         payload.actual = document.getElementById('cm-actual').value;
         payload.match_format = document.getElementById('cm-format').value;
       }
+      payload.mentions = collectMentions(tags, [payload.body, payload.expected, payload.actual, ...(payload.steps || [])]);
       if (cfg.mode === 'new') {
         payload.page_url = cfg.prefill.page_url || document.referrer || '';
         payload.app_version = cfg.app_version || '';
@@ -548,7 +726,10 @@
       replyTo.hidden = true;
       home.insertBefore(form, homeNext);
     }
+    const tagOpts = { postId: () => cfg.post_id };
+    const commentTags = newMentionState();
     if (form) {
+      initMentions(document.getElementById('cm-comment-body'), commentTags, tagOpts);
       document.getElementById('cm-reply-cancel').addEventListener('click', resetComposer);
       form.addEventListener('submit', async e => {
         e.preventDefault();
@@ -558,7 +739,8 @@
         const btn = form.querySelector('button[type="submit"]');
         btn.disabled = true;
         errEl.hidden = true;
-        const r = await api(ep.comments, 'POST', { body, parent_id: form.dataset.parent || null });
+        const r = await api(ep.comments, 'POST', { body, parent_id: form.dataset.parent || null,
+                                                   mentions: collectMentions(commentTags, [body]) });
         btn.disabled = false;
         if (!r.ok) { errEl.textContent = r.data.error || 'Could not post comment.'; errEl.hidden = false; return; }
         ta.value = '';
@@ -598,11 +780,13 @@
         const bar = document.createElement('div'); bar.style.cssText = 'display:flex;gap:.4rem;margin-top:.4rem';
         bar.append(save, cancel);
         bodyEl.replaceChildren(ta, bar, err);
+        const editTags = newMentionState();
+        initMentions(ta, editTags, tagOpts);
         ta.focus();
         cancel.addEventListener('click', () => { bodyEl.textContent = original; });
         save.addEventListener('click', async () => {
           save.disabled = true;
-          const r = await api(commentUrl(cid), 'PATCH', { body: ta.value });
+          const r = await api(commentUrl(cid), 'PATCH', { body: ta.value, mentions: collectMentions(editTags, [ta.value]) });
           save.disabled = false;
           if (!r.ok) { err.textContent = r.data.error || 'Could not save.'; err.hidden = false; return; }
           reloadAt('c' + cid);

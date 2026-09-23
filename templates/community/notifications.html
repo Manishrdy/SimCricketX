@@ -2,17 +2,31 @@
 {% block title %}Notifications | Community | SimCricketX{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/community.css') }}">{% endblock %}
 {% block content %}
-<div class="cm-wrap cm-wrap--narrow">
-  <a class="cm-crumb" href="{{ url_for('community_index') }}"><i class="fas fa-arrow-left" aria-hidden="true"></i>Community</a>
-  <div class="cm-head"><div><h1>Notifications</h1><p>Replies, admin responses and status changes on posts you're part of.</p></div></div>
-  {% for n in notes %}
-  <a class="cm-row{% if not n.read %} cm-unread{% endif %}"
-     href="{{ url_for('community_post', public_id=n.post_id) }}{% if n.comment_id %}#c{{ n.comment_id }}{% endif %}">
-    <div><div class="cm-row__title" style="margin:0">{{ n.text }}</div>
-      <div class="cm-row__excerpt">{{ n.post_title }} · {{ n.created_at|cm_ago }}</div></div>
-  </a>
-  {% else %}
-  <div class="cm-empty"><i class="far fa-bell" aria-hidden="true"></i>No notifications yet.</div>
-  {% endfor %}
+{% set kinds = {'mention': ('fa-at', 'Mention'), 'reply': ('fa-reply', 'Reply'), 'comment': ('fa-comment', 'Thread reply'), 'admin_response': ('fa-shield-alt', 'Admin response'), 'status_change': ('fa-circle-check', 'Status update')} %}
+<div class="cm-wrap cm-wrap--narrow cm-notification-center">
+  <a class="cm-crumb" href="{{ url_for('community_index') }}"><i class="fas fa-arrow-left" aria-hidden="true"></i>Back to community</a>
+  <header class="cm-inbox-hero">
+    <div class="cm-inbox-hero__icon" aria-hidden="true"><i class="far fa-bell"></i></div>
+    <div><span class="cm-alerts__eyebrow">YOUR COMMUNITY ACTIVITY</span><h1>Notifications</h1><p>The conversations you're part of, all in one place.</p></div>
+  </header>
+  <section class="cm-inbox" aria-label="Notification history">
+    <div class="cm-inbox__toolbar"><div class="cm-inbox__summary"><strong>All activity <span class="cm-inbox__total">{{ total }}</span></strong><span class="cm-inbox__unread"><span data-unread-count>{{ unread }}</span> unread</span></div><button type="button" class="cm-alerts__read" data-notifications-read-all><i class="fas fa-check-double" aria-hidden="true"></i><span>Mark all read</span></button></div>
+    <p role="status" id="cmHistoryStatus" class="cm-alerts__status"></p>
+    {% for n in notes %}
+    {% set icon, label = kinds.get(n.kind, ('fa-bell', 'Update')) %}
+    <a class="cm-alerts__item cm-alerts__item--history{% if not n.read %} cm-unread{% endif %}" data-notification-id="{{ n.id }}" href="{{ n.url }}">
+      <span class="cm-alerts__icon cm-alerts__icon--{{ n.kind }}" aria-hidden="true"><i class="fas {{ icon }}"></i></span>
+      <span class="cm-alerts__body"><span class="cm-alerts__meta"><span>{{ label }}</span><span aria-hidden="true">·</span><time datetime="{{ n.created_at }}" title="{{ n.created_at }}">{{ n.created_at|cm_ago }}</time></span><span class="cm-alerts__text">{{ n.text }}</span></span>
+      <span class="cm-alerts__unread-dot" aria-label="Unread" {% if n.read %}hidden{% endif %}></span><i class="fas fa-chevron-right cm-alerts__chevron" aria-hidden="true"></i>
+    </a>
+    {% else %}
+    <div class="cm-alerts__empty"><span class="cm-alerts__empty-icon"><i class="far fa-bell" aria-hidden="true"></i></span><h2>You're all caught up</h2><p>Replies, mentions and updates will appear here.<br>Start a conversation to get things going.</p><a class="cm-btn" href="{{ url_for('community_index') }}">Explore the community <i class="fas fa-arrow-right" aria-hidden="true"></i></a></div>
+    {% endfor %}
+    {% if page > 1 or has_next %}<nav aria-label="Notification pages" class="cm-alert-pages">
+      {% if page > 1 %}<a class="cm-btn cm-btn--sm" href="{{ url_for('community_notifications_page', page=page-1) }}"><i class="fas fa-arrow-left" aria-hidden="true"></i>Newer</a>{% else %}<span></span>{% endif %}<span>Page {{ page }}</span>
+      {% if has_next %}<a class="cm-btn cm-btn--sm" href="{{ url_for('community_notifications_page', page=page+1) }}">Older<i class="fas fa-arrow-right" aria-hidden="true"></i></a>{% else %}<span></span>{% endif %}
+    </nav>{% endif %}
+  </section>
+  <p class="cm-inbox__hint"><i class="fas fa-check" aria-hidden="true"></i>Notifications are marked read when you open them.</p>
 </div>
 {% endblock %}

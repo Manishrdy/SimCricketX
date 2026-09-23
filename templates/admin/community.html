@@ -4,72 +4,141 @@
 {% block extra_css %}
 {{ super() }}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/community.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_community.css') }}">
 {% endblock %}
 
 {% block admin_content %}
-<div class="cm-wrap" style="margin:0;padding:0;max-width:1000px">
-  <div class="cm-head">
-    <div><h1>Community moderation</h1><p>Private posts are the old support inbox. Reports and unanswered posts are below.</p></div>
-    <a class="cm-btn" href="{{ url_for('community_index') }}"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>Open board</a>
-  </div>
-
-  <div class="cm-stats">
-    <div class="cm-stat{% if private %} cm-stat--alert{% endif %}"><strong>{{ private|length }}</strong><span>Private posts awaiting reply</span></div>
-    <div class="cm-stat{% if reports %} cm-stat--alert{% endif %}"><strong>{{ reports|length }}</strong><span>Open reports</span></div>
-    <div class="cm-stat"><strong>{{ stats.open_bugs }}</strong><span>Open bugs</span></div>
-    <div class="cm-stat"><strong>{{ stats.this_week }}</strong><span>Posts this week</span></div>
-    <div class="cm-stat"><strong>{{ stats.total }}</strong><span>Live posts</span></div>
-  </div>
-
-  <section class="cm-queue">
-    <h2><i class="fas fa-lock" aria-hidden="true"></i>Private: awaiting reply <span>{{ private|length }}</span></h2>
-    {% for p in private %}
-    <div class="cm-row"><div>{{ badges(p) }}<div><a href="{{ url_for('community_post', public_id=p.id) }}">{{ p.title }}</a></div>
-      <div class="cm-row__excerpt">{{ p.author.name }} · {{ p.author.email }} · waiting since {{ p.last_activity_at|cm_ago }}</div></div></div>
-    {% else %}<p class="cm-row__excerpt">Inbox zero.</p>{% endfor %}
-  </section>
-
-  <section class="cm-queue">
-    <h2><i class="fas fa-flag" aria-hidden="true"></i>Reports <span>{{ reports|length }}</span></h2>
-    {% for r in reports %}
-    <div class="cm-row" data-report="{{ r.id }}">
-      <div style="flex:1;min-width:220px">
-        <a href="{{ url_for('community_post', public_id=r.post_id) }}{% if r.comment_id %}#c{{ r.comment_id }}{% endif %}">{{ r.post_title }}</a>
-        <div class="cm-row__excerpt"><strong>{{ r.reason }}</strong> by {{ r.reporter }} · {{ r.created_at.strftime('%d %b %H:%M') }}{% if r.details %} · “{{ r.details }}”{% endif %}</div>
-        <div class="cm-row__excerpt">{{ 'Comment' if r.comment_id else 'Post' }}: {{ r.excerpt }}</div>
-      </div>
-      <div style="display:flex;gap:.4rem">
-        <button class="cm-btn cm-btn--sm" data-resolve="actioned">Actioned</button>
-        <button class="cm-btn cm-btn--sm" data-resolve="dismissed">Dismiss</button>
+<div class="cm-wrap ac-shell">
+  <header class="ac-hero">
+    <div class="ac-hero__glow" aria-hidden="true"></div>
+    <div class="ac-hero__content">
+      <div class="ac-eyebrow"><span class="ac-live-dot"></span> Moderation workspace</div>
+      <h1>Community command center</h1>
+      <p>Review conversations that need attention, protect the community, and keep support moving.</p>
+      <div class="ac-hero__meta">
+        <span><i class="fas fa-shield-halved" aria-hidden="true"></i> Admin only</span>
+        <span><i class="fas fa-clock" aria-hidden="true"></i> Live queue</span>
       </div>
     </div>
-    {% else %}<p class="cm-row__excerpt">No open reports.</p>{% endfor %}
+    <a class="ac-board-link" href="{{ url_for('community_index') }}">
+      <span class="ac-board-link__icon"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></span>
+      <span><small>Public experience</small>Open community board</span>
+      <i class="fas fa-chevron-right" aria-hidden="true"></i>
+    </a>
+  </header>
+
+  <div class="ac-stats" aria-label="Community overview">
+    <article class="ac-stat ac-stat--private{% if private %} is-urgent{% endif %}">
+      <div class="ac-stat__top"><span class="ac-stat__icon"><i class="fas fa-lock" aria-hidden="true"></i></span><span class="ac-stat__trend">Inbox</span></div>
+      <strong>{{ private|length }}</strong><span>Private posts awaiting reply</span>
+    </article>
+    <article class="ac-stat ac-stat--reports{% if reports %} is-urgent{% endif %}">
+      <div class="ac-stat__top"><span class="ac-stat__icon"><i class="fas fa-flag" aria-hidden="true"></i></span><span class="ac-stat__trend">Review</span></div>
+      <strong>{{ reports|length }}</strong><span>Open reports</span>
+    </article>
+    <article class="ac-stat ac-stat--bugs">
+      <div class="ac-stat__top"><span class="ac-stat__icon"><i class="fas fa-bug" aria-hidden="true"></i></span><span class="ac-stat__trend">Active</span></div>
+      <strong>{{ stats.open_bugs }}</strong><span>Open bugs</span>
+    </article>
+    <article class="ac-stat ac-stat--week">
+      <div class="ac-stat__top"><span class="ac-stat__icon"><i class="fas fa-chart-line" aria-hidden="true"></i></span><span class="ac-stat__trend">7 days</span></div>
+      <strong>{{ stats.this_week }}</strong><span>Posts this week</span>
+    </article>
+    <article class="ac-stat ac-stat--live">
+      <div class="ac-stat__top"><span class="ac-stat__icon"><i class="fas fa-comments" aria-hidden="true"></i></span><span class="ac-stat__trend">All time</span></div>
+      <strong>{{ stats.total }}</strong><span>Live posts</span>
+    </article>
+  </div>
+
+  <div class="ac-workspace">
+  <div class="ac-column ac-column--primary">
+  <section class="ac-panel ac-panel--private">
+    <div class="ac-panel__head">
+      <div><span class="ac-panel__kicker">Support inbox</span><h2><span class="ac-panel__icon"><i class="fas fa-lock" aria-hidden="true"></i></span>Private posts</h2></div>
+      <span class="ac-count">{{ private|length }} waiting</span>
+    </div>
+    <div class="ac-panel__body">
+    {% for p in private %}
+    <a class="ac-item ac-item--linked" href="{{ url_for('community_post', public_id=p.id) }}">
+      <span class="ac-item__marker"><i class="fas fa-envelope" aria-hidden="true"></i></span>
+      <span class="ac-item__content">{{ badges(p) }}<strong>{{ p.title }}</strong><small>{{ p.author.name }} · {{ p.author.email }} · waiting since {{ p.last_activity_at|cm_ago }}</small></span>
+      <i class="fas fa-chevron-right ac-item__chevron" aria-hidden="true"></i>
+    </a>
+    {% else %}<div class="ac-empty"><span><i class="fas fa-check" aria-hidden="true"></i></span><div><strong>Inbox zero</strong><small>Every private post has a response.</small></div></div>{% endfor %}
+    </div>
   </section>
 
-  <section class="cm-queue">
-    <h2><i class="fas fa-circle-question" aria-hidden="true"></i>Public: no admin reply yet <span>{{ unanswered|length }}</span></h2>
+  <section class="ac-panel ac-panel--reports">
+    <div class="ac-panel__head">
+      <div><span class="ac-panel__kicker">Safety queue</span><h2><span class="ac-panel__icon"><i class="fas fa-flag" aria-hidden="true"></i></span>Open reports</h2></div>
+      <span class="ac-count ac-count--alert">{{ reports|length }} to review</span>
+    </div>
+    <div class="ac-panel__body">
+    {% for r in reports %}
+    <article class="ac-report" data-report="{{ r.id }}">
+      <div class="ac-report__top">
+        <span class="ac-report__reason">{{ r.reason }}</span>
+        <time datetime="{{ r.created_at.isoformat() }}">{{ r.created_at.strftime('%d %b · %H:%M') }}</time>
+      </div>
+      <a class="ac-report__title" href="{{ url_for('community_post', public_id=r.post_id) }}{% if r.comment_id %}#c{{ r.comment_id }}{% endif %}">{{ r.post_title }}</a>
+      <p class="ac-report__excerpt"><span>{{ 'Comment' if r.comment_id else 'Post' }}</span>{{ r.excerpt }}</p>
+      {% if r.details %}<p class="ac-report__note"><i class="fas fa-quote-left" aria-hidden="true"></i>{{ r.details }}</p>{% endif %}
+      <div class="ac-report__foot">
+        <span><i class="fas fa-user" aria-hidden="true"></i> Reported by {{ r.reporter }}</span>
+        <div class="ac-report__actions">
+          <button type="button" class="ac-button ac-button--quiet" data-resolve="dismissed"><i class="fas fa-xmark" aria-hidden="true"></i>Dismiss</button>
+          <button type="button" class="ac-button ac-button--primary" data-resolve="actioned"><i class="fas fa-check" aria-hidden="true"></i>Mark actioned</button>
+        </div>
+      </div>
+    </article>
+    {% else %}<div class="ac-empty"><span><i class="fas fa-shield-heart" aria-hidden="true"></i></span><div><strong>No open reports</strong><small>The community queue is clear.</small></div></div>{% endfor %}
+    </div>
+  </section>
+  </div>
+
+  <div class="ac-column ac-column--secondary">
+  <section class="ac-panel ac-panel--unanswered">
+    <div class="ac-panel__head">
+      <div><span class="ac-panel__kicker">Needs attention</span><h2><span class="ac-panel__icon"><i class="fas fa-message" aria-hidden="true"></i></span>Awaiting admin reply</h2></div>
+      <span class="ac-count">{{ unanswered|length }} open</span>
+    </div>
+    <div class="ac-panel__body">
     {% for p in unanswered %}
-    <div class="cm-row"><div>{{ badges(p) }}<div><a href="{{ url_for('community_post', public_id=p.id) }}">{{ p.title }}</a></div>
-      <div class="cm-row__excerpt">{{ p.author.name }} · score {{ p.score }} (▲{{ p.vote_count }} ▼{{ p.downvote_count }}) · {{ p.comment_count }} comments · {{ p.created_at|cm_ago }}</div></div></div>
-    {% else %}<p class="cm-row__excerpt">Nothing waiting.</p>{% endfor %}
+    <a class="ac-item ac-item--linked" href="{{ url_for('community_post', public_id=p.id) }}">
+      <span class="ac-item__avatar">{{ p.author.name[:1]|upper }}</span>
+      <span class="ac-item__content">{{ badges(p) }}<strong>{{ p.title }}</strong><small>{{ p.author.name }} · {{ p.comment_count }} comments · {{ p.created_at|cm_ago }}</small></span>
+      <span class="ac-score" title="Community score"><i class="fas fa-arrow-up" aria-hidden="true"></i>{{ p.score }}</span>
+    </a>
+    {% else %}<div class="ac-empty"><span><i class="fas fa-check" aria-hidden="true"></i></span><div><strong>All caught up</strong><small>No public posts are waiting for an admin.</small></div></div>{% endfor %}
+    </div>
   </section>
 
-  <section class="cm-queue">
-    <h2><i class="fas fa-volume-xmark" aria-hidden="true"></i>Muted users <span>{{ muted|length }}</span></h2>
+  <section class="ac-panel ac-panel--compact">
+    <div class="ac-panel__head">
+      <div><span class="ac-panel__kicker">Restrictions</span><h2><span class="ac-panel__icon"><i class="fas fa-volume-xmark" aria-hidden="true"></i></span>Muted users</h2></div>
+      <span class="ac-count">{{ muted|length }}</span>
+    </div>
+    <div class="ac-panel__body">
     {% for u in muted %}
-    <div class="cm-row"><div><strong>{{ u.name }}</strong><div class="cm-row__excerpt">{{ u.email }} · until {{ u.until.strftime('%d %b %Y %H:%M') }} UTC</div></div>
-      <button class="cm-btn cm-btn--sm" data-unmute="{{ u.email }}">Unmute</button></div>
-    {% else %}<p class="cm-row__excerpt">Nobody is muted.</p>{% endfor %}
+    <div class="ac-item"><span class="ac-item__avatar ac-item__avatar--muted">{{ u.name[:1]|upper }}</span><span class="ac-item__content"><strong>{{ u.name }}</strong><small>{{ u.email }} · until {{ u.until.strftime('%d %b %Y %H:%M') }} UTC</small></span>
+      <button type="button" class="ac-button ac-button--quiet" data-unmute="{{ u.email }}">Unmute</button></div>
+    {% else %}<div class="ac-empty ac-empty--small"><span><i class="fas fa-volume-high" aria-hidden="true"></i></span><div><strong>Nobody is muted</strong><small>No active community restrictions.</small></div></div>{% endfor %}
+    </div>
   </section>
 
-  <section class="cm-queue">
-    <h2><i class="fas fa-trash" aria-hidden="true"></i>Recently deleted <span>{{ deleted|length }}</span></h2>
-    <p class="cm-row__excerpt" style="margin-top:-.3rem">Purged automatically 30 days after deletion.</p>
+  <section class="ac-panel ac-panel--compact">
+    <div class="ac-panel__head">
+      <div><span class="ac-panel__kicker">30-day retention</span><h2><span class="ac-panel__icon"><i class="fas fa-trash-can" aria-hidden="true"></i></span>Recently deleted</h2></div>
+      <span class="ac-count">{{ deleted|length }}</span>
+    </div>
+    <div class="ac-panel__body">
     {% for p in deleted %}
-    <div class="cm-row"><div>{{ badges(p) }}<div><a href="{{ url_for('community_post', public_id=p.id) }}">{{ p.title }}</a></div>
-      <div class="cm-row__excerpt">{{ p.author.name }}{% if p.delete_reason %} · {{ p.delete_reason }}{% endif %}</div></div></div>
-    {% else %}<p class="cm-row__excerpt">Nothing deleted recently.</p>{% endfor %}
+    <a class="ac-item ac-item--linked" href="{{ url_for('community_post', public_id=p.id) }}"><span class="ac-item__marker ac-item__marker--trash"><i class="fas fa-trash-can" aria-hidden="true"></i></span><span class="ac-item__content">{{ badges(p) }}<strong>{{ p.title }}</strong><small>{{ p.author.name }}{% if p.delete_reason %} · {{ p.delete_reason }}{% endif %}</small></span><i class="fas fa-chevron-right ac-item__chevron" aria-hidden="true"></i></a>
+    {% else %}<div class="ac-empty ac-empty--small"><span><i class="fas fa-box-archive" aria-hidden="true"></i></span><div><strong>Nothing recently deleted</strong><small>Deleted content stays here for 30 days.</small></div></div>{% endfor %}
+    </div>
   </section>
+  </div>
+  </div>
 </div>
 {% endblock %}
 
