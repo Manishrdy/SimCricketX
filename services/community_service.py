@@ -38,12 +38,18 @@ log = logging.getLogger("SimCricketX")
 
 # ── Vocabulary ────────────────────────────────────────────────────────────────
 
+# vote_label / down_label name what an upvote / downvote means for the flair.
 FLAIRS = {
-    "bug":          {"label": "Bug",             "vote_label": "Me too",        "icon": "fa-bug"},
-    "question":     {"label": "Question",        "vote_label": "Same question", "icon": "fa-circle-question"},
-    "feature":      {"label": "Feature request", "vote_label": "I want this",   "icon": "fa-lightbulb"},
-    "feedback":     {"label": "Feedback",        "vote_label": "Agree",         "icon": "fa-comment-dots"},
-    "announcement": {"label": "Announcement",    "vote_label": "Noted",         "icon": "fa-bullhorn", "admin_only": True},
+    "bug":          {"label": "Bug",             "vote_label": "Me too",   "down_label": "Can't reproduce",
+                     "icon": "fa-bug", "hint": "Something is broken or behaves wrongly"},
+    "question":     {"label": "Question",        "vote_label": "Upvote",   "down_label": "Downvote",
+                     "icon": "fa-circle-question", "hint": "Ask how something works"},
+    "feature":      {"label": "Feature request", "vote_label": "Upvote",   "down_label": "Downvote",
+                     "icon": "fa-lightbulb", "hint": "Suggest something new or better"},
+    "feedback":     {"label": "Feedback",        "vote_label": "Upvote",   "down_label": "Downvote",
+                     "icon": "fa-comment-dots", "hint": "Share what you like or don't"},
+    "announcement": {"label": "Announcement",    "vote_label": "Upvote",   "down_label": "Downvote",
+                     "icon": "fa-bullhorn", "hint": "News from the team", "admin_only": True},
 }
 
 STATUSES = {
@@ -405,11 +411,19 @@ def restore_post(post: CommunityPost) -> None:
 # ── Votes ─────────────────────────────────────────────────────────────────────
 
 def _recount_votes(post: CommunityPost) -> int:
-    post.vote_count = db.session.query(func.count(CommunityVote.id)).filter_by(post_id=post.id).scalar() or 0
-    return post.vote_count
+    rows = dict(db.session.query(CommunityVote.value, func.count(CommunityVote.id))
+                .filter_by(post_id=post.id).group_by(CommunityVote.value).all())
+    post.vote_count = rows.get(1, 0)
+    post.downvote_count = rows.get(-1, 0)
+    post.score = post.vote_count - post.downvote_count
+    return post.score
 
 
-def toggle_vote(post: CommunityPost, user) -> tuple[bool, int]:
+def cast_vote(post: CommunityPost, user, value: int = 1) -> int:
+    """Reddit-style: +1 / -1; repeating your current vote clears it, the
+    opposite vote switches it. Returns the user's vote afterwards (1, -1, 0)."""
+    if value not in (1, -1):
+        raise CommunityError("Vote must be up or down.")
     require_can_write(user, voting=True)
     if post.author_id == user.id:
         raise CommunityError("You can't vote on your own post.", code="own_post")
@@ -418,24 +432,37 @@ def toggle_vote(post: CommunityPost, user) -> tuple[bool, int]:
     if post.deleted_at is not None or post.status == "duplicate":
         raise CommunityError("Voting is closed on this post.", code="closed")
     existing = CommunityVote.query.filter_by(post_id=post.id, user_id=user.id).first()
-    if existing:
+    if existing is not None and existing.value == value:
         db.session.delete(existing)
-        voted = False
+        mine = 0
+    elif existing is not None:
+        existing.value = value
+        mine = value
     else:
-        db.session.add(CommunityVote(post_id=post.id, user_id=user.id))
-        voted = True
+        db.session.add(CommunityVote(post_id=post.id, user_id=user.id, value=value))
+        mine = value
     try:
         db.session.flush()
     except IntegrityError:  # double-click race: the other request won
         db.session.rollback()
-        voted = True
-    count = _recount_votes(post)
+        mine = my_vote(post, user)
+    _recount_votes(post)
     db.session.commit()
-    return voted, count
+    return mine
 
 
-def has_voted(post: CommunityPost, user) -> bool:
-    return CommunityVote.query.filter_by(post_id=post.id, user_id=user.id).first() is not None
+def my_vote(post: CommunityPost, user) -> int:
+    vote = CommunityVote.query.filter_by(post_id=post.id, user_id=user.id).first()
+    return vote.value if vote is not None else 0
+
+
+def my_votes(posts, user) -> dict[int, int]:
+    """post id -> the user's vote, for a list page in one query."""
+    ids = [p.id for p in posts]
+    if not ids:
+        return {}
+    return dict(db.session.query(CommunityVote.post_id, CommunityVote.value)
+                .filter(CommunityVote.user_id == user.id, CommunityVote.post_id.in_(ids)).all())
 
 
 # ── Comments ──────────────────────────────────────────────────────────────────
@@ -571,7 +598,7 @@ def set_status(post: CommunityPost, admin, status: str) -> None:
     label = STATUSES[status]
     _notify(post.author_id, "status_change", post, actor=admin, detail=label)
     if status == "fixed":
-        voter_ids = [v.user_id for v in CommunityVote.query.filter_by(post_id=post.id).all()]
+        voter_ids = [v.user_id for v in CommunityVote.query.filter_by(post_id=post.id, value=1).all()]
         for uid in voter_ids:
             if uid != post.author_id:
                 _notify(uid, "status_change", post, actor=admin, detail=label)
@@ -602,15 +629,16 @@ def mark_duplicate(post: CommunityPost, admin, target_public_id: str) -> Communi
     if target.duplicate_of_id == post.id:
         raise CommunityError("That post is already a duplicate of this one.")
     # Move votes (and the duplicate's author, who clearly has the issue too).
-    carriers = {v.user_id for v in CommunityVote.query.filter_by(post_id=post.id).all()}
+    # Upvotes ("me too") carry over; downvotes on the duplicate don't.
+    carriers = {v.user_id for v in CommunityVote.query.filter_by(post_id=post.id, value=1).all()}
     if post.author_id:
         carriers.add(post.author_id)
     already = {v.user_id for v in CommunityVote.query.filter_by(post_id=target.id).all()}
     for uid in carriers - already - {target.author_id}:
-        db.session.add(CommunityVote(post_id=target.id, user_id=uid))
+        db.session.add(CommunityVote(post_id=target.id, user_id=uid, value=1))
     CommunityVote.query.filter_by(post_id=post.id).delete()
     post.duplicate_of_id = target.id
-    post.vote_count = 0
+    post.vote_count = post.downvote_count = post.score = 0
     db.session.flush()
     _recount_votes(target)
     set_status(post, admin, "duplicate")  # commits
@@ -667,7 +695,7 @@ def resolve_report(report: CommunityReport, admin, resolution: str) -> None:
 
 # ── Listing ───────────────────────────────────────────────────────────────────
 
-SORTS = {"active": CommunityPost.last_activity_at, "new": CommunityPost.created_at, "top": CommunityPost.vote_count}
+SORTS = {"active": CommunityPost.last_activity_at, "new": CommunityPost.created_at, "top": CommunityPost.score}
 
 
 def _visible_query(viewer, *, include_deleted=False):
@@ -821,13 +849,24 @@ def image_urls(img: CommunityImage) -> dict:
     }
 
 
-def serialize_post(post: CommunityPost, viewer, *, detail=False) -> dict:
+def can_vote(post: CommunityPost, viewer) -> bool:
+    return (post.author_id != viewer.id and post.deleted_at is None and post.status != "duplicate"
+            and post.visibility == "public")
+
+
+def serialize_post(post: CommunityPost, viewer, *, detail=False, vote=None) -> dict:
+    """``vote`` is the viewer's vote when the caller already knows it (list
+    pages batch it via my_votes); otherwise it is looked up for detail views."""
     flair = FLAIRS.get(post.flair, FLAIRS["question"])
     admin = is_admin(viewer)
+    if vote is None and detail:
+        vote = my_vote(post, viewer)
     data = {
         "id": post.public_id,
         "flair": post.flair, "flair_label": flair["label"], "flair_icon": flair["icon"],
-        "vote_label": flair["vote_label"],
+        "vote_label": flair["vote_label"], "down_label": flair["down_label"],
+        "downvote_count": post.downvote_count, "score": post.score,
+        "my_vote": vote or 0, "can_vote": can_vote(post, viewer),
         "title": post.title,
         "status": post.status, "status_label": STATUSES.get(post.status, post.status),
         "visibility": post.visibility,
@@ -848,14 +887,13 @@ def serialize_post(post: CommunityPost, viewer, *, detail=False) -> dict:
             "match_format": post.match_format,
             "match_format_label": BUG_FORMATS.get(post.match_format or "", None),
             "images": [image_urls(i) for i in post.images if i.purged_at is None or admin],
-            "voted": has_voted(post, viewer),
+            "voted": vote == 1,
             "duplicate_of": None,
             "can": {
                 "edit": can_edit_post(post, viewer),
                 "delete": admin or post.author_id == viewer.id,
                 "comment": can_comment(post, viewer),
-                "vote": (post.author_id != viewer.id and post.deleted_at is None and post.status != "duplicate"
-                         and post.visibility == "public"),
+                "vote": can_vote(post, viewer),
                 "moderate": admin,
             },
         })
@@ -924,7 +962,7 @@ def admin_queues(limit=50) -> dict:
         "private": live.filter(CommunityPost.visibility == "private", CommunityPost.needs_admin.is_(True))
                        .order_by(CommunityPost.last_activity_at.asc()).limit(limit).all(),
         "unanswered": live.filter(CommunityPost.visibility == "public", CommunityPost.needs_admin.is_(True))
-                          .order_by(CommunityPost.vote_count.desc(), CommunityPost.created_at.asc()).limit(limit).all(),
+                          .order_by(CommunityPost.score.desc(), CommunityPost.created_at.asc()).limit(limit).all(),
         "reports": CommunityReport.query.filter(CommunityReport.resolved_at.is_(None))
                                         .order_by(CommunityReport.created_at.asc()).limit(limit).all(),
         "deleted": CommunityPost.query.filter(CommunityPost.deleted_at.isnot(None))

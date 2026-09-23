@@ -6,13 +6,13 @@
   <a class="cm-crumb" href="{{ url_for('community_index') }}"><i class="fas fa-arrow-left" aria-hidden="true"></i>Community</a>
   <div class="cm-head"><div><h1>Notifications</h1><p>Replies, admin responses and status changes on posts you're part of.</p></div></div>
   {% for n in notes %}
-  <a class="cm-row" style="text-decoration:none{% if not n.read %};border-left:3px solid var(--accent){% endif %}"
+  <a class="cm-row{% if not n.read %} cm-unread{% endif %}"
      href="{{ url_for('community_post', public_id=n.post_id) }}{% if n.comment_id %}#c{{ n.comment_id }}{% endif %}">
-    <div><div style="color:var(--fg);font-weight:600;font-size:.9rem">{{ n.text }}</div>
+    <div><div class="cm-row__title" style="margin:0">{{ n.text }}</div>
       <div class="cm-row__excerpt">{{ n.post_title }} · {{ n.created_at|cm_ago }}</div></div>
   </a>
   {% else %}
-  <div class="cm-empty">No notifications yet.</div>
+  <div class="cm-empty"><i class="far fa-bell" aria-hidden="true"></i>No notifications yet.</div>
   {% endfor %}
 </div>
 {% endblock %}

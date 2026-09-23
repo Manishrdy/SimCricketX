@@ -14,14 +14,15 @@
 
   <div id="cm-form-error" class="cm-notice cm-notice--error" role="alert" hidden><i class="fas fa-circle-exclamation" aria-hidden="true"></i><div></div></div>
 
-  <form id="cm-post-form" class="cm-form" novalidate {% if block or new_account %}inert aria-disabled="true" style="opacity:.6"{% endif %}>
+  <form id="cm-post-form" class="cm-form cm-form-card" novalidate {% if block or new_account %}inert aria-disabled="true" style="opacity:.6"{% endif %}>
     <div class="cm-field" data-field="flair">
       <span class="cm-label" id="cm-flair-label">What kind of post is this?</span>
       <div class="cm-flair-pick" role="radiogroup" aria-labelledby="cm-flair-label">
         {% for key, f in flairs.items() %}
-        <label><input type="radio" name="flair" value="{{ key }}" required
+        <label class="is-{{ key }}"><input type="radio" name="flair" value="{{ key }}" required
           {% if (post and post.flair == key) or (not post and prefill.flair == key) %}checked{% endif %}>
-          <i class="fas {{ f.icon }}" aria-hidden="true"></i>{{ f.label }}</label>
+          <span class="cm-flair-icon"><i class="fas {{ f.icon }}" aria-hidden="true"></i></span>
+          <strong>{{ f.label }}</strong><span class="cm-hint">{{ f.hint }}</span></label>
         {% endfor %}
       </div>
       <p class="cm-inline-error" hidden></p>
@@ -39,7 +40,7 @@
       </div>
     </div>
 
-    <fieldset id="cm-bug-fields" class="cm-form" style="border:0;padding:0;margin:0" hidden>
+    <fieldset id="cm-bug-fields" class="cm-form" style="border:0;padding:0;margin:0;min-width:0" hidden>
       <div class="cm-field" data-field="steps">
         <span class="cm-label">Steps to reproduce</span>
         <div id="cm-steps"></div>
@@ -91,7 +92,7 @@
         <span><strong>Private</strong>: only you and the admin can see this. Use it for account problems or anything with personal details.</span></label>
     </div>
 
-    <div style="display:flex;gap:.6rem;justify-content:flex-end;flex-wrap:wrap">
+    <div class="cm-form-foot">
       <a class="cm-btn" href="{{ url_for('community_post', public_id=post.id) if post else url_for('community_index') }}">Cancel</a>
       <button type="submit" class="cm-btn cm-btn--primary" id="cm-submit">{{ 'Save changes' if post else 'Post' }}</button>
     </div>
