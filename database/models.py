@@ -1409,7 +1409,7 @@ class CommunityNotification(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
-    kind = db.Column(db.String(20), nullable=False)  # reply | comment | admin_response | status_change
+    kind = db.Column(db.String(20), nullable=False)  # reply | comment | admin_response | status_change | mention
     post_id = db.Column(db.Integer, db.ForeignKey('community_posts.id', ondelete='CASCADE'), nullable=False)
     comment_id = db.Column(db.Integer, db.ForeignKey('community_comments.id', ondelete='CASCADE'), nullable=True)
     actor_name = db.Column(db.String(100), nullable=True)
@@ -1421,6 +1421,30 @@ class CommunityNotification(db.Model):
 
     __table_args__ = (
         db.Index('ix_community_notifications_user_read', 'user_id', 'read_at'),
+    )
+
+
+class CommunityMention(db.Model):
+    """An @-tag of a user in a post (comment_id NULL) or a comment.
+
+    The text itself stays plain ("@Rohit Sharma"); this row is what makes it a
+    tag. ``name`` is the name as written, so the highlight survives a rename.
+    """
+    __tablename__ = 'community_mentions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('community_posts.id', ondelete='CASCADE'), nullable=False)
+    comment_id = db.Column(db.Integer, db.ForeignKey('community_comments.id', ondelete='CASCADE'), nullable=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    author_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    name = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    user = relationship('User', foreign_keys=[user_id])
+
+    __table_args__ = (
+        db.Index('ix_community_mentions_user', 'user_id', 'created_at'),
+        db.Index('ix_community_mentions_target', 'post_id', 'comment_id'),
     )
 
 

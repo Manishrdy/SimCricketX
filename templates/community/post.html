@@ -13,9 +13,9 @@
     {% if c.is_official and not c.deleted %}<span class="cm-official-tag"><i class="fas fa-circle-check" aria-hidden="true"></i> {{ 'Official answer' if c.author.is_admin else 'Accepted answer' }}</span>{% endif %}
     {% if c.deleted and c.can.moderate %}<span class="cm-tag cm-tag--private">Deleted{% if c.delete_reason %}: {{ c.delete_reason }}{% endif %}</span>{% endif %}
   </div>
-  <div class="cm-comment__body" data-role="body">{% if c.deleted and not c.can.moderate %}[deleted]{% else %}{{ c.body|cm_linkify }}{% endif %}</div>
+  <div class="cm-comment__body" data-role="body">{% if c.deleted and not c.can.moderate %}[deleted]{% else %}{{ c.body|cm_linkify(c.mentions) }}{% endif %}</div>
   <div class="cm-comment__tools">
-    {% if not c.deleted and post.can.comment %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="reply" data-parent="{{ c.parent_id or c.id }}" data-name="{{ c.author.name }}"><i class="fas fa-reply" aria-hidden="true"></i>Reply</button>{% endif %}
+    {% if not c.deleted and post.can.comment %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="reply" data-parent="{{ c.id }}" data-name="{{ c.author.name }}"><i class="fas fa-reply" aria-hidden="true"></i>Reply</button>{% endif %}
     {% if c.can.edit %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="edit-comment">Edit</button>{% endif %}
     {% if c.can.delete %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="delete-comment">Delete</button>{% endif %}
     {% if not c.deleted and not c.can.edit and not c.can.moderate %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="report" data-comment="{{ c.id }}">Report</button>{% endif %}
@@ -52,18 +52,18 @@
     {% if post.flair == 'bug' and post.steps %}
     <div class="cm-section">
       <h3>Steps to reproduce</h3>
-      <ol class="cm-steps">{% for s in post.steps %}<li>{{ s|cm_linkify }}</li>{% endfor %}</ol>
+      <ol class="cm-steps">{% for s in post.steps %}<li><span>{{ s|cm_linkify(post.mentions) }}</span></li>{% endfor %}</ol>
     </div>
     <div class="cm-section cm-bug-grid">
-      <div><h3>Expected</h3><p>{{ post.expected|cm_linkify }}</p></div>
-      <div><h3>Actual</h3><p>{{ post.actual|cm_linkify }}</p></div>
+      <div><h3>Expected</h3><p>{{ post.expected|cm_linkify(post.mentions) }}</p></div>
+      <div><h3>Actual</h3><p>{{ post.actual|cm_linkify(post.mentions) }}</p></div>
     </div>
     {% if post.match_format_label %}<div class="cm-section"><h3>Format</h3><span class="cm-tag">{{ post.match_format_label }}</span></div>{% endif %}
     {% endif %}
 
     {% if post.body %}
     {% if post.flair == 'bug' %}<div class="cm-section"><h3>More details</h3></div>{% endif %}
-    <div class="cm-body">{{ post.body|cm_linkify }}</div>
+    <div class="cm-body">{{ post.body|cm_linkify(post.mentions) }}</div>
     {% endif %}
 
     {% if post.images %}
@@ -132,7 +132,7 @@
     {% if post.can.comment %}
     <form class="cm-composer" id="cm-comment-form" data-parent="">
       <label for="cm-comment-body" style="position:absolute;left:-9999px">Write a comment</label>
-      <textarea id="cm-comment-body" class="cm-textarea" maxlength="{{ comment_max }}" placeholder="Add a comment in English…" required></textarea>
+      <textarea id="cm-comment-body" class="cm-textarea" maxlength="{{ comment_max }}" placeholder="Add a comment in English… Type @ to tag someone" required></textarea>
       <div class="cm-composer__foot">
         <span id="cm-reply-to" hidden>Replying to <strong></strong> · <button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" id="cm-reply-cancel">cancel</button></span>
         <span class="cm-spacer"></span>
@@ -191,6 +191,7 @@
     'moderate': url_for('admin_community_moderate_post', public_id=post.id),
     'moderate_comment': url_for('admin_community_moderate_comment', comment_id=0),
     'mute': url_for('admin_community_mute'),
+    'mention_suggest': url_for('community_api_mention_suggest'),
   }
 }|tojson }}</script>
 {% endblock %}

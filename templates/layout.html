@@ -1222,41 +1222,40 @@
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_manage.css') }}">
 
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navigation.css') }}">
     {% block extra_css %}{% endblock %}
 </head>
 
 <body{% if request.path and request.path.startswith('/admin') %} class="admin-page"{% endif %}>
 
     <!-- Navigation -->
-    <nav class="navbar">
+    <nav class="navbar scx-nav" aria-label="Main navigation">
         <a href="{{ url_for('home') }}" class="nav-brand">
-            <i class="fas fa-baseball-ball"></i>
+            <span class="nav-brand-mark" aria-hidden="true"><i class="fas fa-baseball-ball"></i></span>
             <span class="nav-logo-text">SimCricketX</span>
         </a>
 
         <div class="nav-items">
             {% block navbar_items %}
             {% if current_user.is_authenticated %}
-            <a href="{{ url_for('home') }}" class="theme-toggle nav-home-link" title="Home"><i class="fas fa-home"></i></a>
-            <a href="{{ url_for('community_index') }}" class="theme-toggle cm-bell" id="cmNavBell" title="Community" aria-label="Community">
-                <i class="fas fa-comments"></i>
-                <span class="cm-bell__dot" id="cmNavBellDot" hidden></span>
-            </a>
+            {% if request.endpoint != 'home' %}
+            <a href="{{ url_for('home') }}" class="nav-control nav-home-link" title="Dashboard" aria-label="Dashboard"><i class="fas fa-house" aria-hidden="true"></i><span>Dashboard</span></a>
+            {% endif %}
             {% if current_user.is_admin %}
-            <a href="{{ url_for('admin_dashboard') }}" class="theme-toggle admin-nav-shield" id="adminNavShield" title="Admin Panel"
-                style="background: var(--accent-light); color: var(--accent); border-color: var(--accent); position: relative;">
-                <i class="fas fa-shield-alt"></i>
+            <a href="{{ url_for('admin_dashboard') }}" class="nav-control admin-nav-shield" id="adminNavShield" title="Admin panel" aria-label="Admin panel">
+                <i class="fas fa-shield-halved" aria-hidden="true"></i><span class="nav-control-label">Admin</span>
                 <span class="admin-nav-shield__dot" id="adminNavShieldDot" hidden aria-hidden="true"></span>
             </a>
-            <button onclick="downloadDatabase()" class="theme-toggle nav-db-download" title="Download Database Backup"
-                style="background: var(--accent-light); color: var(--accent); border-color: var(--accent);">
-                <i class="fas fa-database"></i>
-            </button>
             {% endif %}
+            <a href="{{ url_for('community_notifications_page') }}" class="nav-control cm-bell" id="cmNavBell" title="Notifications" aria-label="Notifications" aria-expanded="false" aria-controls="cmAlerts">
+                <i class="fas fa-bell" aria-hidden="true"></i>
+                <span class="cm-bell__dot" id="cmNavBellDot" hidden></span>
+            </a>
+            <button id="theme-btn" class="nav-control" type="button" title="Toggle theme" aria-label="Toggle theme"><i class="fas fa-moon" aria-hidden="true"></i></button>
 
             <!-- User Profile Dropdown -->
             <div class="profile-dropdown-wrapper">
-                <button class="profile-trigger" id="profileBtn">
+                <button class="profile-trigger" id="profileBtn" type="button" aria-label="My profile" aria-expanded="false" aria-controls="profileDropdown">
                     <div class="profile-avatar-wrap">
                         <div class="profile-avatar">{{ (current_user.display_name or current_user.id)[0]|upper }}</div>
                         {% if user_stats.active_matches %}<span class="active-match-badge"></span>{% endif %}
@@ -1267,15 +1266,6 @@
 
                 <!-- Dropdown Menu -->
                 <div class="profile-dropdown" id="profileDropdown">
-                    <!-- Mobile-only nav: mirrors the icon-buttons hidden on narrow screens -->
-                    <div class="profile-mobile-nav">
-                        <a href="{{ url_for('home') }}" class="profile-action-item"><i class="fas fa-home"></i><span>Home</span></a>
-                        {% if current_user.is_admin %}
-                        <a href="{{ url_for('admin_dashboard') }}" class="profile-action-item"><i class="fas fa-shield-alt"></i><span>Admin Panel</span></a>
-                        <button type="button" class="profile-action-item" onclick="downloadDatabase()"><i class="fas fa-database"></i><span>Download Database Backup</span></button>
-                        {% endif %}
-                        <div class="profile-divider"></div>
-                    </div>
                     <!-- Ongoing Matches -->
                     {% if user_stats.active_matches %}
                     <div class="active-matches-section">
@@ -1341,10 +1331,6 @@
 
                     <!-- Quick Actions -->
                     <div class="profile-actions">
-                        <a href="{{ url_for('community_index') }}" class="profile-action-item">
-                            <i class="fas fa-comments"></i>
-                            <span>Community &amp; Help</span>
-                        </a>
                         <a href="{{ url_for('my_analytics') }}" class="profile-action-item">
                             <i class="fas fa-chart-bar"></i>
                             <span>My Analytics</span>
@@ -1381,9 +1367,9 @@
             </div>
             {% endif %}
             {% endblock %}
-            <button id="theme-btn" class="theme-toggle" title="Toggle Theme">
-                <i class="fas fa-moon"></i>
-            </button>
+            {% if not current_user.is_authenticated %}
+            <button id="theme-btn" class="nav-control" type="button" title="Toggle theme" aria-label="Toggle theme"><i class="fas fa-moon" aria-hidden="true"></i></button>
+            {% endif %}
         </div>
     </nav>
 
@@ -1621,6 +1607,7 @@
                 e.stopPropagation();
                 profileBtn.classList.toggle('active');
                 profileDropdown.classList.toggle('active');
+                profileBtn.setAttribute('aria-expanded', String(profileDropdown.classList.contains('active')));
             });
 
             // Close when clicking outside
@@ -1628,14 +1615,17 @@
                 if (!profileDropdown.contains(e.target) && e.target !== profileBtn && !profileBtn.contains(e.target)) {
                     profileBtn.classList.remove('active');
                     profileDropdown.classList.remove('active');
+                    profileBtn.setAttribute('aria-expanded', 'false');
                 }
             });
 
             // Close on escape key
             document.addEventListener('keydown', function (e) {
                 if (e.key === 'Escape' && profileDropdown.classList.contains('active')) {
+                    profileBtn.focus();
                     profileBtn.classList.remove('active');
                     profileDropdown.classList.remove('active');
+                    profileBtn.setAttribute('aria-expanded', 'false');
                 }
             });
         })();

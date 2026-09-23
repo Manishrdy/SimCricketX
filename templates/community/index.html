@@ -33,13 +33,14 @@
           <nav class="cm-tabs" aria-label="Sort posts">
             {% for key, label, icon in [('active', 'Active', 'fa-bolt'), ('new', 'New', 'fa-clock'), ('top', 'Top', 'fa-arrow-trend-up')] %}
             <a class="cm-tab{% if filters.sort == key %} is-active{% endif %}" {% if filters.sort == key %}aria-current="page"{% endif %}
-               href="{{ url_for('community_index', sort=key, flair=filters.flair, status=filters.status, mine='1' if filters.mine else None) }}"><i class="fas {{ icon }}" aria-hidden="true"></i>{{ label }}</a>
+               href="{{ url_for('community_index', sort=key, flair=filters.flair, status=filters.status, mine='1' if filters.mine else None, mentions='1' if filters.mentions else None) }}"><i class="fas {{ icon }}" aria-hidden="true"></i>{{ label }}</a>
             {% endfor %}
           </nav>
           <form method="get" action="{{ url_for('community_index') }}">
             <input type="hidden" name="sort" value="{{ filters.sort }}">
             {% if filters.flair %}<input type="hidden" name="flair" value="{{ filters.flair }}">{% endif %}
             {% if filters.mine %}<input type="hidden" name="mine" value="1">{% endif %}
+            {% if filters.mentions %}<input type="hidden" name="mentions" value="1">{% endif %}
             <label class="cm-inline-select">Status
               <select class="cm-select" name="status" onchange="this.form.submit()">
                 <option value="">Any</option>
@@ -51,11 +52,12 @@
         </div>
 
         <nav class="cm-chips" id="cm-browse-chips" aria-label="Filter by flair" {% if filters.q %}hidden{% endif %}>
-          <a class="cm-chip{% if not filters.flair and not filters.mine %} is-active{% endif %}" href="{{ url_for('community_index', sort=filters.sort, status=filters.status) }}">All</a>
+          <a class="cm-chip{% if not filters.flair and not filters.mine and not filters.mentions %} is-active{% endif %}" href="{{ url_for('community_index', sort=filters.sort, status=filters.status) }}">All</a>
           {% for key, f in flairs.items() %}
           <a class="cm-chip{% if filters.flair == key %} is-active{% endif %}" href="{{ url_for('community_index', flair=key, sort=filters.sort, status=filters.status) }}"><i class="fas {{ f.icon }}" aria-hidden="true"></i>{{ f.label }}</a>
           {% endfor %}
           <a class="cm-chip{% if filters.mine %} is-active{% endif %}" href="{{ url_for('community_index', mine='1', sort=filters.sort) }}"><i class="fas fa-user" aria-hidden="true"></i>My posts</a>
+          <a class="cm-chip{% if filters.mentions %} is-active{% endif %}" href="{{ url_for('community_index', mentions='1', sort=filters.sort) }}"><i class="fas fa-at" aria-hidden="true"></i>Mentions</a>
         </nav>
       </div>
 

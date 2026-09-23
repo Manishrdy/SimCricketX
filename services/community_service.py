@@ -14,7 +14,7 @@ import secrets
 import time
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 
@@ -22,6 +22,7 @@ from database import db
 from database.models import (
     CommunityComment,
     CommunityImage,
+    CommunityMention,
     CommunityNotification,
     CommunityPost,
     CommunityReport,
@@ -243,11 +244,12 @@ def get_visible_post(public_id: str, user) -> CommunityPost:
 
 # ── Validation ────────────────────────────────────────────────────────────────
 
-def _check_language(texts: list[str], user):
+def _check_language(texts: list[str], user, extra_words=()):
     if is_admin(user):
         return
     joined = "\n".join(t for t in texts if t)
-    result = check_english(joined, extra_words=player_pool_words())
+    words = player_pool_words() | frozenset(extra_words) if extra_words else player_pool_words()
+    result = check_english(joined, extra_words=words)
     if not result.ok:
         raise CommunityError(result.message(), code="not_english", fields={"_language": result.unrecognised[:8]})
 
@@ -259,9 +261,11 @@ def _check_profanity(texts: list[str], user):
         raise CommunityError("Please remove the offensive language and try again.", code="profanity")
 
 
-def validate_post_payload(data: dict, user, *, existing: CommunityPost | None = None) -> dict:
+def validate_post_payload(data: dict, user, *, existing: CommunityPost | None = None,
+                          check_content: bool = True) -> dict:
     """Return a clean dict of post fields or raise CommunityError with
-    per-field messages."""
+    per-field messages. ``check_content=False`` skips the profanity and
+    English checks so the caller can run them once tags are resolved."""
     errors: dict[str, str] = {}
     flair = (data.get("flair") or (existing.flair if existing else "")).strip().lower()
     if flair not in FLAIRS:
@@ -313,23 +317,229 @@ def validate_post_payload(data: dict, user, *, existing: CommunityPost | None = 
     if errors:
         raise CommunityError("Please fix the highlighted fields.", code="invalid", fields=errors)
 
-    texts = [title, body]
-    if flair == "bug":
-        texts += json.loads(clean["steps_json"]) + [clean["expected"], clean["actual"]]
-    _check_profanity(texts, user)
-    _check_language(texts, user)
+    if check_content:
+        check_post_content(clean, user)
     return clean
 
 
-def validate_comment_body(body, user) -> str:
+def post_texts(clean: dict) -> list[str]:
+    """Every user-written text field of a cleaned post payload."""
+    texts = [clean["title"], clean["body"]]
+    if clean["flair"] == "bug":
+        texts += json.loads(clean["steps_json"]) + [clean["expected"], clean["actual"]]
+    return texts
+
+
+def taggable_texts(clean: dict) -> list[str]:
+    """Where @-tags work: everything but the title (titles show up in lists,
+    emails and search, where a tag has nothing to point at)."""
+    return post_texts(clean)[1:]
+
+
+def check_post_content(clean: dict, user, extra_words=()) -> None:
+    texts = post_texts(clean)
+    _check_profanity(texts, user)
+    _check_language(texts, user, extra_words)
+
+
+def validate_comment_body(body, user, *, check_content: bool = True, extra_words=()) -> str:
     body = _clean_text(body)
     if not body:
         raise CommunityError("Comment cannot be empty.", fields={"body": "Write something first."})
     if len(body) > COMMENT_MAX:
         raise CommunityError(f"Comments are limited to {COMMENT_MAX} characters.", fields={"body": "Too long."})
-    _check_profanity([body], user)
-    _check_language([body], user)
+    if check_content:
+        _check_profanity([body], user)
+        _check_language([body], user, extra_words)
     return body
+
+
+# ── Mentions (@-tags) ─────────────────────────────────────────────────────────
+#
+# The text stays plain ("@Rohit Sharma"); a CommunityMention row is what makes
+# it a tag. Display names are not unique, so the composer sends the stable ids
+# of the people picked from autocomplete, and a tag is kept only when that
+# person's @name is really in the text and every rule below passes. Anything
+# else is dropped silently and stays plain text: an error would tell a user
+# which names belong to admins.
+
+MAX_MENTIONS = 10
+MENTION_QUERY_MAX = 50
+
+
+def can_tag(tagger, target) -> bool:
+    """Users can tag anyone but admins; admins can tag anyone."""
+    if target is None or not target.display_name or target.id == tagger.id:
+        return False
+    return is_admin(tagger) or not target.is_admin
+
+
+def _can_see(target, visibility, post_author_id) -> bool:
+    """can_view_post for a post that may not exist yet. A tag only counts
+    for someone who can already read the post."""
+    return bool(target.is_admin) or visibility == "public" or target.id == post_author_id
+
+
+def _member_filter():
+    """SQL condition on User: has a live post, or a live comment, on a live
+    public post. Private-only activity doesn't count, so autocomplete can't
+    reveal who has written privately to the admins."""
+    public_post = (db.session.query(CommunityPost.id)
+                   .filter(CommunityPost.author_id == User.id, CommunityPost.deleted_at.is_(None),
+                           CommunityPost.visibility == "public").exists())
+    public_comment = (db.session.query(CommunityComment.id)
+                      .join(CommunityPost, CommunityComment.post_id == CommunityPost.id)
+                      .filter(CommunityComment.author_id == User.id, CommunityComment.deleted_at.is_(None),
+                              CommunityPost.deleted_at.is_(None), CommunityPost.visibility == "public").exists())
+    return or_(public_post, public_comment)
+
+
+def thread_participant_ids(post) -> set[str]:
+    """The post author plus everyone with a live comment on it."""
+    if post is None or post.id is None:
+        return set()
+    ids = {uid for (uid,) in db.session.query(CommunityComment.author_id)
+           .filter(CommunityComment.post_id == post.id, CommunityComment.deleted_at.is_(None)).distinct()}
+    ids.add(post.author_id)
+    ids.discard(None)
+    return ids
+
+
+def _named_in(name, texts) -> bool:
+    """'@name' as a whole token (not the tail of an email, not a prefix of a
+    longer word), case-insensitive."""
+    if not name:
+        return False
+    rx = re.compile(r"(?<![\w@])@" + re.escape(name) + r"(?!\w)", re.IGNORECASE)
+    return any(rx.search(t or "") for t in texts)
+
+
+def _mention_rows(post, comment) -> list[CommunityMention]:
+    if post is None or post.id is None:
+        return []
+    return (CommunityMention.query.options(selectinload(CommunityMention.user))
+            .filter_by(post_id=post.id, comment_id=comment.id if comment is not None else None).all())
+
+
+def resolve_mentions(author, texts, stable_ids, *, visibility, post_author_id,
+                     participants=frozenset(), existing=()) -> list[tuple[User, str]]:
+    """[(user, name as written)] for every valid tag in ``texts``.
+
+    ``stable_ids`` are the people the composer says were picked. ``existing``
+    are the rows already stored for this post/comment: they stay while their
+    name is still in the text, so an edit needn't resend them.
+    """
+    out: dict[str, tuple[User, str]] = {}
+    for row in existing:
+        target = row.user
+        if target is None or target.id in out:
+            continue
+        name = next((n for n in (row.name, target.display_name) if _named_in(n, texts)), None)
+        if name and _can_see(target, visibility, post_author_id):
+            out[target.id] = (target, name)
+
+    wanted: list[str] = []
+    for sid in stable_ids if isinstance(stable_ids, list) else []:
+        if isinstance(sid, str) and sid and sid not in wanted:
+            wanted.append(sid)
+    wanted = wanted[:MAX_MENTIONS]
+    if wanted and len(out) < MAX_MENTIONS:
+        users = User.query.filter(User.stable_id.in_(wanted)).all()
+        picked = [u for u in users if u.id not in out and can_tag(author, u)
+                  and _can_see(u, visibility, post_author_id) and _named_in(u.display_name, texts)]
+        if picked and not is_admin(author):
+            outsiders = [u.id for u in picked if u.id not in participants]
+            members = ({uid for (uid,) in db.session.query(User.id).filter(User.id.in_(outsiders), _member_filter())}
+                       if outsiders else set())
+            picked = [u for u in picked if u.id in participants or u.id in members]
+        order = {sid: i for i, sid in enumerate(wanted)}
+        for u in sorted(picked, key=lambda u: order[u.stable_id]):
+            if len(out) >= MAX_MENTIONS:
+                break
+            out[u.id] = (u, u.display_name)
+    return list(out.values())
+
+
+def mention_words(resolved) -> frozenset[str]:
+    """Words of the tagged names, so '@Rohit Sharma' or '@Kohlifan' doesn't
+    fail the English check (it only strips the first word after '@')."""
+    return frozenset(w for _, name in resolved for w in re.findall(r"[^\W\d_]+", name.lower()))
+
+
+def sync_mentions(post, comment, author, resolved) -> list[str]:
+    """Store exactly ``resolved`` as the tags of this post (comment=None) or
+    comment. Returns the ids of people who are newly tagged."""
+    comment_id = comment.id if comment is not None else None
+    current = {r.user_id: r for r in CommunityMention.query.filter_by(post_id=post.id, comment_id=comment_id)}
+    wanted = {u.id: name[:100] for u, name in resolved}
+    for uid, row in current.items():
+        if uid not in wanted:
+            db.session.delete(row)
+        elif row.name != wanted[uid]:
+            row.name = wanted[uid]
+    added = [uid for uid in wanted if uid not in current]
+    for uid in added:
+        db.session.add(CommunityMention(post_id=post.id, comment_id=comment_id, user_id=uid,
+                                        author_id=author.id, name=wanted[uid]))
+    return added
+
+
+def mention_candidates(viewer, q, *, post=None, private=False, limit=8) -> list[dict]:
+    """Autocomplete for '@'. Users see community members (thread participants
+    first) and never admins; admins see everyone with a display name. On a
+    private post only people who can read it are offered."""
+    q = re.sub(r"\s+", " ", (q or "").lstrip("@")).strip()[:MENTION_QUERY_MAX]
+    admin = is_admin(viewer)
+    if post is not None:
+        private = post.visibility == "private"
+    post_author_id = post.author_id if post is not None else viewer.id
+    participants = thread_participant_ids(post)
+
+    query = User.query.filter(User.display_name.isnot(None), User.display_name != "",
+                              User.stable_id.isnot(None), User.id != viewer.id)
+    if private:
+        if not admin:
+            return []  # the only other readers are admins
+        query = query.filter(or_(User.is_admin.is_(True), User.id == post_author_id))
+    if not admin:
+        query = query.filter(User.is_admin.is_(False))
+        member = _member_filter()
+        query = query.filter(or_(User.id.in_(participants), member) if participants else member)
+
+    low = q.lower()
+    if low:
+        like = low.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        name = func.lower(User.display_name)
+        query = (query.filter(name.like(f"%{like}%", escape="\\"))
+                 .order_by(case((name.like(f"{like}%", escape="\\"), 0), else_=1), func.length(User.display_name)))
+    elif participants:
+        query = query.filter(User.id.in_(participants))
+    else:
+        return []
+    rows = query.limit(200).all()
+
+    def tier(display):
+        n = display.lower()
+        if not low or n.startswith(low):
+            return 0
+        return 1 if f" {low}" in n else 2
+
+    rows.sort(key=lambda u: (u.id not in participants, tier(u.display_name), len(u.display_name),
+                             u.display_name.lower()))
+    return [{"id": u.stable_id, "name": u.display_name, "is_admin": bool(u.is_admin),
+             "in_thread": u.id in participants} for u in rows[:limit]]
+
+
+def mentions_for_post(post, viewer) -> dict:
+    """{comment_id or None: [{name, me, is_admin}]} for rendering the whole
+    thread, in one query."""
+    out: dict = {}
+    rows = (CommunityMention.query.options(selectinload(CommunityMention.user))
+            .filter_by(post_id=post.id).all())
+    for r in rows:
+        out.setdefault(r.comment_id, []).append({
+            "name": r.name, "me": r.user_id == viewer.id, "is_admin": bool(r.user and r.user.is_admin)})
+    return out
 
 
 # ── Posts ─────────────────────────────────────────────────────────────────────
@@ -356,7 +566,10 @@ def _attach_images(post: CommunityPost, user, image_ids) -> None:
 
 def create_post(user, data: dict, *, request_meta: dict | None = None) -> CommunityPost:
     require_can_write(user)
-    clean = validate_post_payload(data, user)
+    clean = validate_post_payload(data, user, check_content=False)
+    resolved = resolve_mentions(user, taggable_texts(clean), data.get("mentions"),
+                                visibility=clean["visibility"], post_author_id=user.id)
+    check_post_content(clean, user, mention_words(resolved))
     now = utcnow()
     meta = request_meta or {}
     post = CommunityPost(
@@ -371,6 +584,8 @@ def create_post(user, data: dict, *, request_meta: dict | None = None) -> Commun
     db.session.add(post)
     db.session.flush()
     _attach_images(post, user, data.get("image_ids"))
+    for uid in sync_mentions(post, None, user, resolved):
+        _notify(uid, "mention", post, actor=user)
     db.session.commit()
     return post
 
@@ -380,13 +595,19 @@ def update_post(post: CommunityPost, user, data: dict) -> CommunityPost:
         raise CommunityError("You can't edit this post.", code="forbidden", status=403)
     if post.author_id == user.id:
         require_can_write(user)
-    clean = validate_post_payload(data, user, existing=post)
+    clean = validate_post_payload(data, user, existing=post, check_content=False)
+    resolved = resolve_mentions(user, taggable_texts(clean), data.get("mentions"),
+                                visibility=clean["visibility"], post_author_id=post.author_id,
+                                participants=thread_participant_ids(post), existing=_mention_rows(post, None))
+    check_post_content(clean, user, mention_words(resolved))
     if not is_admin(user) and clean["flair"] != post.flair and post.flair == "announcement":
         raise CommunityError("You can't change this flair.", code="forbidden", status=403)
     for key, value in clean.items():
         setattr(post, key, value)
     if "image_ids" in data:  # absent = leave attachments alone
         _attach_images(post, user, data.get("image_ids"))
+    for uid in sync_mentions(post, None, user, resolved):
+        _notify(uid, "mention", post, actor=user)
     post.edited_at = utcnow()
     post.edited_by = user.id
     db.session.commit()
@@ -483,24 +704,36 @@ def _recount_comments(post: CommunityPost) -> None:
                           .scalar() or 0)
 
 
-def add_comment(post: CommunityPost, user, body, parent_id=None) -> CommunityComment:
+def add_comment(post: CommunityPost, user, body, parent_id=None, mentions=None) -> CommunityComment:
     require_can_write(user)
     if not can_comment(post, user):
         raise CommunityError("Comments are closed on this post.", code="locked", status=403)
-    body = validate_comment_body(body, user)
+    body = validate_comment_body(body, user, check_content=False)
+    typed = body
+    requested = list(mentions) if isinstance(mentions, list) else []
 
     parent = None
+    answered = None  # actual recipient, before flattening for display
     if parent_id:
         parent = db.session.get(CommunityComment, int(parent_id))
         if parent is None or parent.post_id != post.id or parent.deleted_at is not None:
             raise CommunityError("The comment you replied to is gone.", code="not_found", status=404)
+        answered = parent.author
         if parent.parent_id:
             # Instagram-style: replies to replies join the top-level thread
-            # with an @mention of who they answered.
-            mention = f"@{author_name(parent.author)}"
+            # with an @mention of who they answered (a real tag when allowed).
+            mention = f"@{author_name(answered)}"
             if not body.startswith(mention):
                 body = f"{mention} {body}"
+            if answered is not None and answered.stable_id:
+                requested.insert(0, answered.stable_id)
             parent = db.session.get(CommunityComment, parent.parent_id)
+
+    resolved = resolve_mentions(user, [body], requested, visibility=post.visibility,
+                                post_author_id=post.author_id, participants=thread_participant_ids(post))
+    # Judge what the user typed; the auto-prefixed name is not their writing.
+    _check_profanity([typed], user)
+    _check_language([typed], user, mention_words(resolved))
 
     now = utcnow()
     comment = CommunityComment(post_id=post.id, author_id=user.id, body=body,
@@ -514,13 +747,21 @@ def add_comment(post: CommunityPost, user, body, parent_id=None) -> CommunityCom
     elif user.id == post.author_id:
         post.needs_admin = True
     _recount_comments(post)
+    tagged = sync_mentions(post, comment, user, resolved)
 
-    if is_admin(user):
-        _notify(post.author_id, "admin_response", post, comment=comment, actor=user)
-    else:
-        _notify(post.author_id, "comment", post, comment=comment, actor=user)
-    if parent is not None and parent.author_id != post.author_id:
-        _notify(parent.author_id, "reply", post, comment=comment, actor=user)
+    # One notification per person, most specific first.
+    notified: set = set()
+
+    def once(uid, kind):
+        if uid and uid != user.id and uid not in notified:
+            notified.add(uid)
+            _notify(uid, kind, post, comment=comment, actor=user)
+
+    if answered is not None:
+        once(answered.id, "reply")
+    for uid in tagged:
+        once(uid, "mention")
+    once(post.author_id, "admin_response" if is_admin(user) else "comment")
     db.session.commit()
 
     if is_admin(user) and post.author_id and post.author_id != user.id:
@@ -528,7 +769,7 @@ def add_comment(post: CommunityPost, user, body, parent_id=None) -> CommunityCom
     return comment
 
 
-def edit_comment(comment: CommunityComment, user, body) -> CommunityComment:
+def edit_comment(comment: CommunityComment, user, body, mentions=None) -> CommunityComment:
     if not (is_admin(user) or comment.author_id == user.id):
         raise CommunityError("You can't edit this comment.", code="forbidden", status=403)
     if comment.deleted_at is not None:
@@ -537,9 +778,17 @@ def edit_comment(comment: CommunityComment, user, body) -> CommunityComment:
         require_can_write(user)
         if not can_comment(comment.post, user):
             raise CommunityError("Comments are closed on this post.", code="locked", status=403)
-    comment.body = validate_comment_body(body, user)
+    body = validate_comment_body(body, user, check_content=False)
+    post = comment.post
+    resolved = resolve_mentions(user, [body], mentions, visibility=post.visibility, post_author_id=post.author_id,
+                                participants=thread_participant_ids(post), existing=_mention_rows(post, comment))
+    _check_profanity([body], user)
+    _check_language([body], user, mention_words(resolved))
+    comment.body = body
     comment.edited_at = utcnow()
     comment.edited_by = user.id
+    for uid in sync_mentions(post, comment, user, resolved):
+        _notify(uid, "mention", post, comment=comment, actor=user)
     db.session.commit()
     return comment
 
@@ -716,7 +965,7 @@ def _encode_cursor(post, sort) -> str:
 
 
 def list_posts(viewer, *, flair=None, status=None, sort="active", mine=False, visibility=None,
-               q=None, cursor=None, limit=20):
+               q=None, cursor=None, limit=20, mentions=False):
     """Return (pinned, posts, next_cursor). Search results are ranked and
     unpaginated (capped at 50)."""
     sort = sort if sort in SORTS else "active"
@@ -729,6 +978,13 @@ def list_posts(viewer, *, flair=None, status=None, sort="active", mine=False, vi
         base = base.filter(CommunityPost.author_id == viewer.id)
     if visibility in ("public", "private"):
         base = base.filter(CommunityPost.visibility == visibility)
+    if mentions:
+        # Posts where the viewer is tagged in the post or in a live comment.
+        tagged = (db.session.query(CommunityMention.post_id)
+                  .outerjoin(CommunityComment, CommunityMention.comment_id == CommunityComment.id)
+                  .filter(CommunityMention.user_id == viewer.id,
+                          or_(CommunityMention.comment_id.is_(None), CommunityComment.deleted_at.is_(None))))
+        base = base.filter(CommunityPost.id.in_(tagged))
 
     if q and q.strip():
         ids = community_search.search_post_ids(db.session, q, limit=50, precise=True)
@@ -738,7 +994,7 @@ def list_posts(viewer, *, flair=None, status=None, sort="active", mine=False, vi
         return [], _demote_duplicates([rows[i] for i in ids if i in rows]), None
 
     pinned = []
-    filtered = bool(flair or status or mine or visibility)
+    filtered = bool(flair or status or mine or visibility or mentions)
     if not cursor and not filtered:
         pinned = base.filter(CommunityPost.is_pinned.is_(True)).order_by(CommunityPost.created_at.desc()).all()
     if not filtered:
@@ -852,20 +1108,40 @@ def did_you_mean(q: str) -> str | None:
 
 # ── Notifications ─────────────────────────────────────────────────────────────
 
+def visible_notifications(user):
+    """One visibility policy for lists, badges and read updates."""
+    q = (CommunityNotification.query.join(CommunityPost)
+         .outerjoin(CommunityComment, CommunityNotification.comment_id == CommunityComment.id)
+         .filter(CommunityNotification.user_id == user.id,
+                 CommunityPost.deleted_at.is_(None),
+                 or_(CommunityNotification.comment_id.is_(None),
+                     CommunityComment.deleted_at.is_(None))))
+    if not is_admin(user):
+        q = q.filter(or_(CommunityPost.visibility == "public", CommunityPost.author_id == user.id))
+    return q
+
+
 def unread_count(user) -> int:
-    return CommunityNotification.query.filter_by(user_id=user.id, read_at=None).count()
+    return visible_notifications(user).filter(CommunityNotification.read_at.is_(None)).count()
 
 
-def recent_notifications(user, limit=30):
-    return (CommunityNotification.query.filter_by(user_id=user.id)
-            .order_by(CommunityNotification.created_at.desc()).limit(limit).all())
+def recent_notifications(user, limit=30, page=1):
+    return (visible_notifications(user).options(selectinload(CommunityNotification.post))
+            .order_by(CommunityNotification.created_at.desc(), CommunityNotification.id.desc())
+            .offset((page - 1) * limit).limit(limit).all())
 
 
-def mark_notifications_read(user, ids=None) -> None:
-    q = CommunityNotification.query.filter_by(user_id=user.id, read_at=None)
-    if ids:
-        q = q.filter(CommunityNotification.id.in_([int(i) for i in ids if str(i).isdigit()]))
-    q.update({"read_at": utcnow()}, synchronize_session=False)
+def mark_notifications_read(user, ids=None, *, all=False) -> None:
+    if all is not True and (not isinstance(ids, list) or
+            any(type(i) is not int or i <= 0 for i in ids)):
+        raise CommunityError("Provide a list of positive notification IDs.")
+    q = visible_notifications(user).filter(CommunityNotification.read_at.is_(None))
+    if not all:
+        q = q.filter(CommunityNotification.id.in_(ids))
+    # SQLAlchemy cannot bulk-update a joined query; scope through a subquery.
+    targets = q.with_entities(CommunityNotification.id).subquery()
+    CommunityNotification.query.filter(CommunityNotification.id.in_(db.select(targets.c.id))).update(
+        {"read_at": utcnow()}, synchronize_session="fetch")
     db.session.commit()
 
 
@@ -882,9 +1158,12 @@ def send_notification_email(post: CommunityPost, kind: str, detail: str = "") ->
         # Only emailable kinds count: a user's comment landing in the same hour
         # must not swallow the admin's reply email.
         since = utcnow() - timedelta(hours=1)
+        admin_comment = (db.session.query(CommunityComment.id).join(User, CommunityComment.author_id == User.id)
+                         .filter(CommunityComment.id == CommunityNotification.comment_id, User.is_admin.is_(True))
+                         .exists())
         recent = (CommunityNotification.query
                   .filter(CommunityNotification.user_id == author.id, CommunityNotification.post_id == post.id,
-                          CommunityNotification.kind.in_(("admin_response", "status_change")),
+                          or_(CommunityNotification.kind.in_(("admin_response", "status_change")), admin_comment),
                           CommunityNotification.created_at >= since)
                   .count())
         if recent > 1:  # the notification just written is one of them
@@ -934,9 +1213,10 @@ def can_vote(post: CommunityPost, viewer) -> bool:
             and post.visibility == "public")
 
 
-def serialize_post(post: CommunityPost, viewer, *, detail=False, vote=None) -> dict:
+def serialize_post(post: CommunityPost, viewer, *, detail=False, vote=None, mentions=None) -> dict:
     """``vote`` is the viewer's vote when the caller already knows it (list
-    pages batch it via my_votes); otherwise it is looked up for detail views."""
+    pages batch it via my_votes); otherwise it is looked up for detail views.
+    ``mentions`` are the post's own tags (see mentions_for_post)."""
     flair = FLAIRS.get(post.flair, FLAIRS["question"])
     admin = is_admin(viewer)
     if vote is None and detail:
@@ -968,6 +1248,7 @@ def serialize_post(post: CommunityPost, viewer, *, detail=False, vote=None) -> d
             "match_format_label": BUG_FORMATS.get(post.match_format or "", None),
             "images": [image_urls(i) for i in post.images if i.purged_at is None or admin],
             "voted": vote == 1,
+            "mentions": mentions or [],
             "duplicate_of": None,
             "can": {
                 "edit": can_edit_post(post, viewer),
@@ -987,7 +1268,7 @@ def serialize_post(post: CommunityPost, viewer, *, detail=False, vote=None) -> d
     return data
 
 
-def serialize_comment(comment: CommunityComment, viewer) -> dict:
+def serialize_comment(comment: CommunityComment, viewer, mentions=None) -> dict:
     admin = is_admin(viewer)
     deleted = comment.deleted_at is not None
     return {
@@ -997,6 +1278,7 @@ def serialize_comment(comment: CommunityComment, viewer) -> dict:
         "deleted": deleted,
         "delete_reason": comment.delete_reason if admin else None,
         "is_official": comment.is_official,
+        "mentions": (mentions or []) if (not deleted or admin) else [],
         "author": serialize_author(comment.author, viewer) if (not deleted or admin) else
         {"name": "[deleted]", "is_admin": False, "deleted": True},
         "created_at": _iso(comment.created_at),
@@ -1011,14 +1293,20 @@ def serialize_comment(comment: CommunityComment, viewer) -> dict:
 
 def serialize_notification(n: CommunityNotification) -> dict:
     post = n.post
+    from flask import url_for
+    title = f"‘{post.title}’" if post else "a deleted thread"
+    actor = n.actor_name or "Someone"
     text = {
-        "comment": f"{n.actor_name or 'Someone'} commented on your post",
-        "reply": f"{n.actor_name or 'Someone'} replied to your comment",
-        "admin_response": "An admin replied to your post",
+        "comment": f"{actor} replied to your thread {title}",
+        "reply": f"{actor} replied to you in {title}",
+        "admin_response": f"{actor} replied to your thread {title}",
         "status_change": f"Status changed to {n.detail}" if n.detail else "Status changed",
+        "mention": f"{actor} mentioned you in {title}",
     }.get(n.kind, "Update on a post")
     return {
         "id": n.id, "kind": n.kind, "text": text,
+        "url": (url_for("community_post", public_id=post.public_id)
+                + (f"#c{n.comment_id}" if n.comment_id else "")) if post else None,
         "post_id": post.public_id if post else None,
         "post_title": post.title if post else "",
         "comment_id": n.comment_id,
