@@ -63,6 +63,8 @@ def run_migration(db, app):
                 conn.execute(text("ALTER TABLE users ADD COLUMN community_muted_until DATETIME"))
                 print("[Migration] add_community: added users.community_muted_until.")
 
+            had_score = (conn.dialect.has_table(conn, "community_posts")
+                         and "score" in _columns(conn, "community_posts"))
             for name in COMMUNITY_MODELS:
                 table = getattr(models, name).__table__
                 if not conn.dialect.has_table(conn, table.name):
@@ -72,6 +74,16 @@ def run_migration(db, app):
                     _add_missing_model_columns(conn, table)
                     for index in table.indexes:
                         index.create(bind=conn, checkfirst=True)
+
+            if not had_score:
+                # Downvotes arrived after the first release: every existing
+                # vote is an upvote (value defaulted to 1); derive the counters.
+                conn.execute(text("""
+                    UPDATE community_posts SET
+                        vote_count = (SELECT COUNT(*) FROM community_votes v WHERE v.post_id = community_posts.id AND v.value > 0),
+                        downvote_count = (SELECT COUNT(*) FROM community_votes v WHERE v.post_id = community_posts.id AND v.value < 0)
+                """))
+                conn.execute(text("UPDATE community_posts SET score = vote_count - downvote_count"))
 
             if ensure_fts(conn):
                 print("[Migration] add_community: created community_posts_fts.")

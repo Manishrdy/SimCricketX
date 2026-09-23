@@ -1321,7 +1321,9 @@ class CommunityPost(db.Model):
     # True while the latest word on the thread is not an admin's
     needs_admin = db.Column(db.Boolean, nullable=False, default=True, index=True)
 
-    vote_count = db.Column(db.Integer, nullable=False, default=0)
+    vote_count = db.Column(db.Integer, nullable=False, default=0)       # upvotes
+    downvote_count = db.Column(db.Integer, nullable=False, default=0)
+    score = db.Column(db.Integer, nullable=False, default=0, index=True)  # up - down, drives "Top"
     comment_count = db.Column(db.Integer, nullable=False, default=0)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
@@ -1365,12 +1367,13 @@ class CommunityComment(db.Model):
 
 
 class CommunityVote(db.Model):
-    """One "me too" / "I want this" per user per post."""
+    """One vote per user per post: +1 (upvote / "Me too") or -1 (downvote)."""
     __tablename__ = 'community_votes'
 
     id = db.Column(db.Integer, primary_key=True)
     post_id = db.Column(db.Integer, db.ForeignKey('community_posts.id', ondelete='CASCADE'), nullable=False, index=True)
     user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    value = db.Column(db.Integer, nullable=False, default=1)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     __table_args__ = (

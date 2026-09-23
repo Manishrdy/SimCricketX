@@ -6,6 +6,7 @@ Registered-users only. All rules live in services/community_service.py.
 from __future__ import annotations
 
 import re
+import zlib
 from datetime import datetime
 
 from markupsafe import Markup, escape
@@ -61,6 +62,7 @@ def time_ago(iso) -> str:
 def register_community_routes(app, *, db=db, limiter=None):
     app.jinja_env.filters["cm_linkify"] = linkify
     app.jinja_env.filters["cm_ago"] = time_ago
+    app.jinja_env.filters["cm_hue"] = lambda name: zlib.crc32((name or "").encode()) % 360
 
     def limit(rule):
         if limiter is None:
@@ -81,10 +83,11 @@ def register_community_routes(app, *, db=db, limiter=None):
             "q": (args.get("q") or "").strip()[:100] or None,
         }
         pinned, posts, next_cursor = cs.list_posts(current_user, cursor=args.get("cursor"), **filters)
+        votes = cs.my_votes(pinned + posts, current_user)
         return render_template(
             "community/index.html",
-            pinned=[cs.serialize_post(p, current_user) for p in pinned],
-            posts=[cs.serialize_post(p, current_user) for p in posts],
+            pinned=[cs.serialize_post(p, current_user, vote=votes.get(p.id, 0)) for p in pinned],
+            posts=[cs.serialize_post(p, current_user, vote=votes.get(p.id, 0)) for p in posts],
             next_cursor=next_cursor, filters=filters,
             flairs=cs.FLAIRS, statuses=cs.STATUSES,
             block=cs.posting_block_reason(current_user),
@@ -206,12 +209,16 @@ def register_community_routes(app, *, db=db, limiter=None):
     @limit("60 per minute")
     def community_api_vote(public_id):
         try:
+            value = int(_json_body().get("value", 1))
+        except (TypeError, ValueError):
+            return jsonify({"error": "Vote must be up or down."}), 400
+        try:
             post = cs.get_visible_post(public_id, current_user)
-            voted, count = cs.toggle_vote(post, current_user)
+            mine = cs.cast_vote(post, current_user, value)
         except cs.CommunityError as exc:
             db.session.rollback()
             return _error(exc)
-        return jsonify({"voted": voted, "vote_count": count})
+        return jsonify({"vote": mine, "up": post.vote_count, "down": post.downvote_count, "score": post.score})
 
     @app.route("/api/community/similar")
     @login_required
