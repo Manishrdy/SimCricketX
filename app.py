@@ -122,6 +122,7 @@ from routes.community_routes import register_community_routes
 from routes.admin_community_routes import register_admin_community_routes
 from routes.player_pool_routes import register_player_pool_routes
 from routes.scenario_routes import register_scenario_routes
+from routes.guide_routes import register_guide_routes
 from utils.exception_tracker import log_exception
 from utils.turnstile import turnstile_enabled, turnstile_config_warning
 
@@ -825,10 +826,10 @@ def create_app():
     def inject_route_helpers():
         def has_endpoint(endpoint_name):
             return endpoint_name in app.view_functions
-        from engine.format_catalog import FORMAT_CATALOG, FORMAT_LABELS, SUPPORTED_FORMATS, TOUR_FORMATS
+        from engine.format_catalog import FORMAT_CATALOG, FORMAT_LABELS, SUPPORTED_FORMATS, TOUR_FORMATS, SQUAD_FORMATS
         return {"has_endpoint": has_endpoint, "maintenance_mode": MAINTENANCE_MODE,
                 "cricket_formats": FORMAT_CATALOG, "format_labels": FORMAT_LABELS,
-                "supported_formats": SUPPORTED_FORMATS, "tour_formats": TOUR_FORMATS}
+                "squad_formats": SQUAD_FORMATS, "supported_formats": SUPPORTED_FORMATS, "tour_formats": TOUR_FORMATS}
 
     @app.context_processor
     def inject_user_stats():
@@ -1713,6 +1714,9 @@ def create_app():
 
     # --- Story Mode Routes (legendary match arcs gallery) ---
     register_scenario_routes(app)
+
+    # --- Onboarding guide (page tours + new-user first-match journey) ---
+    register_guide_routes(app, limiter=limiter)
 
     # --- Request logging ---
     @app.before_request
