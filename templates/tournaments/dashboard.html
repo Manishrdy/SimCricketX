@@ -142,7 +142,7 @@
                         </div>
                         {% else %}
                         <div class="stat-group">
-                            <div class="stat-label-mini">NRR</div>
+                            <div class="stat-label-mini">{{ 'NRR / 5 balls' if tournament.format_type == 'Hundred' else 'NRR' }}</div>
                             <div
                                 class="stat-value-mini {% if team.net_run_rate > 0 %}positive{% elif team.net_run_rate < 0 %}negative{% endif %}">
                                 {{ "%+.3f"|format(team.net_run_rate) }}

@@ -104,17 +104,18 @@ class ResourceLedger:
     R(u, w) - R(u', w). An innings terminated outright loses R(u, w).
     """
 
-    def __init__(self, scheduled_overs: int):
+    def __init__(self, scheduled_overs: int, balls_per_over: int = 6):
+        self.balls_per_over = balls_per_over
         self.scheduled_overs = scheduled_overs
-        self.starting_resources = resources_remaining(scheduled_overs, 0)
+        self.starting_resources = resources_remaining(scheduled_overs * balls_per_over / 6, 0)
         self.lost = 0.0
         self.interruptions = []   # audit log of dicts, serializable
 
     def record_interruption(self, overs_remaining_at_stop: float, wickets_lost: int,
                             overs_remaining_at_resume: float) -> float:
         """Record a stoppage that resumes with fewer overs. Returns resources lost."""
-        at_stop = resources_remaining(overs_remaining_at_stop, wickets_lost)
-        at_resume = resources_remaining(overs_remaining_at_resume, wickets_lost)
+        at_stop = resources_remaining(overs_remaining_at_stop * self.balls_per_over / 6, wickets_lost)
+        at_resume = resources_remaining(overs_remaining_at_resume * self.balls_per_over / 6, wickets_lost)
         lost = max(0.0, at_stop - at_resume)
         self.lost += lost
         self.interruptions.append({
@@ -137,13 +138,14 @@ class ResourceLedger:
     def to_dict(self) -> dict:
         return {
             "scheduled_overs": self.scheduled_overs,
+            "balls_per_over": self.balls_per_over,
             "lost": self.lost,
             "interruptions": self.interruptions,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "ResourceLedger":
-        ledger = cls(data["scheduled_overs"])
+        ledger = cls(data["scheduled_overs"], data.get("balls_per_over", 6))
         ledger.lost = data.get("lost", 0.0)
         ledger.interruptions = data.get("interruptions", [])
         return ledger

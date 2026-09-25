@@ -53,7 +53,7 @@ def register_match_routes(
     reverse_player_aggregates,
 ):
     app.jinja_env.globals["cricket_format_label"] = cricket_format_label
-    from engine.format_catalog import SUPPORTED_FORMATS
+    from engine.format_catalog import SUPPORTED_FORMATS, squad_format
     MATCH_SETUP_FORMATS = set(SUPPORTED_FORMATS)
 
     @app.route("/match/setup", methods=["GET", "POST"])
@@ -271,17 +271,21 @@ def register_match_routes(
             data["team_home"] = f"{home_code}_{home_db.user_id}"
             data["team_away"] = f"{away_code}_{away_db.user_id}"
 
+            data["is_knockout"] = False
+            if data.get("fixture_id"):
+                hundred_fixture = db.session.get(TournamentFixture, data["fixture_id"])
+                data["is_knockout"] = bool(hundred_fixture and hundred_fixture.stage != "league")
             _fmt = data.get("match_format", "T20")
 
-            home_profile = next((p for p in home_db.profiles if p.format_type == _fmt), None)
-            away_profile = next((p for p in away_db.profiles if p.format_type == _fmt), None)
+            home_profile = next((p for p in home_db.profiles if p.format_type == squad_format(_fmt)), None)
+            away_profile = next((p for p in away_db.profiles if p.format_type == squad_format(_fmt)), None)
 
             def _resolve_players_for_format(team_obj, profile_obj):
                 # Backward compatibility for legacy teams with players that are not
                 # attached to TeamProfile rows (profile_id is NULL in older data/tests).
                 if profile_obj:
                     return list(profile_obj.players)
-                legacy_players = [p for p in team_obj.players if p.profile_id is None] if _fmt != "T10" else []
+                legacy_players = [p for p in team_obj.players if p.profile_id is None] if _fmt not in ("T10", "Hundred") else []
                 if legacy_players:
                     return legacy_players
                 return []
@@ -447,14 +451,16 @@ def register_match_routes(
 
             from engine.ground_config import get_effective_config as _get_gc
 
-            if data["match_format"] == "T10":
+            if data["match_format"] in ("T10", "Hundred"):
                 from engine.short_bowler_manager import ShortBowlerManager
+                from engine.hundred_bowler_manager import HundredBowlerManager
+                manager_cls = HundredBowlerManager if data["match_format"] == "Hundred" else ShortBowlerManager
                 for side in ("home", "away"):
                     xi = data["playing_xi"][side]
                     if len(xi) != 11 or len({p["name"] for p in xi}) != 11:
-                        return jsonify(error="T10 requires eleven distinct players per XI"), 400
+                        return jsonify(error="This format requires eleven distinct players per XI"), 400
                     try:
-                        ShortBowlerManager(xi, _get_any_format("T10")).validate_attack()
+                        manager_cls(xi, _get_any_format(data["match_format"])).validate_attack()
                     except ValueError as exc:
                         return jsonify(error=str(exc)), 400
 
@@ -619,7 +625,7 @@ def register_match_routes(
 
         def _check(team_db, xi_names):
             profile = next(
-                (p for p in team_db.profiles if p.format_type == fmt), None
+                (p for p in team_db.profiles if p.format_type == squad_format(fmt)), None
             )
             if not profile:
                 # Team has no profile for this format — all names are invalid.
@@ -652,6 +658,7 @@ def register_match_routes(
         format_map = {
             "t20": ("T20", "T20"),
             "t10": ("T10", "T10"),
+            "hundred": ("Hundred", "The Hundred"),
             "lista": ("ListA", "List A"),
             "odi": ("ListA", "List A"),
             "fc": ("FC", "First-Class"),
@@ -744,7 +751,7 @@ def register_match_routes(
             match_data, _path, _err = _load_match_file_for_user(match_id)
             has_snapshot = bool(
                 match_data
-                and (match_data.get("super_over_snapshot") or match_data.get("fc_snapshot"))
+                and (match_data.get("super_over_snapshot") or match_data.get("fc_snapshot") or match_data.get("hundred_snapshot"))
             )
             if match_data and (has_snapshot or wants_delivery):
                 match, err = _get_or_restore_match_instance(match_id)
@@ -788,8 +795,8 @@ def register_match_routes(
         bowler_stats_entry = match.bowler_stats.get(current_bowler.get("name", ""), {})
 
         current_ball = getattr(match, "current_ball", 0)
-        total_balls = match.current_over * 6 + current_ball
-        crr = round((match.score * 6 / total_balls), 2) if total_balls > 0 else 0.0
+        total_balls = match.current_over * match.balls_per_over + current_ball
+        crr = round((match.score * (1 if match.is_hundred else 6) / total_balls), 2) if total_balls > 0 else 0.0
 
         batting_name = match._get_team_name(match.batting_team) if hasattr(match, "_get_team_name") else ""
         bowling_name = match._get_team_name(match.bowling_team) if hasattr(match, "_get_team_name") else ""
@@ -844,6 +851,7 @@ def register_match_routes(
             "phase_name": None if match.is_fc else match.fmt.phase_key(match.current_over),
             "bowler_max_overs": getattr(match.fmt, "max_bowler_overs", None),
             "bowling_eligibility": match.get_bowling_eligibility(),
+            **(match.hundred_state() if match.is_hundred else {}),
             "rain_affected": getattr(match, "rain_affected", False),
             "dls_par": match._current_dls_par() if hasattr(match, "_current_dls_par") else None,
             "rain_events": getattr(match, "rain_events_log", []),
@@ -881,6 +889,8 @@ def register_match_routes(
         }
 
         def format_overs(card):
+            if db_match.match_format == "Hundred":
+                return str(card.balls_bowled or 0)
             if card.balls_bowled:
                 return f"{card.balls_bowled // 6}.{card.balls_bowled % 6}"
             if card.overs:
@@ -935,7 +945,7 @@ def register_match_routes(
                         "noballs": card.noballs,
                         "byes": card.byes or 0,
                         "leg_byes": card.leg_byes or 0,
-                        "economy": (card.runs_conceded * 6.0 / card.balls_bowled) if card.balls_bowled else 0,
+                        "economy": (card.runs_conceded * (100 if db_match.match_format == "Hundred" else 6.0) / card.balls_bowled) if card.balls_bowled else 0,
                         "position": card.position or 9999,
                     }
                 )
@@ -1367,6 +1377,37 @@ def register_match_routes(
             log_exception(e)
             app.logger.warning(f"[SuperOver] Snapshot persist failed for {match_id}: {e}")
 
+    def _persist_hundred_snapshot(match, match_id):
+        from engine.hundred_snapshot import serialize
+        match_data, path, err = _load_match_file_for_user(match_id)
+        if not match_data:
+            raise ValueError("Hundred match file is unavailable")
+        match_data["hundred_snapshot"] = serialize(match)
+        match_data.pop("super_over_snapshot", None)
+        temporary = path + ".hundred.tmp"
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump(match_data, handle)
+        os.replace(temporary, path)
+
+    @app.route("/match/<match_id>/strategic-timeout", methods=["POST"])
+    @login_required
+    def hundred_timeout(match_id):
+        match, err = _get_or_restore_match_instance(match_id)
+        if err:
+            return err
+        if match.data.get("created_by") != current_user.id:
+            return jsonify(error="Unauthorized"), 403
+        payload = request.get_json(silent=True) or {}
+        if type(payload.get("active")) is not bool:
+            return jsonify(error="active must be a boolean"), 400
+        try:
+            with _delivery_for(match).lock:
+                result = match.set_strategic_timeout(payload["active"])
+                _persist_hundred_snapshot(match, match_id)
+            return jsonify(result)
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+
     def _persist_fc_snapshot(match, match_id):
         """Write the current FC match snapshot into the match JSON so a
         process restart or instance eviction mid-match resumes instead of
@@ -1442,6 +1483,13 @@ def register_match_routes(
                 match_data['rain_probability'] = load_config().get('rain_probability', 0.0)
 
             match = Match(match_data)
+            if match.is_hundred and match_data.get("hundred_snapshot"):
+                from engine.hundred_snapshot import restore
+                try:
+                    restore(match, match_data["hundred_snapshot"])
+                except (ValueError, KeyError, TypeError) as exc:
+                    app.logger.exception("Hundred checkpoint restore failed")
+                    return None, (jsonify(error="Hundred state could not be restored"), 500)
             snap = match_data.get("super_over_snapshot")
             if snap:
                 try:
@@ -1598,7 +1646,7 @@ def register_match_routes(
         # snapshot immediately so a crash before the first super-over ball
         # is already recoverable.
         if outcome.get("super_over_required"):
-            _persist_super_over_snapshot(match, match_id)
+            (_persist_hundred_snapshot if match.is_hundred else _persist_super_over_snapshot)(match, match_id)
 
         # FC: persist after every over/innings/day boundary (current_ball
         # == 0 right after a ball was just processed means one of those
@@ -1617,6 +1665,9 @@ def register_match_routes(
             )
         ):
             _persist_fc_snapshot(match, match_id)
+
+        if getattr(match, "is_hundred", False) and not outcome.get("match_over"):
+            _persist_hundred_snapshot(match, match_id)
 
         if outcome.get("match_over"):
             _finalize_completed_match(match, match_id, outcome)
@@ -1707,6 +1758,8 @@ def register_match_routes(
             # Persist the cleared state, or a restart would re-offer a card
             # the user has already seen.
             _persist_fc_snapshot(match, match_id)
+        if acked and match.is_hundred:
+            _persist_hundred_snapshot(match, match_id)
         return jsonify({"acked": acked})
 
     @app.route("/match/<match_id>/set-simulation-mode", methods=["POST"])
@@ -1741,6 +1794,10 @@ def register_match_routes(
                     return jsonify({"error": "Unauthorized"}), 403
                 match.simulation_mode = mode
                 match.data["simulation_mode"] = mode
+                if match.is_hundred:
+                    if mode == "auto":
+                        match.timeout_active = False
+                    _persist_hundred_snapshot(match, match_id)
 
         return jsonify({"success": True, "mode": mode}), 200
 
@@ -1767,6 +1824,8 @@ def register_match_routes(
             return jsonify({"error": "Decision type mismatch"}), 400
 
         result, status_code = match.submit_pending_decision(selected_index)
+        if status_code == 200 and match.is_hundred:
+            _persist_hundred_snapshot(match, match_id)
         return jsonify(result), status_code
     
 
@@ -1788,7 +1847,7 @@ def register_match_routes(
         result = match.start_super_over(first_batting_team, batsmen_names, bowler_name)
         if isinstance(result, dict) and result.get("error"):
             return jsonify(result), 400
-        _persist_super_over_snapshot(match, match_id)
+        (_persist_hundred_snapshot if match.is_hundred else _persist_super_over_snapshot)(match, match_id)
         return jsonify(result)
 
     @app.route("/match/<match_id>/start-super-over-innings2", methods=["POST"])
@@ -1807,7 +1866,7 @@ def register_match_routes(
         result = match.start_super_over_innings2(batsmen_names, bowler_name)
         if isinstance(result, dict) and result.get("error"):
             return jsonify(result), 400
-        _persist_super_over_snapshot(match, match_id)
+        (_persist_hundred_snapshot if match.is_hundred else _persist_super_over_snapshot)(match, match_id)
         return jsonify(result)
 
     @app.route("/match/<match_id>/next-super-over-ball", methods=["POST"])
@@ -1837,7 +1896,7 @@ def register_match_routes(
                 # at completion; writing after would resurrect a stale file.
                 _finalize_completed_match(match, match_id, result)
             elif isinstance(result, dict) and not result.get("error"):
-                _persist_super_over_snapshot(match, match_id)
+                (_persist_hundred_snapshot if match.is_hundred else _persist_super_over_snapshot)(match, match_id)
             return jsonify(result)
         except Exception as e:
             log_exception(e)
@@ -2251,6 +2310,13 @@ def register_match_routes(
                     away_inn1 = f"{m.away_team_score or 0}/{m.away_team_wickets or 0}"
                     away_inn2 = f" & {m.away_team_score_innings2}/{m.away_team_wickets_innings2}" if m.away_team_score_innings2 is not None else ""
                     match_scoreline = f"{home_name} {home_inn1}{home_inn2} vs {away_name} {away_inn1}{away_inn2}"
+                elif format_code == "Hundred":
+                    def hundred_balls(value):
+                        return int(float(value or 0)) * 5 + round((float(value or 0) % 1) * 10)
+                    match_scoreline = (f"{home_name} {m.home_team_score or 0}/{m.home_team_wickets or 0} "
+                        f"({hundred_balls(m.home_team_overs)} balls) vs "
+                        f"{away_name} {m.away_team_score or 0}/{m.away_team_wickets or 0} "
+                        f"({hundred_balls(m.away_team_overs)} balls)")
                 else:
                     match_scoreline = (
                         f"{home_name} {m.home_team_score or 0}/{m.home_team_wickets or 0} "

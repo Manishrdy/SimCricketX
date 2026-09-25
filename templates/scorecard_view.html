@@ -516,13 +516,13 @@ Match Scorecard - SimCricketX
                 <thead>
                     <tr>
                         <th>Bowler</th>
-                        <th>O</th>
+                        <th>{{ 'Balls' if match.match_format == 'Hundred' else 'O' }}</th>
                         <th>M</th>
                         <th>R</th>
                         <th>W</th>
                         <th>Wd</th>
                         <th>Nb</th>
-                        <th>Econ</th>
+                        <th>{{ 'Econ/100' if match.match_format == 'Hundred' else 'Econ' }}</th>
                     </tr>
                 </thead>
                 <tbody>

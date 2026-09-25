@@ -304,7 +304,7 @@
             ('/statistics', 'chart-column', 'Statistics', 'Explore player records and performance trends.', 'Analyze'),
             ('/community', 'comments', 'Community', 'Share ideas, ask questions, and talk cricket.', 'Connect')
         ] %}
-        <a class="home-option home-option-{{ loop.index }}{% if loop.first %} home-option-primary{% endif %}" href="{{ href }}">
+        <a class="home-option home-option-{{ loop.index }}{% if loop.first %} home-option-primary{% endif %}" href="{{ href }}" data-guide="{{ href.strip('/').replace('/', '-') }}">
             {% if loop.first %}
             <svg class="home-stadium" viewBox="0 0 420 420" fill="none" aria-hidden="true">
                 <ellipse cx="210" cy="210" rx="192" ry="158"/><ellipse cx="210" cy="210" rx="165" ry="134"/><ellipse cx="210" cy="210" rx="116" ry="95" stroke-dasharray="4 8"/>
@@ -318,6 +318,7 @@
         </a>
         {% endfor %}
     </section>
+    <div id="scxg-journey-mount"></div>
     <p class="home-guide"><i class="fa-regular fa-lightbulb" aria-hidden="true"></i> Getting started? Build two teams, then bring them together for your first game.</p>
 </div>
 

@@ -90,7 +90,7 @@ class TournamentEngine:
         pass
 
     @staticmethod
-    def overs_to_balls(overs) -> int:
+    def overs_to_balls(overs, unit=6) -> int:
         """
         Convert cricket overs (str or float) to total balls.
         E.g., "19.5" overs = 19*6 + 5 = 119 balls
@@ -102,20 +102,20 @@ class TournamentEngine:
             return 0
         whole_overs = int(overs_f)
         partial_balls = round((overs_f - whole_overs) * 10)
-        if partial_balls > 5:
+        if partial_balls >= unit:
             logger.warning(f"Invalid overs format: {overs} - partial balls {partial_balls} > 5")
-            partial_balls = 5
-        return whole_overs * 6 + partial_balls
+            partial_balls = unit - 1
+        return whole_overs * unit + partial_balls
 
     @staticmethod
-    def balls_to_overs(balls: int) -> str:
+    def balls_to_overs(balls: int, unit=6) -> str:
         """
         Convert total balls to cricket overs string.
         E.g., 119 balls = "19.5"
         """
         if balls is None or balls < 0:
             return '0.0'
-        return f"{balls // 6}.{balls % 6}"
+        return f"{balls // unit}.{balls % unit}"
 
     def get_available_modes(self, num_teams: int) -> list:
         """
@@ -1410,15 +1410,15 @@ class TournamentEngine:
             if is_no_result:
                 home_team_stats.no_result += 1
                 away_team_stats.no_result += 1
-                home_team_stats.points += self.POINTS_NO_RESULT
-                away_team_stats.points += self.POINTS_NO_RESULT
+                home_team_stats.points += (self.POINTS_NO_RESULT * (2 if match.match_format == "Hundred" else 1))
+                away_team_stats.points += (self.POINTS_NO_RESULT * (2 if match.match_format == "Hundred" else 1))
             elif winner_id == match.home_team_id:
                 home_team_stats.won += 1
-                home_team_stats.points += self.POINTS_WIN
+                home_team_stats.points += (self.POINTS_WIN * (2 if match.match_format == "Hundred" else 1))
                 away_team_stats.lost += 1
             elif winner_id == match.away_team_id:
                 away_team_stats.won += 1
-                away_team_stats.points += self.POINTS_WIN
+                away_team_stats.points += (self.POINTS_WIN * (2 if match.match_format == "Hundred" else 1))
                 home_team_stats.lost += 1
             elif match.match_status == 'drawn':
                 home_team_stats.drawn += 1
@@ -1428,8 +1428,8 @@ class TournamentEngine:
             else:
                 home_team_stats.tied += 1
                 away_team_stats.tied += 1
-                home_team_stats.points += self.POINTS_TIE
-                away_team_stats.points += self.POINTS_TIE
+                home_team_stats.points += (self.POINTS_TIE * (2 if match.match_format == "Hundred" else 1))
+                away_team_stats.points += (self.POINTS_TIE * (2 if match.match_format == "Hundred" else 1))
 
             # Update NRR components — First-Class drops NRR entirely (a
             # run-rate metric doesn't translate to variable-length Test
@@ -1551,6 +1551,13 @@ class TournamentEngine:
             return f"{max_overs}.0"
         return actual
 
+    def _hundred_nrr_components(self, match):
+        metadata = getattr(match, "format_metadata", None) or {}
+        if match.match_format != "Hundred" or not metadata.get("nrr"):
+            return None
+        home, away = metadata["nrr"]["home"], metadata["nrr"]["away"]
+        return home["runs"], away["runs"], self.balls_to_overs(home["balls"], 5), self.balls_to_overs(away["balls"], 5)
+
     def _update_nrr_components(self, home_stats, away_stats, match):
         """Update Net Run Rate components for both teams."""
         home_score = match.home_team_score or 0
@@ -1563,18 +1570,23 @@ class TournamentEngine:
         away_overs = self._get_nrr_overs(
             match.away_team_overs, match.away_team_wickets, match
         )
+        if match.match_format == "Hundred":
+            contribution = self._hundred_nrr_components(match)
+            if contribution:
+                home_score, away_score, home_overs, away_overs = contribution
+
 
         # Home Batting / Away Bowling
         home_stats.runs_scored += home_score
-        home_stats.overs_faced = self._add_overs(home_stats.overs_faced, home_overs)
+        home_stats.overs_faced = self._add_overs(home_stats.overs_faced, home_overs, 5 if match.match_format == "Hundred" else 6)
         away_stats.runs_conceded += home_score
-        away_stats.overs_bowled = self._add_overs(away_stats.overs_bowled, home_overs)
+        away_stats.overs_bowled = self._add_overs(away_stats.overs_bowled, home_overs, 5 if match.match_format == "Hundred" else 6)
 
         # Away Batting / Home Bowling
         away_stats.runs_scored += away_score
-        away_stats.overs_faced = self._add_overs(away_stats.overs_faced, away_overs)
+        away_stats.overs_faced = self._add_overs(away_stats.overs_faced, away_overs, 5 if match.match_format == "Hundred" else 6)
         home_stats.runs_conceded += away_score
-        home_stats.overs_bowled = self._add_overs(home_stats.overs_bowled, away_overs)
+        home_stats.overs_bowled = self._add_overs(home_stats.overs_bowled, away_overs, 5 if match.match_format == "Hundred" else 6)
 
         # Recalculate NRR
         self._calculate_nrr(home_stats)
@@ -1599,31 +1611,32 @@ class TournamentEngine:
             from engine.tour_engine import refresh_tour
             refresh_tour(tournament.tour)
 
-    def _add_overs(self, o1, o2):
+    def _add_overs(self, o1, o2, unit=6):
         """Add two cricket overs values."""
-        balls1 = self.overs_to_balls(o1 or '0.0')
-        balls2 = self.overs_to_balls(o2 or '0.0')
-        return self.balls_to_overs(balls1 + balls2)
+        balls1 = self.overs_to_balls(o1 or '0.0', unit)
+        balls2 = self.overs_to_balls(o2 or '0.0', unit)
+        return self.balls_to_overs(balls1 + balls2, unit)
 
-    def _subtract_overs(self, total, sub):
+    def _subtract_overs(self, total, sub, unit=6):
         """Subtract cricket overs values."""
-        total_balls = self.overs_to_balls(total or '0.0')
-        sub_balls = self.overs_to_balls(sub or '0.0')
+        total_balls = self.overs_to_balls(total or '0.0', unit)
+        sub_balls = self.overs_to_balls(sub or '0.0', unit)
         result_balls = max(0, total_balls - sub_balls)
-        return self.balls_to_overs(result_balls)
+        return self.balls_to_overs(result_balls, unit)
 
     def _calculate_nrr(self, team_stats):
         """Calculate and update the net run rate for a team."""
-        balls_faced = self.overs_to_balls(team_stats.overs_faced or '0.0')
-        balls_bowled = self.overs_to_balls(team_stats.overs_bowled or '0.0')
+        unit = 5 if getattr(getattr(team_stats, "tournament", None), "format_type", None) == "Hundred" else 6
+        balls_faced = self.overs_to_balls(team_stats.overs_faced or '0.0', unit)
+        balls_bowled = self.overs_to_balls(team_stats.overs_bowled or '0.0', unit)
 
         if balls_faced > 0:
-            run_rate_for = (team_stats.runs_scored or 0) / (balls_faced / 6.0)
+            run_rate_for = (team_stats.runs_scored or 0) / (balls_faced / unit)
         else:
             run_rate_for = 0.0
 
         if balls_bowled > 0:
-            run_rate_against = (team_stats.runs_conceded or 0) / (balls_bowled / 6.0)
+            run_rate_against = (team_stats.runs_conceded or 0) / (balls_bowled / unit)
         else:
             run_rate_against = 0.0
 
@@ -1673,6 +1686,7 @@ class TournamentEngine:
         if not player_ids:
             return
 
+        tournament_format = db.session.get(Tournament, tournament_id).format_type
         tournament_match_ids = {
             row[0]
             for row in db.session.query(TournamentFixture.match_id)
@@ -1879,7 +1893,7 @@ class TournamentEngine:
                     bowl[2] / bowl[3], 2
                 ) if bowl[3] > 0 else None
                 cache.bowling_economy = round(
-                    (bowl[2] / (total_balls / 6.0)), 2
+                    (bowl[2] * (100 if tournament_format == "Hundred" else 6) / total_balls), 2
                 ) if total_balls > 0 else 0.0
                 cache.bowling_strike_rate = round(
                     total_balls / bowl[3], 2
@@ -2036,15 +2050,15 @@ class TournamentEngine:
             if was_no_result:
                 home_team_stats.no_result = max(0, home_team_stats.no_result - 1)
                 away_team_stats.no_result = max(0, away_team_stats.no_result - 1)
-                home_team_stats.points = max(0, home_team_stats.points - self.POINTS_NO_RESULT)
-                away_team_stats.points = max(0, away_team_stats.points - self.POINTS_NO_RESULT)
+                home_team_stats.points = max(0, home_team_stats.points - (self.POINTS_NO_RESULT * (2 if match.match_format == "Hundred" else 1)))
+                away_team_stats.points = max(0, away_team_stats.points - (self.POINTS_NO_RESULT * (2 if match.match_format == "Hundred" else 1)))
             elif winner_id == match.home_team_id:
                 home_team_stats.won = max(0, home_team_stats.won - 1)
-                home_team_stats.points = max(0, home_team_stats.points - self.POINTS_WIN)
+                home_team_stats.points = max(0, home_team_stats.points - (self.POINTS_WIN * (2 if match.match_format == "Hundred" else 1)))
                 away_team_stats.lost = max(0, away_team_stats.lost - 1)
             elif winner_id == match.away_team_id:
                 away_team_stats.won = max(0, away_team_stats.won - 1)
-                away_team_stats.points = max(0, away_team_stats.points - self.POINTS_WIN)
+                away_team_stats.points = max(0, away_team_stats.points - (self.POINTS_WIN * (2 if match.match_format == "Hundred" else 1)))
                 home_team_stats.lost = max(0, home_team_stats.lost - 1)
             elif match.match_status == 'drawn':
                 home_team_stats.drawn = max(0, home_team_stats.drawn - 1)
@@ -2054,8 +2068,8 @@ class TournamentEngine:
             else:
                 home_team_stats.tied = max(0, home_team_stats.tied - 1)
                 away_team_stats.tied = max(0, away_team_stats.tied - 1)
-                home_team_stats.points = max(0, home_team_stats.points - self.POINTS_TIE)
-                away_team_stats.points = max(0, away_team_stats.points - self.POINTS_TIE)
+                home_team_stats.points = max(0, home_team_stats.points - (self.POINTS_TIE * (2 if match.match_format == "Hundred" else 1)))
+                away_team_stats.points = max(0, away_team_stats.points - (self.POINTS_TIE * (2 if match.match_format == "Hundred" else 1)))
 
             if not was_no_result and match.match_format != 'FC':
                 self._reverse_nrr_components(home_team_stats, away_team_stats, match)
@@ -2337,13 +2351,18 @@ class TournamentEngine:
         away_overs = self._get_nrr_overs(
             match.away_team_overs, match.away_team_wickets, match
         )
+        if match.match_format == "Hundred":
+            contribution = self._hundred_nrr_components(match)
+            if contribution:
+                home_score, away_score, home_overs, away_overs = contribution
+
 
         home_stats.runs_scored = max(0, (home_stats.runs_scored or 0) - home_score)
-        home_stats.overs_faced = self._subtract_overs(home_stats.overs_faced, home_overs)
+        home_stats.overs_faced = self._subtract_overs(home_stats.overs_faced, home_overs, 5 if match.match_format == "Hundred" else 6)
         away_stats.runs_conceded = max(0, (away_stats.runs_conceded or 0) - home_score)
-        away_stats.overs_bowled = self._subtract_overs(away_stats.overs_bowled, home_overs)
+        away_stats.overs_bowled = self._subtract_overs(away_stats.overs_bowled, home_overs, 5 if match.match_format == "Hundred" else 6)
 
         away_stats.runs_scored = max(0, (away_stats.runs_scored or 0) - away_score)
-        away_stats.overs_faced = self._subtract_overs(away_stats.overs_faced, away_overs)
+        away_stats.overs_faced = self._subtract_overs(away_stats.overs_faced, away_overs, 5 if match.match_format == "Hundred" else 6)
         home_stats.runs_conceded = max(0, (home_stats.runs_conceded or 0) - away_score)
-        home_stats.overs_bowled = self._subtract_overs(home_stats.overs_bowled, away_overs)
+        home_stats.overs_bowled = self._subtract_overs(home_stats.overs_bowled, away_overs, 5 if match.match_format == "Hundred" else 6)

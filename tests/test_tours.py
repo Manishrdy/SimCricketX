@@ -8,6 +8,7 @@ from database.models import Tour, Tournament, TournamentFixture, Match, MatchSco
 from engine.tour_engine import (create_tour, ordered_series, fixture_block_reason,
                                reorder_series, refresh_tour, tour_summary, series_result)
 from engine.tournament_engine import TournamentEngine
+from engine.format_catalog import TOUR_FORMATS
 
 
 def add_ready_profiles(team):
@@ -171,7 +172,7 @@ def test_aggregate_fc_innings_and_super_over(make_tour, test_team, regular_user)
 
 def test_create_pages_and_zero_section(authenticated_client, test_team, test_team_2):
     page = authenticated_client.get('/tournaments/tours/create')
-    assert page.status_code == 200 and page.data.count(b'value="0"') == 4
+    assert page.status_code == 200 and page.data.count(b'value="0"') == len(TOUR_FORMATS)
     response = authenticated_client.post('/tournaments/tours/create', data=confirmed_payload({
         'name': 'India tour', 'host_team_id': test_team.id, 'visiting_team_id': test_team_2.id,
         'count_FC': '3', 'count_ListA': '3', 'count_T20': '0',

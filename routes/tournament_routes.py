@@ -316,7 +316,7 @@ def register_tournament_routes(
         # Build a map of {team_id: [format_types]} so the template JS can filter
         # teams based on the selected match format.
         team_formats = {
-            t.id: [p.format_type for p in t.profiles]
+            t.id: [p.format_type for p in t.profiles] + (["Hundred"] if any(p.format_type == "T20" for p in t.profiles) else [])
             for t in teams
         }
 

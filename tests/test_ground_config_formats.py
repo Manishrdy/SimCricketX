@@ -42,7 +42,7 @@ class TestDefaults:
             assert block, f"{fmt} has no defaults block"
 
     def test_unknown_format_falls_back_to_t20(self):
-        assert normalise_format("Hundred") == "T20"
+        assert normalise_format("Hundred") == "Hundred"
         assert normalise_format(None) == "T20"
         assert normalise_format("ListA") == "ListA"
 

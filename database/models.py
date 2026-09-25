@@ -71,6 +71,11 @@ class User(UserMixin, db.Model):
     # Community board mute (read-only on the board, rest of the site unaffected)
     community_muted_until = db.Column(db.DateTime, nullable=True)
 
+    # Onboarding guide progress as JSON: which page tours the user has finished
+    # or skipped, and where they are in the new-user "first match" journey.
+    # NULL = never touched. Parsed and validated by utils/guide_state.py only.
+    guide_state = db.Column(db.Text, nullable=True)
+
     # Relationships — cascade so deleting a User removes all owned data
     teams = relationship('Team', backref='owner', lazy=True, cascade="all, delete-orphan")
     matches = relationship('Match', backref='user', lazy=True, cascade="all, delete-orphan")
@@ -703,6 +708,7 @@ class Match(db.Model):
     
     # Match Format
     match_format = db.Column(db.String(20), default='T20')
+    format_metadata = db.Column(db.JSON, nullable=True)
     scheduled_overs = db.Column(db.Integer, nullable=True)
     overs_per_side = db.Column(db.Integer, default=20)
     is_day_night = db.Column(db.Boolean, default=False)

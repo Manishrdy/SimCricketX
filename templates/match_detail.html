@@ -497,11 +497,11 @@
                     <thead>
                         <tr>
                             <th>Bowler</th>
-                            <th>O</th>
+                            <th>{{ "Balls" if match.get("match_format") == "Hundred" else "O" }}</th>
                             <th>M</th>
                             <th>R</th>
                             <th>W</th>
-                            <th>ECO</th>
+                            <th>{{ 'Econ/100' if match.match_format == 'Hundred' else 'ECO' }}</th>
                         </tr>
                     </thead>
                     <tbody id="bowling-tbody"></tbody>

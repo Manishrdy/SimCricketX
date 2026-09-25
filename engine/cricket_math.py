@@ -9,13 +9,13 @@ was fed a truncated whole-overs counter instead, corrupting the value.
 """
 
 
-def balls_to_overs_str(balls: int) -> str:
+def balls_to_overs_str(balls: int, balls_per_over: int = 6) -> str:
     """Return cricket-notation overs as a string, e.g. 23 balls -> "3.5"."""
     balls = max(0, int(balls or 0))
-    return f"{balls // 6}.{balls % 6}"
+    return f"{balls // balls_per_over}.{balls % balls_per_over}"
 
 
-def balls_to_overs_float(balls: int) -> float:
+def balls_to_overs_float(balls: int, balls_per_over: int = 6) -> float:
     """Return cricket-notation overs as a float, e.g. 23 balls -> 3.5.
 
     Note this is NOT true decimal overs (23/6 = 3.8333); it's the
@@ -23,4 +23,4 @@ def balls_to_overs_float(balls: int) -> float:
     (0-5), matching how overs are always displayed/scored.
     """
     balls = max(0, int(balls or 0))
-    return (balls // 6) + (balls % 6) / 10.0
+    return (balls // balls_per_over) + (balls % balls_per_over) / 10.0

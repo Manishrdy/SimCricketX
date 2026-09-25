@@ -262,8 +262,8 @@ function deriveBowlerStats(history, name) {
             if (!b.is_extra || (b.extra_type !== 'Wide' && b.extra_type !== 'No Ball')) legalBalls++;
         }
     }
-    const overs = Math.floor(legalBalls / 6) + '.' + (legalBalls % 6);
-    return { runs, wickets, overs, econ: legalBalls > 0 ? ((runs / legalBalls) * 6).toFixed(1) : '0.0' };
+    const overs = IS_HUNDRED_MATCH ? String(legalBalls) : Math.floor(legalBalls / (IS_HUNDRED_MATCH ? 5 : 6)) + '.' + (legalBalls % (IS_HUNDRED_MATCH ? 5 : 6));
+    return { runs, wickets, overs, econ: legalBalls > 0 ? ((runs / legalBalls) * (IS_HUNDRED_MATCH ? 100 : 6)).toFixed(1) : '0.0' };
 }
 
 function renderBatterCard(name, s, isStriker) {
@@ -384,7 +384,7 @@ function _buildWormSeries(history) {
     let cumulative = 0;
     for (const b of history) {
         cumulative += (b.runs || 0);
-        const point = { x: b.over + (b.ball + 1) / 6, y: cumulative };
+        const point = { x: b.over + (b.ball + 1) / (IS_HUNDRED_MATCH ? 5 : 6), y: cumulative };
         path.push(point);
         if (b.batter_out) wickets.push(point);
     }
@@ -579,7 +579,7 @@ function updateWinProbability(history) {
 
     const latest = history[history.length - 1];
     const innings = latest.innings, score = latest.score, wickets = latest.wickets;
-    const oversCompleted = latest.over + (latest.ball + 1) / 6;
+    const oversCompleted = latest.over + (latest.ball + 1) / (IS_HUNDRED_MATCH ? 5 : 6);
     let battingProb;
 
     if (innings === 1) {
@@ -590,14 +590,15 @@ function updateWinProbability(history) {
         if (!target) { battingProb = 50; }
         else {
             const remaining = target - score;
-            const ballsLeft = 120 - (latest.over * 6 + latest.ball + 1);
+            const allocation = IS_HUNDRED_MATCH ? (latest.innings_ball_limit || 100) : 120;
+            const ballsLeft = allocation - (latest.over * (IS_HUNDRED_MATCH ? 5 : 6) + latest.ball + 1);
             const wicketsInHand = 10 - wickets;
             if (remaining <= 0) battingProb = 100;
             else if (wicketsInHand <= 0 || ballsLeft <= 0) battingProb = 0;
             else {
                 const rrr = (remaining * 6) / ballsLeft;
-                const crr = ballsLeft < 120 ? (score * 6) / (120 - ballsLeft) : 8;
-                battingProb = 50 * Math.max(0, 1 - (rrr - crr) * 0.08) + 30 * (wicketsInHand / 10) + 20 * (ballsLeft / 120);
+                const crr = ballsLeft < allocation ? (score * 6) / (allocation - ballsLeft) : 8;
+                battingProb = 50 * Math.max(0, 1 - (rrr - crr) * 0.08) + 30 * (wicketsInHand / 10) + 20 * (ballsLeft / allocation);
             }
         }
     }
