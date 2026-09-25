@@ -23,6 +23,8 @@ def team_squad_readiness_error(team, format_type):
     """Return why a team cannot enter a competition in the given format."""
     if team.is_draft:
         return "Team is a draft. Publish its squads first."
+    from engine.format_catalog import squad_format
+    format_type = squad_format(format_type)
     profile = next((p for p in team.profiles if p.format_type == format_type), None)
     if profile is None:
         return "Squad not created."

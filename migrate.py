@@ -78,6 +78,8 @@ def run_schema_migration(app, db):
         ensure_schema(db.engine, db)
         from migrations.add_scheduled_overs import run_migration as migrate_scheduled_overs
         migrate_scheduled_overs(db, app)
+        from migrations.add_hundred_metadata import run_migration as migrate_hundred_metadata
+        migrate_hundred_metadata(db, app)
 
         # Report changes
         inspector = inspect(db.engine)

@@ -1,4 +1,4 @@
-import random
+from engine import random_source as random
 import logging
 from typing import Optional
 
@@ -507,7 +507,7 @@ class PressureEngine:
         if so_state.get('so_innings', 1) == 2 and so_state.get('runs_needed') is not None:
             runs_needed = max(0, so_state['runs_needed'])
             balls_remaining = max(1, so_state.get('balls_remaining', 6))
-            required_rr = runs_needed / (balls_remaining / 6.0)
+            required_rr = runs_needed / (balls_remaining / getattr(self.fmt, "balls_per_over", 6))
             rrr_ratio = required_rr / SUPER_OVER_NEUTRAL_RPO
 
             if rrr_ratio > 1.0:

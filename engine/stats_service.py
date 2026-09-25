@@ -140,6 +140,8 @@ class StatsService:
         return self._calculate_stats_from_records(records, match_format=match_format)
 
     def _try_cache_tournament_stats(self, tournament_id, user_id, match_format=None, scheduled_overs=None):
+        if match_format == "Hundred":
+            return None
         """Attempt to serve tournament stats from TournamentPlayerStatsCache.
 
         Returns the same dict shape as _calculate_stats_from_records() on
@@ -241,7 +243,7 @@ class StatsService:
             })
 
         batting_stats.sort(key=lambda x: x['runs'], reverse=True)
-        bowling_stats.sort(key=lambda x: (-x['wickets'], x['economy']))
+        bowling_stats.sort(key=lambda x: (-x['wickets'], x['economy'] if x['economy'] is not None else float('inf')))
         fielding_stats.sort(
             key=lambda x: (x['catches'] + x['run_outs'] + x.get('stumpings', 0), x['matches']),
             reverse=True
@@ -559,6 +561,7 @@ class StatsService:
             'bowl_wickets_lbw': 0,
             'bowl_best': (0, 9999),  # (wickets, runs)
             'bowl_five_wicket_hauls': 0,
+            'bowl_four_wicket_hauls': 0,
             'bowl_match_data': defaultdict(lambda: {'wickets': 0, 'runs': 0}),
             'catches': 0,
             'run_outs': 0,
@@ -609,6 +612,8 @@ class StatsService:
                 balls = card.balls_bowled or 0
                 if balls > 0:
                     player_data[pid]['bowl_innings'] += 1
+                    if (card.wickets or 0) == 4:
+                        player_data[pid]['bowl_four_wicket_hauls'] += 1
                     if (card.wickets or 0) >= 5:
                         player_data[pid]['bowl_five_wicket_hauls'] += 1
                     match_figures = player_data[pid]['bowl_match_data'][match.id]
@@ -637,7 +642,7 @@ class StatsService:
         
         # Calculate final statistics
         batting_stats = self._calculate_batting_stats(player_data)
-        bowling_stats = self._calculate_bowling_stats(player_data)
+        bowling_stats = self._calculate_bowling_stats(player_data, match_format)
         fielding_stats = self._calculate_fielding_stats(player_data)
         leaderboards = self._calculate_leaderboards(
             batting_stats, bowling_stats, match_format=match_format
@@ -696,6 +701,7 @@ class StatsService:
                 'strike_rate': strike_rate,
                 'average': average,
                 'zeros': zeros,
+                'dots': data['bat_dots'],
                 'ones': data['bat_ones'],
                 'twos': data['bat_twos'],
                 'threes': data['bat_threes'],
@@ -712,7 +718,7 @@ class StatsService:
         batting_stats.sort(key=lambda x: x['runs'], reverse=True)
         return batting_stats
     
-    def _calculate_bowling_stats(self, player_data):
+    def _calculate_bowling_stats(self, player_data, match_format=None):
         """Calculate bowling statistics with all required fields"""
         bowling_stats = []
         
@@ -727,10 +733,10 @@ class StatsService:
             wickets = data['bowl_wickets']
             
             # Calculate overs (proper cricket format: 3.2 means 3 overs and 2 balls)
-            overs = balls_to_overs_float(balls)
+            overs = balls if match_format == "Hundred" else balls_to_overs_float(balls)
 
             # Calculate economy rate
-            economy = runs / (balls / 6) if balls > 0 else 0
+            economy = runs * (100 if match_format == "Hundred" else 6) / balls if balls > 0 else (None if match_format == "Hundred" else 0)
             
             # Calculate average — undefined when bowler has zero wickets.
             # Standard cricket convention: shown as '-', not as 0.
@@ -760,7 +766,8 @@ class StatsService:
                     if best_match and best_match['wickets'] > 0 else '-'
                 ),
                 'average': average,
-                'economy': round(economy, 2),
+                'economy': round(economy, 2) if economy is not None else None,
+                'economy_unit': 'runs/100 balls' if match_format == 'Hundred' else 'runs/over',
                 'strike_rate': strike_rate,
                 'maidens': data['bowl_maidens'],
                 'five_wicket_hauls': data['bowl_five_wicket_hauls'],
@@ -768,6 +775,9 @@ class StatsService:
                     1 for figures in match_figures if figures['wickets'] >= 10
                 ),
                 'dots': data['bowl_dots'],
+                'balls': balls,
+                'dot_percentage': round(data['bowl_dots'] * 100 / balls, 2) if balls else None,
+                'four_wicket_hauls': data['bowl_four_wicket_hauls'],
                 'bowled': data['bowl_wickets_bowled'],
                 'lbw': data['bowl_wickets_lbw'],
                 'byes': data['bowl_byes'],
@@ -777,7 +787,7 @@ class StatsService:
             })
         
         # Sort by wickets (descending), then by economy (ascending)
-        bowling_stats.sort(key=lambda x: (-x['wickets'], x['economy']))
+        bowling_stats.sort(key=lambda x: (-x['wickets'], x['economy'] if x['economy'] is not None else float('inf')))
         return bowling_stats
     
     def _calculate_fielding_stats(self, player_data):
@@ -978,6 +988,13 @@ class StatsService:
         
         # Stats rows include extra internal keys (e.g. role/player_id). Ignore
         # unknown keys so exports remain stable across response-shape evolution.
+        if match_format == "Hundred":
+            fieldnames = ['match_format'] + [name for name in fieldnames if name != 'overs']
+            if stat_type == 'batting':
+                fieldnames += ['highest_score', 'dots']
+            if stat_type == 'bowling':
+                fieldnames += ['balls', 'economy_unit', 'strike_rate', 'dot_percentage', 'four_wicket_hauls', 'five_wicket_hauls']
+            data = [dict(row, match_format='Hundred') for row in data]
         writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
         writer.writeheader()
         writer.writerows(data)
@@ -1042,7 +1059,10 @@ class StatsService:
                 for d in data
             ]
         
-        return tabulate(rows, headers=headers, tablefmt='grid')
+        if match_format == 'Hundred':
+            headers = ['Balls' if h == 'Overs' else 'Econ/100' if h == 'Econ' else h for h in headers]
+        result = tabulate(rows, headers=headers, tablefmt='grid', missingval='—')
+        return ('The Hundred — legal balls; economy: runs/100 balls\n' + result) if match_format == 'Hundred' else result
     
     # ============================================================================
     # NEW FEATURE: Best Bowling Figures Tracking
@@ -1093,7 +1113,7 @@ class StatsService:
                 # Calculate economy rate
                 economy = 0.0
                 if card.balls_bowled and card.balls_bowled > 0:
-                    economy = (card.runs_conceded * 6.0) / card.balls_bowled
+                    economy = (card.runs_conceded * (100 if match_format == "Hundred" else 6.0)) / card.balls_bowled
                 
                 # Determine opponent team
                 opponent_name = self._get_opponent_name(match, team.id)
@@ -1104,8 +1124,9 @@ class StatsService:
                     'figures': f"{card.wickets}/{card.runs_conceded}",
                     'wickets': card.wickets,
                     'runs': card.runs_conceded,
-                    'overs': balls_to_overs_float(card.balls_bowled or 0),
-                    'economy': round(economy, 2),
+                    'overs': (card.balls_bowled or 0) if match_format == 'Hundred' else balls_to_overs_float(card.balls_bowled or 0),
+                    'economy': round(economy, 2) if economy is not None else None,
+                'economy_unit': 'runs/100 balls' if match_format == 'Hundred' else 'runs/over',
                     'maidens': card.maidens or 0,
                     'match_id': match.id,
                     'opponent': opponent_name,
@@ -1272,7 +1293,8 @@ class StatsService:
                         'balls': card.balls or 0,
                         'is_out': card.is_out,
                         'fours': card.fours or 0,
-                        'sixes': card.sixes or 0
+                        'sixes': card.sixes or 0,
+                        'dots': card.dot_balls or 0
                     })
                 
                 if card.record_type == 'bowling' and (card.balls_bowled or 0) > 0:
@@ -1281,7 +1303,8 @@ class StatsService:
                         'innings_number': card.innings_number,
                         'wickets': card.wickets or 0,
                         'runs': card.runs_conceded or 0,
-                        'balls': card.balls_bowled or 0
+                        'balls': card.balls_bowled or 0,
+                        'dots': card.dot_balls_bowled or 0
                     })
                 
                 catches += card.catches or 0
@@ -1290,7 +1313,7 @@ class StatsService:
 
             # Calculate batting stats
             batting_stats = self._calculate_batting_metrics(batting_data)
-            bowling_stats = self._calculate_bowling_metrics(bowling_data)
+            bowling_stats = self._calculate_bowling_metrics(bowling_data, effective_format)
 
             return {
                 'player_id': player_id,
@@ -1335,6 +1358,8 @@ class StatsService:
             'average': avg,
             'strike_rate': sr,
             'high_score': high_score,
+            'dots': sum(i.get('dots', 0) for i in innings_list),
+            'ducks': sum(i['runs'] == 0 and i['is_out'] for i in innings_list),
             'not_outs': not_outs,
             'fours': sum(i['fours'] for i in innings_list),
             'sixes': sum(i['sixes'] for i in innings_list),
@@ -1344,7 +1369,7 @@ class StatsService:
             'triple_centuries': sum(1 for i in innings_list if i['runs'] >= 300),
         }
     
-    def _calculate_bowling_metrics(self, bowling_list):
+    def _calculate_bowling_metrics(self, bowling_list, match_format=None):
         """Calculate bowling metrics from bowling performances"""
         if not bowling_list:
             return {}
@@ -1357,7 +1382,7 @@ class StatsService:
         # Bowling average and strike rate are undefined when bowler has zero
         # wickets (cricket convention — cannot be 0, that would imply best ever).
         avg = round(total_runs / total_wickets, 2) if total_wickets > 0 else None
-        economy = (total_runs * 6.0 / total_balls) if total_balls > 0 else 0.0
+        economy = (total_runs * (100 if match_format == "Hundred" else 6.0) / total_balls) if total_balls > 0 else (None if match_format == "Hundred" else 0.0)
         sr = round(total_balls / total_wickets, 1) if total_wickets > 0 else None
 
         best = max(bowling_list, key=lambda x: (x['wickets'], -x['runs'])) if bowling_list else None
@@ -1377,14 +1402,19 @@ class StatsService:
             'wickets': total_wickets,
             'runs': total_runs,
             'balls': total_balls,
-            'overs': f"{total_balls // 6}.{total_balls % 6}",
+            'dots': sum(b.get('dots', 0) for b in bowling_list),
+            'dot_percentage': round(sum(b.get('dots', 0) for b in bowling_list) * 100 / total_balls, 2) if total_balls else None,
+            'overs': total_balls if match_format == 'Hundred' else f"{total_balls // 6}.{total_balls % 6}",
+            'economy_unit': 'runs/100 balls' if match_format == 'Hundred' else 'runs/over',
             'average': avg,
-            'economy': round(economy, 2),
+            'economy': round(economy, 2) if economy is not None else None,
             'strike_rate': sr,
             'best_figures': f"{best['wickets']}/{best['runs']}" if best else 'N/A',
             'best_match_figures': (
                 f"{best_match['wickets']}/{best_match['runs']}" if best_match else 'N/A'
             ),
+            'four_wicket_hauls': sum(1 for b in bowling_list if b['wickets'] == 4),
+            'economy_per_six_balls': round(total_runs * 6 / total_balls, 2) if total_balls else None,
             'five_wicket_hauls': sum(1 for b in bowling_list if b['wickets'] >= 5),
             'ten_wicket_matches': sum(1 for b in by_match.values() if b['wickets'] >= 10),
         }
@@ -1905,7 +1935,7 @@ class StatsService:
                     })
 
             batting = self._calculate_batting_metrics(batting_innings)
-            bowling = self._calculate_bowling_metrics(bowling_innings)
+            bowling = self._calculate_bowling_metrics(bowling_innings, match_format)
 
             # Milestones
             milestones = []

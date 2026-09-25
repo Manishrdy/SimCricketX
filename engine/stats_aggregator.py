@@ -31,6 +31,11 @@ class StatsAggregator:
         for file_path in file_paths:
             try:
                 df = pd.read_csv(file_path)
+                if 'Match Format' not in df:
+                    df['Match Format'] = 'Legacy'
+                if 'Balls' in df and 'Overs' not in df and required_columns == self.REQUIRED_BOWLING_COLS:
+                    # Legacy aggregation works in six-ball notation internally.
+                    df['Overs'] = df['Balls'].apply(lambda b: int(b) // 6 + (int(b) % 6) / 10)
                 # Validate required columns
                 if required_columns:
                     missing = required_columns - set(df.columns)
@@ -50,7 +55,36 @@ class StatsAggregator:
                 logging.error(f"Error reading {file_path}: {e}")
         return pd.concat(df_list, ignore_index=True) if df_list else pd.DataFrame()
 
+    def _by_format(self, discipline):
+        original_bat, original_bowl = self.batting_df, self.bowling_df
+        source = original_bat if discipline == 'batting' else original_bowl
+        if source.empty:
+            return pd.DataFrame()
+        results = []
+        try:
+            for fmt in source['Match Format'].unique():
+                self.batting_df = original_bat[original_bat['Match Format'] == fmt].copy() if not original_bat.empty else original_bat
+                self.bowling_df = original_bowl[original_bowl['Match Format'] == fmt].copy() if not original_bowl.empty else original_bowl
+                result = getattr(self, '_legacy_' + discipline + '_stats')()
+                result['Match Format'] = fmt
+                if discipline == 'bowling':
+                    result['Balls'] = result['Overs'].astype(float).apply(lambda x: int(x) * 6 + round((x % 1) * 10))
+                    result['Economy Unit'] = 'runs/100 balls' if fmt == 'Hundred' else 'runs/over'
+                    if fmt == 'Hundred':
+                        result['Economy'] = (result['Runs'] * 100 / result['Balls'].where(result['Balls'] > 0)).round(2)
+                        result['Overs'] = result['Balls']
+                results.append(result)
+        finally:
+            self.batting_df, self.bowling_df = original_bat, original_bowl
+        return pd.concat(results, ignore_index=True)
+
     def _calculate_batting_stats(self):
+        return self._by_format('batting')
+
+    def _calculate_bowling_stats(self):
+        return self._by_format('bowling')
+
+    def _legacy_batting_stats(self):
         if self.batting_df.empty:
             return pd.DataFrame()
 
@@ -104,7 +138,7 @@ class StatsAggregator:
 
         return player_stats[ordered_cols]
 
-    def _calculate_bowling_stats(self):
+    def _legacy_bowling_stats(self):
         if self.bowling_df.empty:
             return pd.DataFrame()
 

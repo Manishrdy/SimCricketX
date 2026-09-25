@@ -32,7 +32,7 @@
     Each format is configured separately and only affects matches of that format.
 </p>
 
-{% if match_format in ('T20', 'T10') %}
+{% if match_format in ('T20', 'T10', 'Hundred') %}
 <!-- Game Mode Selector (T20 only — List A uses its own phase model) -->
 <section class="gc-modes">
     <div class="gc-modes-label"><i class="fa-solid fa-gamepad"></i> Game Mode</div>
@@ -82,7 +82,7 @@
 </section>
 {% endif %}
 
-{% if match_format in ('T20', 'T10') %}
+{% if match_format in ('T20', 'T10', 'Hundred') %}
 <!-- Pitch Profile Tiles -->
 <section>
     <div class="gc-section-header">

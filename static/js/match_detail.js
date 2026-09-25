@@ -4,6 +4,9 @@
  * Expects 'matchData' and 'html2canvas' to be available in the global scope.
  */
 
+const IS_HUNDRED_MATCH = typeof matchData !== 'undefined' && matchData.match_format === 'Hundred';
+const BALLS_PER_SET = IS_HUNDRED_MATCH ? 5 : 6;
+const LIVE_RATE_UNIT = IS_HUNDRED_MATCH ? 1 : 6;
 // --- Global State ---
 let impactPlayerState = {
     home: {
@@ -70,7 +73,6 @@ function syncCodeWindowHeight() {
         codeWindow.style.maxHeight = px;
     }
 }
-
 // C1: HTML escaping utility to prevent XSS via innerHTML
 function escapeHtml(str) {
     if (str === null || str === undefined) return '';
@@ -772,7 +774,7 @@ function showDecisionModal(data) {
             `(follow-on margin ${ctx.follow_on_margin || 0}). ${ctx.days_remaining || 0} day(s) left.`;
     } else {
         title.textContent = 'Select Next Bowler';
-        context.textContent = `Choose bowler for over ${ctx.upcoming_over || ((data.over || 0) + 1)}.`;
+        context.textContent = `Choose bowler for ${IS_HUNDRED_MATCH ? "set" : "over"} ${ctx.upcoming_over || ((data.over || 0) + 1)}.`;
     }
 
     optionsWrap.innerHTML = '';
@@ -787,11 +789,11 @@ function showDecisionModal(data) {
             // entirely for FC options — showing "0 ov left" there would
             // wrongly read as "this bowler is out of overs."
             const meta = type === 'next_bowler'
-                ? `${opt.bowling_type || ''} | ${opt.overs_bowled || 0} ov done` +
-                  (opt.overs_remaining !== undefined ? ` | ${opt.overs_remaining} ov left` : '')
+                ? `${opt.bowling_type || ''} | ${(opt.overs_bowled || 0) * (IS_HUNDRED_MATCH ? 5 : 1)} ${IS_HUNDRED_MATCH ? 'balls' : 'ov'} done` +
+                  (opt.overs_remaining !== undefined ? ` | ${opt.overs_remaining * (IS_HUNDRED_MATCH ? 5 : 1)} ${IS_HUNDRED_MATCH ? 'balls' : 'ov'} left` : '')
                 : `${opt.role || ''} | Bat ${opt.batting_rating || 0}`;
             card.innerHTML = `
-                <span><strong>${escapeHtml(opt.name)}</strong></span>
+                <span><strong>${opt.continue_bowler ? "Continue: " : ""}${escapeHtml(opt.name)}</strong></span>
                 <span class="decision-meta">${escapeHtml(meta)}</span>
             `;
         }
@@ -859,6 +861,7 @@ async function submitManualDecision() {
 // --- Simulation Loop ---
 
 function appendLog(message, type = 'normal') {
+    if (IS_HUNDRED_MATCH) message = message.replace(/Super Over/g, 'Super Five').replace(/SUPER OVER/g, 'SUPER FIVE');
     const logContainer = document.getElementById('commentary-log');
     const div = document.createElement('div');
     div.className = 'code-line';
@@ -1038,9 +1041,9 @@ function updateRainStatus(data) {
     if (data.rain_interruption) {
         const info = data.rain_interruption;
         if (info.innings === 2 && info.target) {
-            rainRevisionText = `🌧 DLS: ${info.target} off ${info.revised_overs} overs`;
+            rainRevisionText = `🌧 ${IS_HUNDRED_MATCH ? "D/L approximation" : "DLS"}: ${info.target} off ${info.revised_overs * (IS_HUNDRED_MATCH ? 5 : 1)} ${IS_HUNDRED_MATCH ? "balls" : "overs"}`;
         } else {
-            rainRevisionText = `🌧 Rain: revised to ${info.revised_overs} overs a side`;
+            rainRevisionText = `🌧 Rain: revised to ${info.revised_overs * (IS_HUNDRED_MATCH ? 5 : 1)} ${IS_HUNDRED_MATCH ? "balls" : "overs"} a side`;
         }
     }
 
@@ -1103,17 +1106,18 @@ function showFCWeatherEvent(data) {
 }
 
 function updateScoreBanner(data) {
+    if (IS_HUNDRED_MATCH) updateHundredTimeout(data);
     // Main score
     const scoreEl = document.getElementById('sb-score');
     if (scoreEl) scoreEl.textContent = `${data.score}/${data.wickets}`;
 
     // Overs
     const oversEl = document.getElementById('sb-overs');
-    if (oversEl) oversEl.textContent = `${data.over}.${data.ball} ov`;
+    if (oversEl) oversEl.textContent = IS_HUNDRED_MATCH ? `${data.legal_balls ?? (data.over * 5 + data.ball)}/${data.innings_ball_limit ?? ((data.total_overs || 20) * 5)} balls` : `${data.over}.${data.ball} ov`;
 
     // Current Run Rate
-    const totalBalls = data.over * 6 + data.ball;
-    const crr = totalBalls > 0 ? ((data.score / totalBalls) * 6).toFixed(2) : '0.00';
+    const totalBalls = data.over * BALLS_PER_SET + data.ball;
+    const crr = totalBalls > 0 ? ((data.score / totalBalls) * LIVE_RATE_UNIT).toFixed(2) : '0.00';
     const crrEl = document.getElementById('sb-crr');
     if (crrEl) crrEl.textContent = crr;
 
@@ -1123,9 +1127,9 @@ function updateScoreBanner(data) {
     if (data.target && data.innings_number === 2) {
         const remaining = data.target - data.score;
         const totalOvers = data.total_overs || 20;
-        const ballsLeft = (totalOvers * 6) - totalBalls;
+        const ballsLeft = (totalOvers * BALLS_PER_SET) - totalBalls;
         if (ballsLeft > 0 && remaining > 0) {
-            const rrr = ((remaining / ballsLeft) * 6).toFixed(2);
+            const rrr = ((remaining / ballsLeft) * LIVE_RATE_UNIT).toFixed(2);
             if (rrrEl) rrrEl.textContent = rrr;
             if (rrrWrap) rrrWrap.style.display = '';
         }
@@ -1155,7 +1159,7 @@ function updateScoreBanner(data) {
     const targetEl = document.getElementById('sb-target');
     if (targetEl && data.target && data.innings_number === 2) {
         const need = data.target - data.score;
-        const ballsLeft = ((data.total_overs || 20) * 6) - totalBalls;
+        const ballsLeft = ((data.total_overs || 20) * BALLS_PER_SET) - totalBalls;
         if (need > 0) {
             targetEl.textContent = `Need ${need} off ${ballsLeft}b`;
             targetEl.style.display = '';
@@ -2271,11 +2275,12 @@ function soResetState(round) {
 function soOpenModal(teamData, round, forcedFirstBatting) {
     soResetState(round);
     soState.teamData = teamData;
+    forcedFirstBatting = forcedFirstBatting || teamData.next_first_batting_team;
 
     const overlay = document.getElementById('super-over-overlay');
     overlay.style.display = 'flex';
 
-    document.getElementById('so-title').textContent = 'SUPER OVER';
+    document.getElementById('so-title').textContent = IS_HUNDRED_MATCH ? 'SUPER FIVE' : 'SUPER OVER';
     document.getElementById('so-round-badge').textContent = `Round ${round}`;
     document.getElementById('so-innings-badge').textContent = 'Innings 1';
 
@@ -2535,7 +2540,7 @@ function soSimulateBall() {
             let logLine = data.commentary + `  [${data.score}/${data.wickets}]`;
             if (soState.innings === 2 && soState.target) {
                 const need = soState.target - data.score;
-                const ballsLeft = 6 - data.ball;
+                const ballsLeft = BALLS_PER_SET - data.ball;
                 if (need > 0 && ballsLeft > 0) {
                     logLine += ` Need ${need} off ${ballsLeft}b`;
                 } else if (need <= 0) {
@@ -2649,7 +2654,7 @@ function soShowResumeButton() {
     if (document.getElementById('so-resume-btn')) return;
     const btn = document.createElement('button');
     btn.id = 'so-resume-btn';
-    btn.textContent = 'Resume Super Over';
+    btn.textContent = IS_HUNDRED_MATCH ? 'Resume Super Five' : 'Resume Super Over';
     btn.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;padding:12px 24px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
     btn.onclick = () => {
         btn.remove();
@@ -2850,7 +2855,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (state.total_overs && state.original_overs &&
                     state.total_overs !== state.original_overs) {
                     rainRevisionText = state.innings === 2 && state.target
-                        ? `🌧 DLS: ${state.target} off ${state.total_overs} overs`
+                        ? `🌧 ${IS_HUNDRED_MATCH ? "D/L approximation" : "DLS"}: ${state.target} off ${state.total_overs * (IS_HUNDRED_MATCH ? 5 : 1)} ${IS_HUNDRED_MATCH ? "balls" : "overs"}`
                         : `🌧 Rain: revised to ${state.total_overs} overs a side`;
                 }
                 updateRainStatus({
@@ -2901,3 +2906,36 @@ document.addEventListener('DOMContentLoaded', () => {
             if (spinBtn) spinBtn.disabled = false;
         });
 });
+
+
+function updateHundredTimeout(data) {
+    if (simulationMode !== 'manual') return;
+    let button = document.getElementById('hundred-timeout');
+    if (!button) {
+        button = document.createElement('button');
+        button.id = 'hundred-timeout';
+        button.className = 'btn btn-secondary';
+        const banner = document.getElementById('sb-overs');
+        if (!banner) return;
+        banner.parentElement.appendChild(button);
+        button.onclick = async () => {
+            button.disabled = true;
+            try {
+                const mid = matchData.match_id;
+                const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+                const response = await fetch(`/match/${mid}/strategic-timeout`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf || ''},
+                    body: JSON.stringify({active: button.dataset.active !== 'true'})
+                });
+                const state = await response.json();
+                if (!response.ok) throw new Error(state.error || 'Timeout failed');
+                updateHundredTimeout(state);
+            } catch (error) {
+                if (typeof Toast !== 'undefined') Toast.show(error.message, 'error');
+            } finally { button.disabled = false; }
+        };
+    }
+    button.hidden = !(data.timeout_available || data.timeout_active);
+    button.dataset.active = String(Boolean(data.timeout_active));
+    button.textContent = data.timeout_active ? 'Resume play' : 'Strategic timeout';
+}

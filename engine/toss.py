@@ -67,6 +67,7 @@ def decide_toss(fmt, pitch, is_day_night=False, rng=None):
     """An AI captain's call after winning the toss, as "Bat" or "Bowl"."""
     rng = rng or _random
     decision = correct_decision(fmt, pitch, is_day_night=is_day_night)
-    if rng.random() >= CORRECT_DECISION_RATE:
+    rate = 0.65 if getattr(fmt, "name", None) == "Hundred" and is_day_night else CORRECT_DECISION_RATE
+    if rng.random() >= rate:
         decision = "Bowl" if decision == "Bat" else "Bat"
     return decision

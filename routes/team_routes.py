@@ -11,8 +11,8 @@ from sqlalchemy.exc import IntegrityError
 from utils.exception_tracker import log_exception
 from utils.squad_rules import validate_squad_composition
 
-from engine.format_catalog import SUPPORTED_FORMATS
-VALID_FORMATS = SUPPORTED_FORMATS
+from engine.format_catalog import SQUAD_FORMATS
+VALID_FORMATS = SQUAD_FORMATS
 SHORT_CODE_RE = re.compile(r'^[A-Z0-9]{2,5}$')
 
 

@@ -103,12 +103,26 @@ class FormatConfig:
     # Original match length: rain may mutate overs, but never this value.
     scheduled_overs: Optional[int] = None
     strict_short_bowling: bool = False
+    balls_per_over: int = 6
+    balls_per_end: int = 6
+    powerplay_balls: Optional[int] = None
     momentum_window: int = 18
     dot_thresholds: tuple = (2, 4, 6, 8)
     partnership_thresholds: tuple = (25, 50, 75, 100)
 
     def revise_short_innings(self, overs: int) -> None:
         """Rebuild short-format rules; never change the scheduled length."""
+        if self.name == "Hundred":
+            self.overs = overs
+            self.max_bowler_overs = 2 if overs < 10 else math.ceil(overs / 5)
+            self.powerplay_balls = {5: 6, 6: 8, 7: 9, 8: 10, 9: 11, 10: 13, 11: 14, 12: 15, 13: 16, 14: 18, 15: 19, 16: 20, 17: 21, 18: 23, 19: 24, 20: 25}.get(overs, 0)
+            pp = self.powerplay_balls / 5
+            death = max(pp, overs - 4)
+            self.powerplay_phases = [Phase("Powerplay", 0, pp - .000001, 2)]
+            self.middle_phase = Phase("Middle", pp, death - .000001, 5)
+            self.death_phase = Phase("Death", death, overs, 5)
+            self.par_scores = {i: i * self.expected_rr["Middle"] for i in range(overs + 1)}
+            return
         self.overs = overs
         self.max_bowler_overs = max(1, math.ceil(overs / 5))
         pp = 1 if overs <= 4 else 2 if overs <= 8 else 3
@@ -419,6 +433,20 @@ _T10.rrr_baseline = {pitch: total / 10 for pitch, total in _T10.target_scores.it
 _T10.extras_per_innings = 3
 FORMAT_REGISTRY["T10"] = _T10
 
+_HUNDRED = copy.deepcopy(_T20)
+_HUNDRED.name = "Hundred"
+_HUNDRED.scheduled_overs = 20
+_HUNDRED.balls_per_over = 5
+_HUNDRED.balls_per_end = 10
+_HUNDRED.correct_toss_choice_dn = {pitch: "bowl" for pitch in _T20.correct_toss_choice}
+_HUNDRED.strict_short_bowling = True
+_HUNDRED.allow_consecutive_overs = True
+_HUNDRED.expected_rr = {k: v * 5 / 6 for k, v in _T20.expected_rr.items()}
+_HUNDRED.target_scores = {k: round(v * 5 / 6) for k, v in _T20.target_scores.items()}
+_HUNDRED.rrr_baseline = {k: v * 5 / 6 for k, v in _T20.rrr_baseline.items()}
+_HUNDRED.revise_short_innings(20)
+FORMAT_REGISTRY["Hundred"] = _HUNDRED
+
 
 def resolve_scheduled_overs(match_format, scheduled_overs=None):
     """Validate immutable match length, independently of rain-revised overs."""
@@ -434,7 +462,7 @@ def resolve_scheduled_overs(match_format, scheduled_overs=None):
 def format_label(match_format, scheduled_overs=None):
     if match_format == "ListA":
         return f"List A · {resolve_scheduled_overs(match_format, scheduled_overs)} overs"
-    return "First-Class" if match_format == "FC" else match_format
+    return FORMAT_CATALOG.get(match_format, {}).get("label", match_format)
 
 
 def get_format(match_format: Optional[str], scheduled_overs=None) -> FormatConfig:

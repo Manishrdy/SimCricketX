@@ -1,7 +1,7 @@
 
 import collections
 import json
-import random
+from engine import random_source as random
 import logging
 import os
 
