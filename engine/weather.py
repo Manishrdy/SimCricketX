@@ -28,7 +28,7 @@ Simplified ICC rules implemented here:
     anything shorter is a No Result.
 """
 
-import random
+from engine import random_source as random
 from math import ceil
 from typing import Optional
 
@@ -65,7 +65,7 @@ FORECAST_TIERS = {
 DEFAULT_FORECAST = "clear"
 
 # Minimum overs the side batting second must face for a result.
-MIN_OVERS_FOR_RESULT = {"T20": 5, "T10": 3, "ListA": 20}
+MIN_OVERS_FOR_RESULT = {"T20": 5, "T10": 3, "Hundred": 5, "ListA": 20}
 
 
 def forecast_label(forecast: str) -> str:
@@ -106,7 +106,7 @@ def generate_weather_script(forecast: str, scheduled_overs: int,
         return script
 
     max_events = tier["max_events"]
-    if format_name in ("T20", "T10"):
+    if format_name in ("T20", "T10", "Hundred"):
         max_events = min(max_events, 1)   # one clean stoppage max in T20
     n_events = 1 if max_events <= 1 else rng.choice([1, 1, 2])   # 2nd event is the rarity
 

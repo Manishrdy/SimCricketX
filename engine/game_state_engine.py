@@ -161,7 +161,7 @@ def _par_score_at(over: int, ball: int, pitch: str = "Hard", fmt=None) -> float:
 
     base_at    = par_table.get(over,         par_table[_max_over])
     base_next  = par_table.get(over + 1,     par_table[_max_over])
-    fraction   = ball / 6.0
+    fraction   = ball / getattr(fmt, "balls_per_over", 6)
     base_score = base_at + fraction * (base_next - base_at)
     factor     = pitch_table.get(pitch, 1.0)
     return base_score * factor
@@ -295,7 +295,7 @@ def compute_game_state_vector(
     # Resolve format — used for par-curve selection and resource denominator.
     _fmt        = format_config           # FormatConfig | None
     _total_overs = _fmt.overs if _fmt is not None else 20
-    _total_balls = _total_overs * 6       # 120 for T20, 300 for ListA
+    _total_balls = _total_overs * getattr(_fmt, "balls_per_over", 6)       # 120 for T20, 300 for ListA
 
     if _fmt is not None:
         history = history[-getattr(_fmt, "momentum_window", BALL_HISTORY_WINDOW):]
@@ -310,10 +310,10 @@ def compute_game_state_vector(
     rr_ratio = (score / par) if par > 0.0 else 1.0   # >1 ahead, <1 behind
 
     # Second innings: required-run-rate based aggression index
-    balls_remaining = (_total_overs - current_over) * 6 - current_ball
+    balls_remaining = (_total_overs - current_over) * getattr(_fmt, "balls_per_over", 6) - current_ball
     if innings == 2 and balls_remaining > 0 and target > 0:
         runs_needed        = max(0, target - score)
-        overs_left         = balls_remaining / 6.0
+        overs_left         = balls_remaining / getattr(_fmt, "balls_per_over", 6)
         rrr                = runs_needed / overs_left
         # Feature 15: pitch-aware RRR baseline — different pitches have
         # different "neutral" run rates, so we scale the aggression index

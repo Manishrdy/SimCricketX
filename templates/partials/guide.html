@@ -1,0 +1,30 @@
+{# Onboarding guide: page tours + the new-user first-match journey.
+   `guide` comes from routes/guide_routes.py (None on pages without a guide,
+   on admin pages, and for anonymous visitors). Included by layout.html and
+   by the standalone pages that don't extend it (manage_teams.html). #}
+{% if guide %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/scx_guide.css') }}">
+<script id="scx-guide-config" type="application/json">{{ {
+    "page": guide.page,
+    "seen": guide.seen,
+    "journey": guide.journey,
+    "readonly": guide.readonly,
+    "name": (current_user.display_name or current_user.id.split('@')[0]),
+    "csrf": csrf_token(),
+    "rules": {
+        "min": SQUAD_MIN_PLAYERS, "max": SQUAD_MAX_PLAYERS,
+        "wk": SQUAD_MIN_WICKETKEEPERS, "bowl": SQUAD_MIN_BOWLING_OPTIONS,
+    },
+    "urls": {
+        "progress": url_for('guide_progress'),
+        "reset": url_for('guide_reset'),
+        "home": url_for('home'),
+        "createTeam": url_for('create_team'),
+        "manageTeams": url_for('manage_teams'),
+        "matchSetup": url_for('match_setup'),
+        "myMatches": url_for('my_matches'),
+    },
+} | tojson }}</script>
+<script src="{{ url_for('static', filename='js/scx_guide_tours.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/scx_guide.js') }}" defer></script>
+{% endif %}

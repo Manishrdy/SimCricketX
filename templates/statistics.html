@@ -795,6 +795,7 @@
         <div class="pill-group">
             <button class="pill-btn {% if match_format == 'T20' %}active{% endif %}" onclick="selectFormat('T20')">T20</button>
             <button class="pill-btn {% if match_format == 'T10' %}active{% endif %}" onclick="selectFormat('T10')">T10</button>
+            <button class="pill-btn {% if match_format == 'Hundred' %}active{% endif %}" onclick="selectFormat('Hundred')">The Hundred</button>
             <button class="pill-btn {% if match_format == 'ListA' %}active{% endif %}" onclick="selectFormat('ListA')">List A</button>
             <button class="pill-btn {% if match_format == 'FC' %}active{% endif %}" onclick="selectFormat('FC')">First-Class</button>
         </div>
@@ -1261,12 +1262,13 @@
                                 <th onclick="handleSort('batting-table',12)" title="Half-centuries">50s <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('batting-table',13)" title="Centuries">100s <span class="sa">⇕</span></th>
                                 {% endif %}
+                            {% if match_format == "Hundred" %}<th>HS</th><th>Dots</th>{% endif %}
                             </tr>
                         </thead>
                         <tbody>
                             {% for row in batting_stats %}
                             <tr data-role="{{ row.role|default('') }}">
-                                <td>{% if row.player_id %}<a href="/player/{{ row.player_id }}" style="color:var(--fg);text-decoration:none;border-bottom:1px dotted var(--fg-secondary)">{{ row.player }}</a>{% else %}{{ row.player }}{% endif %}</td>
+                                <td>{% if row.player_id %}<a href="/player/{{ row.player_id }}?match_format={{ match_format }}" style="color:var(--fg);text-decoration:none;border-bottom:1px dotted var(--fg-secondary)">{{ row.player }}</a>{% else %}{{ row.player }}{% endif %}</td>
                                 <td>{{ row.team }}</td>
                                 <td>{{ row.matches }}</td>
                                 <td>{{ row.innings }}</td>
@@ -1284,6 +1286,7 @@
                                 <td>{{ row.fifties }}</td>
                                 <td>{{ row.hundreds }}</td>
                                 {% if match_format == 'FC' %}<td>{{ row.double_centuries }}</td><td>{{ row.triple_centuries }}</td>{% endif %}
+                                {% if match_format == 'Hundred' %}<td>{{ row.highest_score }}</td><td>{{ row.dots }}</td>{% endif %}
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -1323,7 +1326,7 @@
                                 <th onclick="handleSort('bowling-table',1)">Team <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('bowling-table',2)" title="Matches">M <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('bowling-table',3)" title="Innings">Inn <span class="sa">⇕</span></th>
-                                <th onclick="handleSort('bowling-table',4)">Overs <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',4)">{{ 'Balls' if match_format == 'Hundred' else 'Overs' }} <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('bowling-table',5)">Runs <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('bowling-table',6)">Wkts <span class="sa">⇕</span></th>
                                 {% if match_format == 'FC' %}
@@ -1331,7 +1334,7 @@
                                 <th onclick="handleSort('bowling-table',8)">BBI <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('bowling-table',9)">BBM <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('bowling-table',10)" title="Average">Avg <span class="sa">⇕</span></th>
-                                <th onclick="handleSort('bowling-table',11)" title="Economy Rate">Eco <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',11)" title="Economy Rate">{{ 'Econ/100' if match_format == 'Hundred' else 'Eco' }} <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('bowling-table',12)" title="Strike Rate">SR <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('bowling-table',13)">5WI <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('bowling-table',14)">10WM <span class="sa">⇕</span></th>
@@ -1341,17 +1344,18 @@
                                 {% else %}
                                 <th onclick="handleSort('bowling-table',7)">Best <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('bowling-table',8)" title="Average">Avg <span class="sa">⇕</span></th>
-                                <th onclick="handleSort('bowling-table',9)" title="Economy Rate">Eco <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',9)" title="Economy Rate">{{ 'Econ/100' if match_format == 'Hundred' else 'Eco' }} <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('bowling-table',10)">Dots <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('bowling-table',11)">Wides <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('bowling-table',12)" title="No Balls">NB <span class="sa">⇕</span></th>
                                 {% endif %}
+                            {% if match_format == "Hundred" %}<th>SR</th><th>Dot %</th><th>4WI</th><th>5WI</th>{% endif %}
                             </tr>
                         </thead>
                         <tbody>
                             {% for row in bowling_stats %}
                             <tr data-role="{{ row.role|default('') }}">
-                                <td>{% if row.player_id %}<a href="/player/{{ row.player_id }}" style="color:var(--fg);text-decoration:none;border-bottom:1px dotted var(--fg-secondary)">{{ row.player }}</a>{% else %}{{ row.player }}{% endif %}</td>
+                                <td>{% if row.player_id %}<a href="/player/{{ row.player_id }}?match_format={{ match_format }}" style="color:var(--fg);text-decoration:none;border-bottom:1px dotted var(--fg-secondary)">{{ row.player }}</a>{% else %}{{ row.player }}{% endif %}</td>
                                 <td>{{ row.team }}</td>
                                 <td>{{ row.matches }}</td>
                                 <td>{{ row.innings }}</td>
@@ -1363,7 +1367,7 @@
                                 <td class="kc">{{ row.best }}</td>
                                 <td class="kc">{{ row.best_match }}</td>
                                 <td class="kc">{{ row.average if row.average is not none else '-' }}</td>
-                                <td class="kc">{{ row.economy }}</td>
+                                <td class="kc">{{ row.economy if row.economy is not none else '—' }}</td>
                                 <td class="kc">{{ row.strike_rate if row.strike_rate is not none else '-' }}</td>
                                 <td>{{ row.five_wicket_hauls }}</td>
                                 <td>{{ row.ten_wicket_matches }}</td>
@@ -1373,11 +1377,12 @@
                                 {% else %}
                                 <td class="kc">{{ row.best }}</td>
                                 <td class="kc">{{ row.average if row.average is not none else '-' }}</td>
-                                <td class="kc">{{ row.economy }}</td>
+                                <td class="kc">{{ row.economy if row.economy is not none else '—' }}</td>
                                 <td>{{ row.dots }}</td>
                                 <td>{{ row.wides }}</td>
                                 <td>{{ row.no_balls }}</td>
                                 {% endif %}
+                            {% if match_format == 'Hundred' %}<td>{{ row.strike_rate if row.strike_rate is not none else '—' }}</td><td>{{ row.dot_percentage if row.dot_percentage is not none else '—' }}</td><td>{{ row.four_wicket_hauls }}</td><td>{{ row.five_wicket_hauls }}</td>{% endif %}
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -1424,7 +1429,7 @@
                         <tbody>
                             {% for row in fielding_stats %}
                             <tr data-role="{{ row.role|default('') }}">
-                                <td>{% if row.player_id %}<a href="/player/{{ row.player_id }}" style="color:var(--fg);text-decoration:none;border-bottom:1px dotted var(--fg-secondary)">{{ row.player }}</a>{% else %}{{ row.player }}{% endif %}</td>
+                                <td>{% if row.player_id %}<a href="/player/{{ row.player_id }}?match_format={{ match_format }}" style="color:var(--fg);text-decoration:none;border-bottom:1px dotted var(--fg-secondary)">{{ row.player }}</a>{% else %}{{ row.player }}{% endif %}</td>
                                 <td>{{ row.team }}</td>
                                 <td>{{ row.matches }}</td>
                                 <td class="kc">{{ row.catches }}</td>

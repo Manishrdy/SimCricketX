@@ -199,7 +199,7 @@ class TestGroundConditionsRoutes:
 
     def test_ground_conditions_page_bad_format_falls_back(self, authenticated_client):
         """An unknown ?format= shows the default editor rather than erroring."""
-        response = authenticated_client.get("/ground-conditions?format=Hundred")
+        response = authenticated_client.get("/ground-conditions?format=UnknownFormat")
         assert response.status_code == 200
         assert 'id="gcModesRow"' in response.get_data(as_text=True)
 

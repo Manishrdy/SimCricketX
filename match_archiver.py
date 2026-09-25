@@ -39,6 +39,7 @@ from database import db
 from database.models import Match as DBMatch, MatchScorecard, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, MatchPartnership
 from utils.exception_tracker import log_exception, log_data_anomaly
 from engine.cricket_math import balls_to_overs_str
+from engine.format_catalog import squad_format, balls_per_over
 from engine import fc_weather
 
 # ─── Define PROJECT_ROOT so that we can write to /<project_root>/data/… ─────────────────────────────────────
@@ -68,6 +69,8 @@ def reverse_player_aggregates(scorecards, logger=None):
     updated_players = set()
 
     for card in scorecards:
+        if card.match and card.match.match_format == "Hundred":
+            continue
         player = DBPlayer.query.get(card.player_id)
         if not player:
             continue
@@ -545,7 +548,7 @@ class MatchArchiver:
             # Find the fielder via format profile; fall back to team-wide lookup
             fielder = None
             _fld_profile = DBTeamProfile.query.filter_by(
-                team_id=fielding_team_id, format_type=_fmt
+                team_id=fielding_team_id, format_type=squad_format(_fmt)
             ).first()
             if _fld_profile:
                 fielder = DBPlayer.query.filter_by(
@@ -745,6 +748,7 @@ class MatchArchiver:
                 
                 # NEW: Match format
                 db_match.match_format = self.match_data.get('match_format', 'T20')
+                db_match.format_metadata = self.match_data.get('format_metadata')
                 db_match.scheduled_overs = self.match_data.get('scheduled_overs')
                 db_match.overs_per_side = self.match_data.get('overs', 20)
                 db_match.is_day_night = bool(self.match_data.get('is_day_night', False))
@@ -804,6 +808,7 @@ class MatchArchiver:
                     toss_winner_team_id=toss_winner_id,
                     toss_decision=self.match_data.get('toss_decision'),
                     # NEW: Match format
+                    format_metadata=self.match_data.get('format_metadata'),
                     match_format=self.match_data.get('match_format', 'T20'),
                     scheduled_overs=self.match_data.get('scheduled_overs'),
                     overs_per_side=self.match_data.get('overs', 20),
@@ -842,13 +847,13 @@ class MatchArchiver:
                         for p in (batting_stats or {}).values()
                     )
                     source = "batting_fallback"
-                if legal_balls > ops_cap * 6:
+                if legal_balls > ops_cap * balls_per_over(self.match_data.get('match_format')):
                     try:
                         from utils.exception_tracker import log_data_anomaly
                         log_data_anomaly(
                             "OversExceedQuota",
                             f"innings {innings_label} reported {legal_balls} legal balls "
-                            f"in a {ops_cap}-over match (capped to {ops_cap * 6})",
+                            f"in a {ops_cap}-over match (capped to {ops_cap * balls_per_over(self.match_data.get('match_format'))})",
                             payload={
                                 "match_id": archive_match_id,
                                 "tournament_id": archive_tournament_id,
@@ -861,8 +866,8 @@ class MatchArchiver:
                         )
                     except Exception:
                         pass
-                    legal_balls = ops_cap * 6
-                return balls_to_overs_str(legal_balls)
+                    legal_balls = ops_cap * balls_per_over(self.match_data.get('match_format'))
+                return balls_to_overs_str(legal_balls, balls_per_over(self.match_data.get("match_format")))
 
             innings_plan = self._build_innings_plan(home_team, away_team)
 
@@ -930,8 +935,8 @@ class MatchArchiver:
                 if player_id:
                     player = DBPlayer.query.get(player_id)
                     if (player and player.team_id == team_id and
-                            (_match_format != 'T10' or
-                             (player.profile is not None and player.profile.format_type == 'T10'))):
+                            (_match_format not in ('T10', 'Hundred') or
+                             (player.profile is not None and player.profile.format_type == squad_format(_match_format)))):
                         return player
                     # id present but stale/mismatched (e.g. player moved teams,
                     # or a spoofed/garbage value) — fall through to name lookup.
@@ -943,7 +948,7 @@ class MatchArchiver:
                 # to any team-wide match would risk attaching this match's stats
                 # to a player row in a *different* format profile.
                 profile = DBTeamProfile.query.filter_by(
-                    team_id=team_id, format_type=_match_format
+                    team_id=team_id, format_type=squad_format(_match_format)
                 ).first()
                 if profile:
                     player = DBPlayer.query.filter_by(
@@ -952,7 +957,7 @@ class MatchArchiver:
                     if player:
                         return player
                 # Legacy fallback: only accept an unassigned (pre-migration) row.
-                if _match_format == 'T10':
+                if _match_format in ('T10', 'Hundred'):
                     return None
                 return DBPlayer.query.filter_by(
                     name=p_name, team_id=team_id, profile_id=None
@@ -1026,7 +1031,7 @@ class MatchArchiver:
                         card.batting_position = position
                     else:
                         card.balls_bowled = s.get('balls_bowled', 0)
-                        card.overs = balls_to_overs_str(card.balls_bowled)
+                        card.overs = balls_to_overs_str(card.balls_bowled, balls_per_over(_match_format))
                         card.runs_conceded = s.get('runs', 0)
                         card.wickets = s.get('wickets', 0)
                         card.maidens = s.get('maidens', 0)
@@ -1133,6 +1138,8 @@ class MatchArchiver:
             updated_players = set()
             player_deltas = {}
             for card in match_cards:
+                if _match_format == "Hundred":
+                    continue  # Shared T20 player totals remain T20-only; Hundred uses scorecards.
                 # relationship loading fallback
                 p = DBPlayer.query.get(card.player_id)
                 if not p: continue
@@ -1228,7 +1235,7 @@ class MatchArchiver:
 
         _pfmt = self.match_data.get('match_format', 'T20')
         _bat_profile = DBTeamProfile.query.filter_by(
-            team_id=batting_team_id, format_type=_pfmt
+            team_id=batting_team_id, format_type=squad_format(_pfmt)
         ).first()
 
         def _lookup_batsman(name):
@@ -1551,14 +1558,14 @@ class MatchArchiver:
         if not bowling_stats:
             return "No bowling statistics available"
         
-        headers = ['Bowler', 'Overs', 'Maidens', 'Runs', 'Wickets', 'Economy', 'Wides', 'No Balls']
+        headers = ['Bowler', 'Balls' if self.match_data.get('match_format') == 'Hundred' else 'Overs', 'Maidens', 'Runs', 'Wickets', 'Econ/100' if self.match_data.get('match_format') == 'Hundred' else 'Economy', 'Wides', 'No Balls']
         rows = []
         
         for bowler_name, stats in bowling_stats.items():
             if stats.get('balls_bowled', 0) > 0:
                 total_balls = stats['balls_bowled']
-                overs_display = balls_to_overs_str(total_balls)
-                economy = f"{(stats['runs'] * 6 / total_balls):.2f}" if total_balls > 0 else "0.00"
+                overs_display = str(total_balls) if self.match_data.get("match_format") == "Hundred" else balls_to_overs_str(total_balls)
+                economy = f"{(stats['runs'] * (100 if self.match_data.get('match_format') == 'Hundred' else 6) / total_balls):.2f}" if total_balls > 0 else "0.00"
                 
                 rows.append([
                     bowler_name,
@@ -1723,7 +1730,7 @@ class MatchArchiver:
                     'Player Name', 'Team Name', 'Runs', 'Balls', '1s', '2s', '3s', 'Fours', 'Sixes', 
                     'Dots', 'Strike Rate', 'Status', 'Bowler Out', 'Fielder Out'
                 ]
-                writer.writerow(headers + ['Match Format', 'Scheduled Overs'])
+                writer.writerow(headers + ['Match Format', 'Scheduled Balls' if self.match_data.get('match_format') == 'Hundred' else 'Scheduled Overs'])
                 
                 # Write data for ALL players in the lineup
                 for player in full_lineup:
@@ -1753,7 +1760,7 @@ class MatchArchiver:
                             status,
                             player_stats.get('bowler_out', ''),
                             player_stats.get('fielder_out', '')
-                        ] + [self.format_label, self.match_data.get("scheduled_overs")])
+                        ] + [self.format_label, 100 if self.match_data.get("match_format") == "Hundred" else self.match_data.get("scheduled_overs")])
                     else:
                         # Player didn't bat - include only name and team, rest empty
                         writer.writerow([
@@ -1771,7 +1778,7 @@ class MatchArchiver:
                             '',  # Empty status
                             '',  # Empty bowler out
                             ''   # Empty fielder out
-                        ] + [self.format_label, self.match_data.get("scheduled_overs")])
+                        ] + [self.format_label, 100 if self.match_data.get("match_format") == "Hundred" else self.match_data.get("scheduled_overs")])
             
             self.created_files.append(csv_path)
             self.logger.debug(f"Batting CSV created: {filename}")
@@ -1790,17 +1797,17 @@ class MatchArchiver:
                 
                 # Enhanced headers with team name
                 headers = [
-                    'Bowler Name', 'Team Name', 'Overs', 'Maidens', 'Runs', 'Wickets', 
-                    'Economy', 'Wides', 'No Balls', 'Byes', 'Leg Byes'
+                    'Bowler Name', 'Team Name', 'Balls' if self.match_data.get('match_format') == 'Hundred' else 'Overs', 'Maidens', 'Runs', 'Wickets',
+                    'Econ/100' if self.match_data.get('match_format') == 'Hundred' else 'Economy', 'Wides', 'No Balls', 'Byes', 'Leg Byes'
                 ]
-                writer.writerow(headers + ['Match Format', 'Scheduled Overs'])
+                writer.writerow(headers + ['Match Format', 'Scheduled Balls' if self.match_data.get('match_format') == 'Hundred' else 'Scheduled Overs'])
                 
                 # Write bowler data
                 for bowler_name, bowler_stats in stats.items():
                     if bowler_stats.get('balls_bowled', 0) > 0:
                         total_balls = bowler_stats['balls_bowled']
-                        overs_display = balls_to_overs_str(total_balls)
-                        economy = f"{(bowler_stats['runs'] * 6 / total_balls):.2f}" if total_balls > 0 else "0.00"
+                        overs_display = str(total_balls) if self.match_data.get("match_format") == "Hundred" else balls_to_overs_str(total_balls)
+                        economy = f"{(bowler_stats['runs'] * (100 if self.match_data.get('match_format') == 'Hundred' else 6) / total_balls):.2f}" if total_balls > 0 else "0.00"
                         
                         writer.writerow([
                             bowler_name,
@@ -1814,7 +1821,7 @@ class MatchArchiver:
                             bowler_stats.get('noballs', 0),
                             bowler_stats.get('byes', 0),
                             bowler_stats.get('legbyes', 0)
-                        ] + [self.format_label, self.match_data.get("scheduled_overs")])
+                        ] + [self.format_label, 100 if self.match_data.get("match_format") == "Hundred" else self.match_data.get("scheduled_overs")])
             
             self.created_files.append(csv_path)
             self.logger.debug(f"Bowling CSV created: {filename}")

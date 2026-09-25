@@ -7,14 +7,14 @@
     const METRICS = {
         'batting.runs': ['Batting · Runs', false], 'batting.average': ['Batting · Average', false],
         'batting.strike_rate': ['Batting · Strike rate', false], 'bowling.wickets': ['Bowling · Wickets', false],
-        'bowling.average': ['Bowling · Average', true], 'bowling.economy': ['Bowling · Economy', true],
+        'bowling.average': ['Bowling · Average', true], 'bowling.economy': ['Bowling · Runs per 6 balls', true],
         'bowling.strike_rate': ['Bowling · Strike rate', true], 'fielding.total_dismissals': ['Fielding · Dismissals', false]
     };
     const selected = new Set();
     let payload = null, charts = [], timer, controller, generation = 0, focus = null;
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const number = value => value == null ? '—' : typeof value === 'number' ? value.toLocaleString(undefined, {maximumFractionDigits: 2}) : esc(value);
-    const metricValue = (data, metric) => { const [section, key] = metric.split('.'); return data?.[section]?.[key] ?? null; };
+    const metricValue = (data, metric) => { const [section, key] = metric.split('.'); return data?.[section]?.[key === 'economy' ? 'economy_per_six_balls' : key] ?? null; };
     const formats = () => payload.formats.filter(fmt => document.querySelector(`input[name="cmp-format"][value="${fmt}"]`).checked);
     const color = index => COLORS[index % COLORS.length];
     const displayName = p => p.linked === false ? `${p.name} · #${p.player_ids[0]}` : p.name;
@@ -54,7 +54,7 @@
     }
     function overview() {
         $('cmp-overview').innerHTML = formats().map(fmt => `<div class="cmp-panel"><h3>${FORMATS[fmt]}</h3>${table(
-            ['Player', 'Runs', 'Bat avg', 'Bat SR', 'Wkts', 'Bowl avg', 'Econ'],
+            ['Player', 'Runs', 'Bat avg', 'Bat SR', 'Wkts', 'Bowl avg', 'Runs/6 balls'],
             payload.players.map((p, i) => { const d = p.formats[fmt]; return row([label(p, i), ...['batting.runs','batting.average','batting.strike_rate','bowling.wickets','bowling.average','bowling.economy'].map(m => number(metricValue(d, m)))], p.id); }))}
             ${payload.players.map((p, i) => { const d = p.formats[fmt]; return `<p class="cmp-stat-line">${label(p, i)} · ${esc((p.teams || []).join(' / '))} · ${d.matches} matches · ${d.batting.innings || 0} batting innings / ${d.batting.balls || 0} balls · ${d.bowling.innings || 0} bowling innings / ${d.bowling.balls || 0} balls${!d.has_data ? ' · No recorded data' : ''}${d.incomplete ? ' · Incomplete archived statistics' : ''}</p>`; }).join('')}</div>`).join('');
     }
@@ -76,14 +76,14 @@
     }
     function landscapes() {
         const discipline = $('cmp-discipline').value, batting = discipline === 'batting';
-        $('cmp-bubble-note').textContent = batting ? 'Average × strike rate. Bubble area represents innings; larger values on both axes indicate higher recorded rates.' : 'Economy × bowling strike rate. Bubble area represents legal balls; lower values on both axes indicate better recorded rates.';
+        $('cmp-bubble-note').textContent = batting ? 'Average × strike rate. Bubble area represents innings; larger values on both axes indicate higher recorded rates.' : 'Runs per 6 balls × bowling strike rate. Bubble area represents legal balls; lower values on both axes indicate better recorded rates.';
         formats().forEach(fmt => {
-            const keys = batting ? ['average','strike_rate'] : ['economy','strike_rate'];
-            const headers = batting ? ['Player','Average','Strike rate','Innings'] : ['Player','Economy','Strike rate','Balls'];
+            const keys = batting ? ['average','strike_rate'] : ['economy_per_six_balls','strike_rate'];
+            const headers = batting ? ['Player','Average','Strike rate','Innings'] : ['Player','Runs/6 balls','Strike rate','Balls'];
             const maxSample = Math.max(1, ...payload.players.map(p => p.formats[fmt][discipline][batting ? 'innings' : 'balls'] || 0));
             chart(panel('cmp-bubbles', fmt, batting ? 'Batting' : 'Bowling', fallback(headers, payload.players.map((p,i) => {const d=p.formats[fmt][discipline]; return row([label(p,i), number(d[keys[0]]),number(d[keys[1]]),number(d[batting?'innings':'balls'])],p.id);}))), 'bubble', {
                 datasets: payload.players.map((p,i) => {const d=p.formats[fmt][discipline]; return {label:displayName(p), playerId:p.id, backgroundColor:color(i)+'aa', borderColor:color(i), data:d[keys[0]] == null || d[keys[1]] == null ? [] : [{x:d[keys[0]],y:d[keys[1]],r:Math.max(3,24*Math.sqrt(d[batting?'innings':'balls']/maxSample))}]};})
-            }, {scales:{x:{title:{display:true,text:batting?'Batting average':'Economy'},beginAtZero:true}, y:{title:{display:true,text:batting?'Batting strike rate':'Bowling strike rate'},beginAtZero:true}}});
+            }, {scales:{x:{title:{display:true,text:batting?'Batting average':'Runs/6 balls'},beginAtZero:true}, y:{title:{display:true,text:batting?'Batting strike rate':'Bowling strike rate'},beginAtZero:true}}});
             const dataRows = [];
             payload.players.forEach((p,i) => p.formats[fmt].recent[discipline].forEach((d,j) => dataRows.push(row([label(p,i),j+1,esc(d.date?.slice(0,10) || 'Unknown'),esc(d.match_id),d.innings_number,batting?number(d.runs)+(!d.is_out?'*':''):number(d.wickets),number(d.balls)],p.id))));
             chart(panel('cmp-recent', fmt, 'Recent '+discipline, fallback(['Player','Sequence','Date','Match','Innings','Value','Balls'],dataRows)), 'line', {
@@ -116,7 +116,7 @@
             bowling:['innings','balls','overs','wickets','runs','average','economy','strike_rate','best_figures'],
             fielding:['catches','run_outs','stumpings','total_dismissals']
         };
-        $('cmp-details').innerHTML=formats().map(fmt=>`<details open><summary>${FORMATS[fmt]}</summary>${Object.entries(fields).map(([section,base])=>{const keys=[...base];if(fmt==='FC')keys.push(...(section==='batting'?['double_centuries','triple_centuries']:section==='bowling'?['best_match_figures','five_wicket_hauls','ten_wicket_matches']:[]));return `<h3>${section[0].toUpperCase()+section.slice(1)}</h3>${table(['Player',...keys.map(k=>k.replaceAll('_',' '))],payload.players.map((p,i)=>row([label(p,i),...keys.map(k=>number(p.formats[fmt][section][k]))],p.id)))}`;}).join('')}</details>`).join('');
+        $('cmp-details').innerHTML=formats().map(fmt=>`<details open><summary>${FORMATS[fmt]}</summary>${Object.entries(fields).map(([section,base])=>{const keys=[...base];if(fmt==='FC')keys.push(...(section==='batting'?['double_centuries','triple_centuries']:section==='bowling'?['best_match_figures','five_wicket_hauls','ten_wicket_matches']:[]));return `<h3>${section[0].toUpperCase()+section.slice(1)}</h3>${table(['Player',...keys.map(k=>k==='economy'&&fmt==='Hundred'?'Econ/100':k==='overs'&&fmt==='Hundred'?'Balls':k.replaceAll('_',' '))],payload.players.map((p,i)=>row([label(p,i),...keys.map(k=>number(p.formats[fmt][section][k]))],p.id)))}`;}).join('')}</details>`).join('');
     }
     function highlight() {
         document.querySelectorAll('[data-player]').forEach(el=>el.classList.toggle('cmp-dim',!!focus&&el.dataset.player!==focus));

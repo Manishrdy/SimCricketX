@@ -127,7 +127,7 @@ def compare(service, user_id, identity_ids, tournament_id=None, scheduled_overs=
                 for key in fielding:
                     fielding[key] += getattr(card, key) or 0
             bat = service._calculate_batting_metrics(batting)
-            bowl = service._calculate_bowling_metrics(bowling)
+            bowl = service._calculate_bowling_metrics(bowling, fmt)
             fielding['total_dismissals'] = sum(fielding.values())
             four_runs, six_runs = bat.get('fours', 0) * 4, bat.get('sixes', 0) * 6
             total = bat.get('runs', 0)

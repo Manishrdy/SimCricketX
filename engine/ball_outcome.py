@@ -1,4 +1,4 @@
-import random
+from engine import random_source as random
 import math
 import logging
 from typing import Optional
@@ -342,6 +342,19 @@ def _apply_fc_pitch_wear(weights: dict, pitch: str,
                                 for outcome, coef in spec.get("factors", {}).items()})
 
     return _renormalise_to(weights, w)
+
+
+def _apply_hundred_dew(weights, innings, legal_balls, is_day_night, config=None):
+    """Simulator assumption: fixed chase-ball clock, unaffected by rain cuts."""
+    if not is_day_night or innings != 2:
+        return weights
+    dew = (config or {}).get("dew", {})
+    start, peak = dew.get("start_ball", 50), dew.get("peak_ball", 90)
+    intensity = max(0.0, min(1.0, (legal_balls - start) / max(1, peak - start)))
+    result = weights.copy()
+    _scale_outcomes(result, {k: 1 + v * intensity for k, v in
+                    dew.get("factors", {"Extras": .20, "Wicket": -.075, "Four": .05}).items()})
+    return result
 
 
 def _apply_dew_factor(weights: dict, innings: int, over: int,
@@ -1242,6 +1255,11 @@ def calculate_outcome(
         if pitch_wear > 0.0:
             raw_weights = _apply_pitch_wear(raw_weights, pitch, pitch_wear)
             logger.debug("[PitchWear=%.3f] Applied T20 pitch deterioration.", pitch_wear)
+
+    if _fmt_name == "Hundred":
+        raw_weights = _apply_hundred_dew(raw_weights, innings, over_number * 5, is_day_night, _gc)
+
+
 
     # 3.5) Apply Game State Momentum Engine (GSME) adjustments.
     # This layer accounts for ball history (last 18 deliveries), run-rate

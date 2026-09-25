@@ -24,7 +24,7 @@ game_state_engine.apply_super_over_momentum() for the full rationale):
   - apply_super_over_momentum()
 """
 
-import random
+from engine import random_source as random
 from engine.ball_outcome import (
     compute_weighted_prob,
     compute_matchup_boost,

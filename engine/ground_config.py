@@ -73,6 +73,10 @@ def _load_defaults():
         raise ValueError(
             f"{_DEFAULTS_PATH} has no 'formats' mapping — expected a v2 config"
         )
+    if "Hundred" not in formats:
+        formats["Hundred"] = copy.deepcopy(formats["T20"])
+        formats["Hundred"]["dew"] = {"start_ball": 50, "peak_ball": 90,
+                                      "factors": {"Extras": .20, "Wicket": -.075, "Four": .05}}
     missing = [f for f in VALID_FORMATS if f not in formats]
     if missing:
         raise ValueError(f"{_DEFAULTS_PATH} is missing format block(s): {missing}")

@@ -1739,7 +1739,7 @@
             // getSharedSupportedFormats() at the Step 1 -> 2 transition is
             // what actually enforces the two teams share a playable format.
             const hasSquad = format
-                ? (squads[format] && squads[format].length > 0)
+                ? (squads[format === "Hundred" ? "T20" : format] && squads[format === "Hundred" ? "T20" : format].length > 0)
                 : getTeamSupportedFormats(team).length > 0;
 
             if (hasSquad) {
@@ -1773,7 +1773,7 @@
     function getTeamSupportedFormats(team) {
         if (!team) return [];
         const squads = team.profile_squads || {};
-        return MATCH_FORMATS.filter(fmt => Array.isArray(squads[fmt]) && squads[fmt].length > 0);
+        return MATCH_FORMATS.filter(fmt => Array.isArray(squads[fmt === "Hundred" ? "T20" : fmt]) && squads[fmt === "Hundred" ? "T20" : fmt].length > 0);
     }
 
     function getSharedSupportedFormats() {
@@ -2073,6 +2073,7 @@
 
         const helpText = {
             'T20':   '20 overs per side. Max 4 overs per bowler.',
+            'Hundred': '100 balls per side. Five-ball sets; change ends every ten balls. Uses your T20 squad.',
             'T10': '10 overs per side. Max 2 overs per bowler. Powerplay: overs 1–3.',
             'ListA': `${document.getElementById('scheduled-overs').value} overs per side. Max ${Number(document.getElementById('scheduled-overs').value) / 5} overs per bowler.`,
             'FC':    'Multi-day, up to 2 innings per side. No bowler over limit.',
@@ -2096,7 +2097,7 @@
         // No fallback — if the format has no squad, players becomes [].
         TEAMS.forEach(team => {
             const squads = team.profile_squads || {};
-            team.players = squads[newFormat] || [];
+            team.players = squads[newFormat === "Hundred" ? "T20" : newFormat] || [];
         });
 
         // Update team card availability badges + disabled state.
@@ -2194,7 +2195,7 @@
             setText('summary-scenario', interesting ? 'Surprise drama' : 'Disabled');
         }
         const fcDays = document.getElementById('fc-days-value')?.value || '4';
-        const formatLabels = { 'T10': 'T10', 'T20': 'T20', 'ListA': `List A · ${document.getElementById('scheduled-overs').value} overs`, 'FC': `First-Class (${fcDays}-day)` };
+        const formatLabels = { 'Hundred': 'The Hundred', 'T10': 'T10', 'T20': 'T20', 'ListA': `List A · ${document.getElementById('scheduled-overs').value} overs`, 'FC': `First-Class (${fcDays}-day)` };
         setText('summary-format', formatLabels[format] || format);
         setText('summary-day-night', isDayNight
             ? (format === 'FC' ? 'Day/Night · Pink ball' : 'Day/Night')

@@ -709,6 +709,11 @@
                 <i class="fa-solid fa-plus"></i>
                 <span class="desktop-only">New Team</span>
             </a>
+            {% if guide %}
+            <button class="theme-toggle" type="button" data-guide-replay title="Show me around this page" aria-label="Show me around this page">
+                <i class="fa-solid fa-circle-question"></i>
+            </button>
+            {% endif %}
             <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
                 <i class="fa-solid fa-moon"></i>
             </button>
@@ -1053,6 +1058,7 @@
             });
         });
     </script>
+    {% include 'partials/guide.html' %}
 </body>
 
 </html>

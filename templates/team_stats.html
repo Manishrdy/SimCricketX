@@ -65,7 +65,8 @@
                 {% endfor %}
             </select>
             <select id="ts-format" onchange="switchFormat(this.value)">
-                <option value="T20" {% if match_format == 'T20' %}selected{% endif %}>T20</option>
+                <option value="Hundred" {% if match_format == 'Hundred' %}selected{% endif %}>The Hundred</option>
+                    <option value="T20" {% if match_format == 'T20' %}selected{% endif %}>T20</option>
                 <option value="T10" {% if match_format == 'T10' %}selected{% endif %}>T10</option>
                 <option value="ListA" {% if match_format == 'ListA' %}selected{% endif %}>List A</option>
                 <option value="FC" {% if match_format == 'FC' %}selected{% endif %}>First-Class</option>

@@ -4,7 +4,7 @@ import dataclasses
 import logging
 import math
 import os
-import random
+from engine import random_source as random
 import sys
 import time
 from engine import dls
@@ -33,6 +33,7 @@ from engine.fc_batting_intent import ability, batting_intent, tail_protection
 from engine.fc_delivery import resolve_delivery
 from engine import ground_config as ground_config_engine
 from engine.short_bowler_manager import ShortBowlerManager
+from engine.hundred_bowler_manager import HundredBowlerManager
 from engine.toss import correct_decision, innings_teams
 from utils.exception_tracker import log_exception
 
@@ -158,6 +159,16 @@ class Match:
         # (1/2/3/4/5) carries overloaded super-over semantics that FC must
         # never touch; FC's own innings counter is self.fc_innings (1-4).
         self.is_fc = (self.fmt.format_family == "multi_day")
+        self.is_hundred = self.fmt.name == "Hundred"
+        self.balls_per_over = getattr(self.fmt, "balls_per_over", 6)
+        self.timeout_used = {1: False, 2: False}
+        self.timeout_active = False
+        self.hundred_innings_limits = {1: 100, 2: 100}
+        self.hundred_rng_state = random.getstate()
+        self.short_manager_class = HundredBowlerManager if self.is_hundred else ShortBowlerManager
+        if self.is_hundred:
+            match_data.update(rule_version="ECB-2026-men", balls_per_over=5, scheduled_balls=100)
+
         if getattr(self.fmt, "strict_short_bowling", False):
             if self.ground_config is None:
                 self.ground_config = ground_config_engine.get_defaults(self.fmt.name, mutable=True)
@@ -166,7 +177,7 @@ class Match:
             for xi in (self.home_xi, self.away_xi):
                 if len(xi) != 11 or len({p["name"] for p in xi}) != 11:
                     raise ValueError("Short-format matches require eleven distinct players per XI")
-                ShortBowlerManager(xi, self.fmt).validate_attack()
+                self.short_manager_class(xi, self.fmt).validate_attack()
         if match_data.get("scenario_pack"):
             from engine.format_config import resolve_scheduled_overs
             pack = match_data["scenario_pack"]
@@ -219,7 +230,7 @@ class Match:
             # declaration, all-out), which never reads self.overs.
             self.overs = self.fmt.days * self.fmt.overs_per_day
         else:
-            self.bowler_manager = (ShortBowlerManager if getattr(self.fmt, "strict_short_bowling", False) else BowlerManager)(self.bowling_team, self.fmt)
+            self.bowler_manager = (self.short_manager_class if getattr(self.fmt, "strict_short_bowling", False) else BowlerManager)(self.bowling_team, self.fmt)
             # Keep bowler_history as a live alias into BowlerManager's quota
             # dict so existing read-only usages remain valid without a
             # large refactor.
@@ -271,7 +282,7 @@ class Match:
         self.rain_events_log = []            # applied interruptions (UI + archive)
         self._innings1_overs_bowled = None   # actual completed overs of innings 1
         self._pending_rain_info = None       # rain info to attach to next response
-        self.dls_ledger_innings1 = None if self.is_fc else dls.ResourceLedger(self.fmt.overs)
+        self.dls_ledger_innings1 = None if self.is_fc else dls.ResourceLedger(self.fmt.overs, self.balls_per_over)
         self.dls_ledger_innings2 = None      # created when the chase is set up
         self.batter_idx = [0, 1]
         self.score = 0
@@ -530,9 +541,8 @@ class Match:
             return self.data["team_home"].split("_")[0]
         return self.data["team_away"].split("_")[0]
 
-    @staticmethod
-    def _balls_to_overs_notation(total_balls):
-        return balls_to_overs_str(total_balls)
+    def _balls_to_overs_notation(self, total_balls):
+        return str(total_balls) if self.is_hundred else balls_to_overs_str(total_balls)
 
     def _set_outcome(self, *, result_text, winner_is_home, match_status, margin_type, margin_value):
         """Set self.result plus the structured fields describing the same
@@ -540,7 +550,7 @@ class Match:
         later by parsing result_text. Does not compose result_text itself —
         callers already build it differently per branch (chase vs. defend
         vs. super over vs. boundary tiebreak)."""
-        self.result = result_text
+        self.result = result_text.replace("Super Over", "Super Five") if self.is_hundred else result_text
         self.winner_is_home = winner_is_home
         self.match_status = match_status
         self.margin_type = margin_type
@@ -563,8 +573,8 @@ class Match:
         }
 
     def _balls_left_in_innings(self):
-        total_balls_in_innings = self.overs * 6
-        balls_played = self.current_over * 6 + self.current_ball
+        total_balls_in_innings = self.overs * self.balls_per_over
+        balls_played = self.current_over * self.balls_per_over + self.current_ball
         return max(0, total_balls_in_innings - balls_played)
 
     def _compute_pitch_wear(self):
@@ -577,12 +587,12 @@ class Match:
         """
         if self.is_fc:
             day_progress = min(1.0, self.fc_day_balls_bowled_today /
-                               (self.fmt.overs_per_day * 6))
+                               (self.fmt.overs_per_day * self.balls_per_over))
             elapsed_days = max(0.0, self.fc_day - 1 + day_progress)
             if elapsed_days <= 3.0:
                 return 0.20 * elapsed_days / 3.0
             return min(1.0, 0.20 + 0.40 * (elapsed_days - 3.0))
-        _total_balls = (20 if getattr(self.fmt, "strict_short_bowling", False) else self.fmt.overs) * 6
+        _total_balls = (20 if getattr(self.fmt, "strict_short_bowling", False) else self.fmt.overs) * self.balls_per_over
         return min(1.0, self.innings_balls_bowled / _total_balls)
 
     def _ball_outcome_token(self, outcome, wicket, runs, extra):
@@ -614,9 +624,9 @@ class Match:
             bowler_stats = {"runs":0,"fours":0,"sixes":0,"wickets":0,"overs":0,"maidens":0,"balls_bowled":0,"wides":0,"noballs":0,"byes":0,"legbyes":0}
         
         team_name = self._get_team_name(self.batting_team)
-        balls_played = self.current_over * 6 + self.current_ball
-        current_rr = (self.score * 6) / balls_played if balls_played > 0 else 0
-        over_progress = bowler_stats.get("overs", 0) + (bowler_stats.get("balls_bowled", 0) % 6) / 10
+        balls_played = self.current_over * self.balls_per_over + self.current_ball
+        current_rr = (self.score * self.balls_per_over) / balls_played if balls_played > 0 else 0
+        over_progress = bowler_stats.get("overs", 0) + (bowler_stats.get("balls_bowled", 0) % self.balls_per_over) / 10
         outcomes = " ".join(self.current_over_outcomes) if self.current_over_outcomes else "-"
         
         bowler_name = self.current_bowler["name"] if self.current_bowler else "Unknown"
@@ -635,8 +645,8 @@ class Match:
         an innings ending on the tenth wicket carries the same final-score
         line instead of leaving the reader to infer it."""
         team_name = self._get_team_name(self.batting_team)
-        balls_played = self.current_over * 6 + self.current_ball
-        current_rr = (self.score * 6) / balls_played if balls_played > 0 else 0
+        balls_played = self.current_over * self.balls_per_over + self.current_ball
+        current_rr = (self.score * self.balls_per_over) / balls_played if balls_played > 0 else 0
         return f"{team_name} {self.score}/{self.wickets}, RR: {current_rr:.2f}"
 
     def _format_dismissal_line(self, name, wicket_type, fielder_name=None):
@@ -661,7 +671,7 @@ class Match:
         """'{bowler}  {overs}-{maidens}-{runs}-{wickets} (extras)' for the
         bowler who took the final wicket."""
         stats = self.bowler_stats.get(bowler_name, {})
-        balls_this_over = stats.get("balls_bowled", 0) % 6
+        balls_this_over = stats.get("balls_bowled", 0) % self.balls_per_over
         overs = stats.get("overs", 0) + (balls_this_over / 10) if balls_this_over else stats.get("overs", 0)
         extras_parts = []
         if stats.get("wides"):
@@ -775,7 +785,7 @@ class Match:
             "total_overs": self.overs,
             "match_format": self.fmt.name,
             "scheduled_overs": self.data.get("scheduled_overs"),
-            "phase_name": None if self.is_fc else self.fmt.get_phase(self.current_over).name,
+            "phase_name": None if self.is_fc else self.fmt.get_phase(self.current_over + (self.current_ball / 5 if self.is_hundred else 0)).name,
             "decision_context": decision.get("context", {}),
             "decision_options": decision.get("options", []),
             "score": self.score,
@@ -849,6 +859,10 @@ class Match:
             }
             if not self.is_fc:
                 option["overs_remaining"] = max(0, self.fmt.max_bowler_overs - overs_done)
+                if self.is_hundred:
+                    option["balls_bowled"] = overs_done * 5
+                    option["balls_remaining"] = option["overs_remaining"] * 5
+                    option["continue_bowler"] = bool(self.current_bowler and bowler["name"] == self.current_bowler["name"])
             options.append(option)
 
         if self.is_fc:
@@ -987,7 +1001,7 @@ class Match:
                 return {"error": "That selection leaves no legal bowling allocation"}, 400
             selected_bowler = self.bowling_team[selected_index]
             previous_bowler = self.current_bowler["name"] if self.current_bowler else None
-            if previous_bowler and selected_bowler["name"] == previous_bowler:
+            if not self.is_hundred and previous_bowler and selected_bowler["name"] == previous_bowler:
                 return {"error": "Selected bowler cannot bowl consecutive overs"}, 400
             self.current_bowler = selected_bowler
             self.bowler_selected_for_over = self.current_over
@@ -1164,10 +1178,10 @@ class Match:
 
     def _calculate_current_match_state(self):
         """Calculate current match state for pressure calculation"""
-        total_balls = self.current_over * 6 + self.current_ball
-        current_rr = (self.score * 6) / total_balls if total_balls > 0 else 0
+        total_balls = self.current_over * self.balls_per_over + self.current_ball
+        current_rr = (self.score * self.balls_per_over) / total_balls if total_balls > 0 else 0
 
-        overs_played = self.current_over + (self.current_ball / 6)
+        overs_played = self.current_over + (self.current_ball / self.balls_per_over)
 
         state = {
             'innings': self.innings,
@@ -1189,7 +1203,7 @@ class Match:
         if self.innings == 2:
             overs_remaining = state['overs_remaining']
             runs_needed = self.target - self.score
-            required_rr = (runs_needed * 6) / (overs_remaining * 6) if overs_remaining > 0 else 0
+            required_rr = (runs_needed * self.balls_per_over) / (overs_remaining * self.balls_per_over) if overs_remaining > 0 else 0
 
             state.update({
                 'runs_needed': runs_needed,
@@ -1243,11 +1257,11 @@ class Match:
         if wickets_in_hand <= 0:
             return 0.0
 
-        balls_remaining = (self.overs - self.current_over) * 6 - self.current_ball
+        balls_remaining = (self.overs - self.current_over) * self.balls_per_over - self.current_ball
         if balls_remaining <= 0:
             return 0.0
 
-        typical_rpb = (self.fmt.rrr_baseline[self.pitch] / 6 if getattr(self.fmt, "strict_short_bowling", False)
+        typical_rpb = (self.fmt.rrr_baseline[self.pitch] / self.balls_per_over if getattr(self.fmt, "strict_short_bowling", False)
                        else self._WIN_PROB_PITCH_RPB.get(self.pitch, 1.38))
         capacity = self._WIN_PROB_WICKET_CAPACITY.get(wickets_in_hand, 0.50)
 
@@ -1418,7 +1432,7 @@ class Match:
             "batsman2_contribution": b2['runs'],
             "batsman2_balls": b2['balls'],
             "start_over": self.current_partnership_start_over,
-            "end_over": self.current_over + (self.current_ball / 6),
+            "end_over": self.current_over + (self.current_ball / self.balls_per_over),
         }
         
         if self.is_fc:
@@ -1433,7 +1447,7 @@ class Match:
         # Reset tracking
         self.current_partnership_runs = 0
         self.current_partnership_balls = 0
-        self.current_partnership_start_over = self.current_over + (self.current_ball / 6)
+        self.current_partnership_start_over = self.current_over + (self.current_ball / self.balls_per_over)
         
         # Reset contributions - one batter stays, one goes.
         # But for tracking simplicity, we'll reset both and accumulate fresh
@@ -1482,6 +1496,27 @@ class Match:
         print(f"📺 Frontend commentary set: {len(frontend_commentary)} items")
 
 
+    def hundred_archive_metadata(self):
+        first = self.first_innings_bowling_stats or {}
+        second = self.second_innings_bowling_stats or self.bowler_stats
+        balls1 = sum(s.get("balls_bowled", 0) for s in first.values())
+        balls2 = sum(s.get("balls_bowled", 0) for s in second.values())
+        runs1, runs2 = self.first_innings_score or 0, self.score
+        wickets1 = sum(bool(s.get("wicket_type")) for s in (self.first_innings_batting_stats or {}).values())
+        nrr1 = self.hundred_innings_limits[1] if wickets1 >= 10 else balls1
+        nrr2 = self.hundred_innings_limits[2] if self.wickets >= 10 else balls2
+        if self.rain_affected and self.match_status != "no_result":
+            runs1 = max(0, (self.target or 1) - 1)
+            terminated = any(e.get("outcome") == "chase_terminated" for e in self.rain_events_log)
+            nrr1 = balls2 if terminated else self.hundred_innings_limits[2]
+        first_home = self.first_batting_team_name == self.data["team_home"].split("_")[0]
+        sides = {"home" if first_home else "away": {"runs": runs1, "balls": nrr1},
+                 "away" if first_home else "home": {"runs": runs2, "balls": nrr2}}
+        return {"rule_version": "ECB-2026-men", "scheduled_balls": 100, "balls_per_set": 5,
+                "innings_limits": self.hundred_innings_limits, "legal_balls": [balls1, balls2],
+                "rain_events": self.rain_events_log, "target": self.target,
+                "nrr": sides, "rain_method": "D/L approximation"}
+
     def _create_match_archive(self):
         """Create complete match archive when match ends"""
         if getattr(self, "_archive_created", False):
@@ -1504,6 +1539,8 @@ class Match:
                 print(f"🔧 Using backend commentary ({len(commentary_to_archive)} items)")
             
             # Create archiver and generate archive
+            if self.is_hundred:
+                self.data["format_metadata"] = self.hundred_archive_metadata()
             archiver = MatchArchiver(self.match_data, self)
             success = archiver.create_archive(original_json_path, commentary_to_archive)
             
@@ -2229,7 +2266,7 @@ class Match:
 
     def _get_match_phase(self):
         """Determine current match phase for context"""
-        if self.fmt.is_powerplay(self.current_over):
+        if self.fmt.is_powerplay(self.current_over + (self.current_ball / 5 if self.is_hundred else 0)):
             return "POWERPLAY"
         if self.fmt.is_death(self.current_over):
             return "DEATH_OVERS"
@@ -2385,7 +2422,7 @@ class Match:
             if not is_pure and pure_need_overs:
                 score -= 6.0
 
-            if self.fmt.is_powerplay(self.current_over):
+            if self.fmt.is_powerplay(self.current_over + (self.current_ball / 5 if self.is_hundred else 0)):
                 if btype in ("Fast", "Fast-medium", "Medium-fast"):
                     score += 6.0
                 if is_pure:
@@ -2821,9 +2858,9 @@ class Match:
 
         # 2nd innings: adapt to required run rate
         if innings == 2 and self.target:
-            balls_remaining = max(1, (self.overs - over) * 6 - self.current_ball)
+            balls_remaining = max(1, (self.overs - over) * self.balls_per_over - self.current_ball)
             runs_needed     = max(0, self.target - self.score)
-            rrr             = (runs_needed * 6) / balls_remaining
+            rrr             = (runs_needed * self.balls_per_over) / balls_remaining
             _short = getattr(self.fmt, "strict_short_bowling", False)
             baseline = getattr(self.fmt, "rrr_baseline", {}).get(pitch, 8.5)
             # Seven down is a reason to shut up shop over 20 overs; over 10 it
@@ -3493,7 +3530,7 @@ class Match:
         """Save star bowlers for crucial phases"""
         print(f"  ⭐ Star Preservation Strategy (Over {self.current_over + 1}):")
         
-        if self.fmt.is_powerplay(self.current_over):  # Powerplay
+        if self.fmt.is_powerplay(self.current_over + (self.current_ball / 5 if self.is_hundred else 0)):  # Powerplay
             return eligible_bowlers
         elif self.fmt.is_middle(self.current_over):  # Middle overs - prefer regulars
             regulars = [b for b in eligible_bowlers if b in bowler_tiers['regular']]
@@ -3533,7 +3570,7 @@ class Match:
 
     def _get_bowling_phase(self):
         """Get current bowling phase"""
-        if self.fmt.is_powerplay(self.current_over):
+        if self.fmt.is_powerplay(self.current_over + (self.current_ball / 5 if self.is_hundred else 0)):
             return "POWERPLAY"
         elif self.fmt.is_death(self.current_over):
             return "DEATH_OVERS"
@@ -4283,7 +4320,7 @@ class Match:
         if self.innings == 1:
             # First innings pressure commentary
             if pressure_score >= 70:
-                if self.fmt.is_powerplay(self.current_over):
+                if self.fmt.is_powerplay(self.current_over + (self.current_ball / 5 if self.is_hundred else 0)):
                     commentary = random.choice([
                         f"<strong>Pressure Building!</strong> {self.data['team_home'].split('_')[0] if self.batting_team == self.home_xi else self.data['team_away'].split('_')[0]} struggling to get going in the powerplay...",
                         f"The run rate is concerning early on - need to accelerate soon!",
@@ -4373,6 +4410,10 @@ class Match:
         """Apply a revised allocation to the innings in progress. Mutating the
         per-match fmt copy propagates the new overs + bowler quota to every
         consumer (BowlerManager, GSME, pressure engine, UI payloads)."""
+        if self.is_hundred:
+            self.hundred_innings_limits[self.innings] = revised_overs * 5
+            if self.innings == 1:
+                self.hundred_innings_limits[2] = revised_overs * 5
         self.overs = revised_overs
         self.fmt.overs = revised_overs
         if getattr(self.fmt, "strict_short_bowling", False):
@@ -4382,7 +4423,7 @@ class Match:
         self.lista_bowler_plan = {}
 
     def _dls_suffix(self):
-        return " (DLS method)" if getattr(self, "rain_affected", False) else ""
+        return (" (D/L approximation)" if self.is_hundred else " (DLS method)") if getattr(self, "rain_affected", False) else ""
 
     def _dls_g50(self):
         """Expected 100%-resource innings total for the R2 > R1 branch of the
@@ -4390,7 +4431,7 @@ class Match:
         expected = self.fmt.target_scores.get(self.pitch)
         if expected is None:
             expected = 245.0 if self.fmt.name == "ListA" else 165.0
-        return dls.g50_from_expected_total(float(expected), self.original_overs)
+        return dls.g50_from_expected_total(float(expected), self.original_overs * self.balls_per_over / 6)
 
     def _global_overs_completed(self):
         """Completed overs across the whole match — the weather script's clock."""
@@ -4407,7 +4448,7 @@ class Match:
         if not self.rain_affected:
             return self.score + 1
         if self.dls_ledger_innings2 is None:
-            self.dls_ledger_innings2 = dls.ResourceLedger(self.overs)
+            self.dls_ledger_innings2 = dls.ResourceLedger(self.overs, self.balls_per_over)
         return dls.compute_target(
             self.score,
             self.dls_ledger_innings1.available(),
@@ -4432,7 +4473,7 @@ class Match:
                 or self.first_innings_score is None):
             return None
         if self.dls_ledger_innings2 is None:
-            self.dls_ledger_innings2 = dls.ResourceLedger(self.overs)
+            self.dls_ledger_innings2 = dls.ResourceLedger(self.overs, self.balls_per_over)
         return dls.par_score(
             self.first_innings_score,
             self.dls_ledger_innings1.available(),
@@ -4576,7 +4617,7 @@ class Match:
 
         # ── Innings 2: the chase ────────────────────────────────────────
         if self.dls_ledger_innings2 is None:
-            self.dls_ledger_innings2 = dls.ResourceLedger(self.overs)
+            self.dls_ledger_innings2 = dls.ResourceLedger(self.overs, self.balls_per_over)
         prev_allocation = self.overs
 
         if rtype == weather_engine.CHASE_TERMINATED:
@@ -4833,7 +4874,7 @@ class Match:
                 }))
 
                 self._set_outcome(
-                    result_text=f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} overs remaining.{self._dls_suffix()}",
+                    result_text=f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} {"balls" if self.is_hundred else "overs"} remaining.{self._dls_suffix()}",
                     winner_is_home=(self.batting_team is self.home_xi),
                     match_status='completed', margin_type='wickets', margin_value=wkts_left,
                 )
@@ -4865,7 +4906,7 @@ class Match:
             striker_stats = self.batsman_stats[self.current_striker["name"]]
             non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
             bowler_stats = self.bowler_stats[self.current_bowler["name"]]
-            overs_bowled = bowler_stats["overs"] + (bowler_stats["balls_bowled"] % 6) / 10
+            overs_bowled = bowler_stats["overs"] + (bowler_stats["balls_bowled"] % self.balls_per_over) / 10
 
             extras_str = ""
             if bowler_stats["wides"] > 0 or bowler_stats["noballs"] > 0:
@@ -5339,7 +5380,7 @@ class Match:
     def fc_day_overs_bowled_today(self, overs):
         """Kept writable for the day reset and for restoring a snapshot
         saved before the ball counter existed."""
-        self.fc_day_balls_bowled_today = int(overs) * 6
+        self.fc_day_balls_bowled_today = int(overs) * self.balls_per_over
 
     # Over rates. A first-class day is 90 overs on the schedule and almost
     # never 90 in practice: a seam-dominated attack with long run-ups gets
@@ -5449,7 +5490,7 @@ class Match:
         effective = self._fc_effective_overs_today()
         target = max(effective, self._fc_minimum_overs_today())
         if getattr(self, "fc_weather_v2", False):
-            over_minutes = self._fc_minutes_per_delivery() * 6.0
+            over_minutes = self._fc_minutes_per_delivery() * self.balls_per_over
             if over_minutes > 0:
                 ceiling = effective + int(
                     max(0, self.fmt.max_overtime_minutes) // over_minutes)
@@ -5549,7 +5590,7 @@ class Match:
         """Current attack's over rate expressed as simulated clock time."""
         adjust = self._fc_compute_day_over_rate_adjust()
         overs_per_six_hours = max(1, self.fmt.overs_per_day + adjust)
-        return fc_weather.PLAYING_MINUTES_PER_DAY / overs_per_six_hours / 6.0
+        return fc_weather.PLAYING_MINUTES_PER_DAY / overs_per_six_hours / self.balls_per_over
 
     def _fc_advance_clock_for_delivery(self):
         if getattr(self, "fc_weather_v2", False):
@@ -5834,12 +5875,12 @@ class Match:
         # carry; fall back to it so a match saved mid-session still adds up.
         start_balls = start.get("day_balls")
         if start_balls is None:
-            start_balls = int(start.get("day_overs", 0)) * 6
+            start_balls = int(start.get("day_overs", 0)) * self.balls_per_over
         balls = self.fc_day_balls_bowled_today - start_balls
         carry_balls = carry.get("balls")
         if carry_balls is None:
             # Pre-ball-counter snapshot: its carry holds a plain over count.
-            carry_balls = int(carry.get("overs", 0) or 0) * 6
+            carry_balls = int(carry.get("overs", 0) or 0) * self.balls_per_over
         total_balls = max(0, balls) + carry_balls
         return {"runs": max(0, runs) + carry.get("runs", 0),
                 "wickets": max(0, wkts) + carry.get("wickets", 0),
@@ -6559,7 +6600,7 @@ class Match:
         scorecard_data = self._generate_detailed_scorecard()
         self.fc_innings_totals[self.fc_innings] = {
             "score": self.score, "wickets": self.wickets,
-            "overs_str": self._balls_to_overs_notation(self.current_over * 6 + self.current_ball),
+            "overs_str": self._balls_to_overs_notation(self.current_over * self.balls_per_over + self.current_ball),
             "side": "home" if self.batting_team is self.home_xi else "away",
         }
         self._fc_record_innings_stats(self.fc_innings)
@@ -6578,7 +6619,7 @@ class Match:
         scorecard_data = self._generate_detailed_scorecard()
         self.fc_innings_totals[ending_innings] = {
             "score": self.score, "wickets": self.wickets,
-            "overs_str": self._balls_to_overs_notation(self.current_over * 6 + self.current_ball),
+            "overs_str": self._balls_to_overs_notation(self.current_over * self.balls_per_over + self.current_ball),
             "side": "home" if self.batting_team is self.home_xi else "away",
         }
         self._fc_record_innings_stats(ending_innings)
@@ -6764,13 +6805,13 @@ class Match:
         total = 0.0
         for entry in self.fc_innings_stats:
             for st in (entry.get("bowling_stats") or {}).values():
-                total += (st.get("overs", 0) or 0) + (st.get("balls_bowled", 0) or 0) / 6.0
+                total += (st.get("overs", 0) or 0) + (st.get("balls_bowled", 0) or 0) / self.balls_per_over
         return total
 
     def _fc_projected_final_wear(self):
         """Roughly how worn the pitch will be by the fourth innings — the
         surface the enforcing captain would be batting last on."""
-        total_balls = max(1, self.fmt.days * self.fmt.overs_per_day * 6)
+        total_balls = max(1, self.fmt.days * self.fmt.overs_per_day * self.balls_per_over)
         # Assume the rest of the match is played out; that is the situation
         # the decision is being made against.
         return min(1.0, (self.match_balls_bowled + total_balls * 0.35) / total_balls)
@@ -6824,7 +6865,55 @@ class Match:
         return {"fc_decision_pending": True, "decision_type": "declaration",
                 "retry_after": 0.5}
 
+    def hundred_state(self):
+        balls = self.current_over * self.balls_per_over + self.current_ball
+        return {"match_format": self.fmt.name, "balls_per_over": self.balls_per_over,
+                "rule_version": self.data.get("rule_version"), "legal_balls": balls,
+                "scheduled_balls": self.original_overs * self.balls_per_over,
+                "innings_ball_limit": self.overs * self.balls_per_over,
+                "balls_remaining": max(0, self.overs * self.balls_per_over - balls),
+                "balls_per_set": 5, "fielders_outside_circle": self.fmt.get_phase(balls / 5).max_fielders_outside,
+                "completed_sets": self.current_over, "ball_in_set": self.current_ball,
+                "bowling_end": (balls // 10) % 2,
+                "consecutive_sets": getattr(self.bowler_manager, "consecutive_sets", 0),
+                "timeout_available": self.simulation_mode == "manual" and self.innings in (1, 2) and balls >= 25 and balls < self.overs * 5 and not self.timeout_used.get(self.innings),
+                "timeout_active": self.timeout_active,
+                "rate_unit": "runs/ball", "economy_unit": "runs/100 balls"}
+
+    def set_strategic_timeout(self, active):
+        if not self.is_hundred or self.simulation_mode != "manual":
+            raise ValueError("Strategic timeout is available in manual Hundred matches")
+        if active:
+            if self.timeout_active or not self.hundred_state()["timeout_available"]:
+                raise ValueError("Strategic timeout is not available")
+            self.timeout_used[self.innings] = True
+            self.commentary.append("Strategic timeout: fielding captain pauses play (90 seconds simulated).")
+        elif not self.timeout_active:
+            raise ValueError("No strategic timeout is active")
+        self.timeout_active = active
+        return self.hundred_state()
+
     def next_ball(self, wait_for_decision=True):
+        if self.is_hundred and self.timeout_active:
+            return {**self.hundred_state(), "commentary": "Strategic timeout — resume when ready."}
+        if self.is_hundred:
+            with random.use_state(self.hundred_rng_state) as rng:
+                result = self._next_ball_impl(wait_for_decision)
+                self.hundred_rng_state = rng.getstate()
+        else:
+            result = self._next_ball_impl(wait_for_decision)
+        if self.is_hundred:
+            result.update(self.hundred_state())
+            result["phase_name"] = self.fmt.get_phase(self.current_over + self.current_ball / 5).name
+            if result.get("commentary"):
+                result["commentary"] = result["commentary"].replace("Super Over", "Super Five").replace("DLS method", "D/L approximation").replace("End of over", "End of set")
+            if self.result:
+                self.result = self.result.replace("Super Over", "Super Five")
+                if "result" in result:
+                    result["result"] = self.result
+        return result
+
+    def _next_ball_impl(self, wait_for_decision=True):
         # A declaration decision deferred at the last interval is settled
         # before anything else happens, so no delivery is ever bowled against
         # an unsettled one and the state it was computed from is still the
@@ -7278,7 +7367,7 @@ class Match:
                 bowler=_effective_bowler,
                 pitch=self.pitch,
                 streak=streak,
-                over_number=self.current_over,
+                over_number=self.current_over + (self.current_ball / 5 if self.is_hundred else 0),
                 batter_runs=self.batsman_stats[striker_name]["runs"],
                 innings=self.innings,
                 pressure_effects=pressure_effects,
@@ -7306,7 +7395,7 @@ class Match:
                     batter=_no_ball_batter if not scenario_override else self.current_striker,
                     bowler=_effective_bowler if not scenario_override else self.current_bowler,
                     pitch=self.pitch, streak=self.batter_streaks.get(self.current_striker["name"], {}),
-                    over_number=self.current_over, batter_runs=self.batsman_stats[self.current_striker["name"]]["runs"],
+                    over_number=self.current_over + (self.current_ball / 5 if self.is_hundred else 0), batter_runs=self.batsman_stats[self.current_striker["name"]]["runs"],
                     innings=self.innings, pressure_effects=pressure_effects, allow_extras=False,
                     balls_faced=self.batsman_stats[self.current_striker["name"]]["balls"],
                     pitch_wear=self._compute_pitch_wear(), format_config=self.fmt,
@@ -7402,7 +7491,7 @@ class Match:
                 bowler=_effective_bowler,
                 pitch=self.pitch,
                 streak=self.batter_streaks.get(self.current_striker["name"], {"boundaries": 0}),
-                over_number=self.current_over,
+                over_number=self.current_over + (self.current_ball / 5 if self.is_hundred else 0),
                 batter_runs=self.batsman_stats[self.current_striker["name"]]["runs"],
                 innings=self.innings,
                 pressure_effects=pressure_effects,
@@ -7493,7 +7582,7 @@ class Match:
         if not hasattr(self, 'recent_wickets_tracker'):
             self.recent_wickets_tracker = []
 
-        current_ball_number = self.current_over * 6 + self.current_ball
+        current_ball_number = self.current_over * self.balls_per_over + self.current_ball
         if wicket:
             self.recent_wickets_tracker.append(current_ball_number)
 
@@ -7931,7 +8020,7 @@ class Match:
                     self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
 
                 # ✅ ADD THIS: Check if over completed with match-winning ball
-                if self.current_ball == 6:
+                if self.current_ball == self.balls_per_over:
                     if not self.current_over_maiden_invalid:
                         self.bowler_stats[self.current_bowler["name"]]["maidens"] += 1
                     self.bowler_stats[self.current_bowler["name"]]["overs"] += 1
@@ -7980,7 +8069,7 @@ class Match:
                     }))
                 
                 self._set_outcome(
-                    result_text=f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} overs remaining.{self._dls_suffix()}",
+                    result_text=f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} {"balls" if self.is_hundred else "overs"} remaining.{self._dls_suffix()}",
                     winner_is_home=(self.batting_team is self.home_xi),
                     match_status='completed', margin_type='wickets', margin_value=wkts_left,
                 )
@@ -7990,7 +8079,7 @@ class Match:
                 bowler_stats = self.bowler_stats[self.current_bowler["name"]]
                 
                 # ✅ CORRECT OVERS CALCULATION INCLUDING THE MATCH-WINNING BALL
-                overs_bowled = bowler_stats["overs"] + (bowler_stats["balls_bowled"] % 6) / 10
+                overs_bowled = bowler_stats["overs"] + (bowler_stats["balls_bowled"] % self.balls_per_over) / 10
                 
                 extras_str = ""
                 if bowler_stats["wides"] > 0 or bowler_stats["noballs"] > 0:
@@ -8113,7 +8202,7 @@ class Match:
             all_commentary.extend(self.pending_pre_ball_commentary)
             self.pending_pre_ball_commentary = []
         all_commentary.append(commentary_line)
-        over_complete = self.current_ball == 6
+        over_complete = self.current_ball == self.balls_per_over
 
         if over_complete:
             if not self.current_over_maiden_invalid:
@@ -8132,9 +8221,9 @@ class Match:
             all_commentary.append(self._format_over_summary(f"End of over {self.current_over + 1}"))
 
             if self.innings == 2:
-                balls_remaining = (self.overs - self.current_over - 1) * 6
+                balls_remaining = (self.overs - self.current_over - 1) * self.balls_per_over
                 if balls_remaining > 0:
-                    required_rr = ((self.target - self.score) * 6) / balls_remaining
+                    required_rr = ((self.target - self.score) * self.balls_per_over) / balls_remaining
                     all_commentary.append(f"Required: {self.target - self.score} runs from {balls_remaining} balls (RRR: {required_rr:.2f})")
             all_commentary.append("<br>")
 
@@ -8144,8 +8233,9 @@ class Match:
             self.current_over_runs = 0
             self.current_over_outcomes = []
             self.current_over_maiden_invalid = False  # A2: reset for new over
-            self.current_striker, self.current_non_striker = self.current_non_striker, self.current_striker
-            self.batter_idx.reverse()
+            if not self.is_hundred or self.current_over % 2 == 0:
+                self.current_striker, self.current_non_striker = self.current_non_striker, self.current_striker
+                self.batter_idx.reverse()
 
             if self.is_fc:
                 # fc_day_balls_bowled_today is incremented per legal delivery
@@ -8223,7 +8313,7 @@ class Match:
         _s_stats = self.batsman_stats.get(_striker_name, {})
         _ns_stats = self.batsman_stats.get(_nonstriker_name, {})
         _bw_stats = self.bowler_stats.get(_bowler_name, {})
-        _bw_overs_display = _bw_stats.get("overs", 0) + (_bw_stats.get("balls_bowled", 0) % 6) / 10
+        _bw_overs_display = _bw_stats.get("overs", 0) + (_bw_stats.get("balls_bowled", 0) % self.balls_per_over) / 10
 
         _rain_info = self._pending_rain_info
         self._pending_rain_info = None
@@ -8255,7 +8345,7 @@ class Match:
             "match_format": self.fmt.name,
             "scheduled_overs": self.data.get("scheduled_overs"),
             # FC has no fielding-circle phases at all — no phase_name.
-            "phase_name": None if self.is_fc else self.fmt.get_phase(self.current_over).name,
+            "phase_name": None if self.is_fc else self.fmt.get_phase(self.current_over + (self.current_ball / 5 if self.is_hundred else 0)).name,
             "bowler_overs_remaining": self.bowler_manager.overs_remaining(_bowler_name),
             "bowling_eligibility": self.get_bowling_eligibility(),
             # FC has no bowling quota — no cap to report.
@@ -8360,13 +8450,14 @@ class Match:
                     # Check if bowler actually bowled
                     if stats["balls_bowled"] > 0 or stats["overs"] > 0:
                         # Calculate economy rate
-                        total_balls = stats["overs"] * 6 + (stats["balls_bowled"] % 6)
-                        economy = (stats["runs"] * 6) / total_balls if total_balls > 0 else 0
-                        overs_display = f"{stats['overs']}.{stats['balls_bowled'] % 6}" if stats['balls_bowled'] % 6 > 0 else str(stats['overs'])
+                        total_balls = stats["overs"] * self.balls_per_over + (stats["balls_bowled"] % self.balls_per_over)
+                        economy = (stats["runs"] * (100 if self.is_hundred else self.balls_per_over)) / total_balls if total_balls > 0 else 0
+                        overs_display = f"{stats['overs']}.{stats['balls_bowled'] % self.balls_per_over}" if stats['balls_bowled'] % self.balls_per_over > 0 else str(stats['overs'])
                         
                         bowlers.append({
                             "name": player_name,
-                            "overs": overs_display,
+                            "overs": str(total_balls) if self.is_hundred else overs_display,
+                            "balls": total_balls,
                             "maidens": stats["maidens"],
                             "runs": stats["runs"],
                             "wickets": stats["wickets"],
@@ -8391,9 +8482,9 @@ class Match:
         individual_runs = sum(stats["runs"] for stats in self.batsman_stats.values())
         extras = self.score - individual_runs
         
-        total_balls = self.current_over * 6 + self.current_ball
+        total_balls = self.current_over * self.balls_per_over + self.current_ball
         overs_display = f"{self.current_over}.{self.current_ball}" if self.current_ball > 0 else str(self.current_over)
-        run_rate = (self.score * 6) / total_balls if total_balls > 0 else 0
+        run_rate = (self.score * self.balls_per_over) / total_balls if total_balls > 0 else 0
 
         # Determine target_info based on innings
         target_info_value = None
@@ -8414,15 +8505,29 @@ class Match:
             "bowlers": bowlers,  # ← ADD THIS LINE
             "total_score": self.score,
             "wickets": self.wickets,
-            "overs": overs_display,
-            "run_rate": f"{run_rate:.2f}",
+            "overs": f"{total_balls}/{self.overs * 5} balls" if self.is_hundred else overs_display,
+            "legal_balls": total_balls,
+            "match_format": self.fmt.name,
+            "economy_unit": "Econ/100" if self.is_hundred else "Economy",
+            "run_rate": f"{run_rate / 5 if self.is_hundred else run_rate:.2f}",
             "extras": extras,
             "target_info": target_info_value
         }
     
     def _setup_super_over(self):
+        if self.is_hundred and not self.data.get("is_knockout", False):
+            self._set_outcome(result_text="Match Tied" + self._dls_suffix(), winner_is_home=None,
+                              match_status="tied", margin_type="tie", margin_value=None)
+            self._save_second_innings_stats()
+            card = self._generate_detailed_scorecard()
+            self.innings = 3
+            self._create_match_archive()
+            return {"match_over": True, "match_tied": True, "result": self.result,
+                    "scorecard_data": card, "final_score": self.score, "wickets": self.wickets}
         """Setup super over after a tie — returns team rosters for player selection"""
         self.super_over_phase = "awaiting_innings1_selection"
+        if self.is_hundred and self.super_over_round == 0:
+            self._super_over_next_first_batting = "home" if self.batting_team is self.home_xi else "away"
 
         # Freeze pitch wear from the main match — the pitch has physically
         # been through a full innings (or two); it doesn't reset just
@@ -8431,13 +8536,13 @@ class Match:
         # carry-over helpers below can read them regardless of which code
         # path reached this tie.
         self._save_second_innings_stats()
-        _so_total_balls = self.fmt.overs * 6
+        _so_total_balls = self.fmt.overs * self.balls_per_over
         self.super_over_pitch_wear = (
             min(1.0, self.innings_balls_bowled / _so_total_balls) if _so_total_balls else 0.0
         )
 
         scorecard_data = self._generate_detailed_scorecard()
-        scorecard_data["target_info"] = "Match Tied - Super Over Required!"
+        scorecard_data["target_info"] = "Match Tied - Super Five Required!" if self.is_hundred else "Match Tied - Super Over Required!"
 
         def _player_info(p):
             return {
@@ -8452,6 +8557,7 @@ class Match:
             "match_tied": True,
             "super_over_required": True,
             "scorecard_data": scorecard_data,
+            "next_first_batting_team": getattr(self, "_super_over_next_first_batting", None),
             "commentary": "MATCH TIED! Super Over Required to decide the winner!",
             "home_team": self.data["team_home"].split("_")[0],
             "away_team": self.data["team_away"].split("_")[0],
@@ -8753,6 +8859,20 @@ class Match:
         return eff
 
     def next_super_over_ball(self):
+        if not self.is_hundred:
+            return self._next_super_over_ball_impl()
+        with random.use_state(self.hundred_rng_state) as rng:
+            result = self._next_super_over_ball_impl()
+            self.hundred_rng_state = rng.getstate()
+        for key in ("commentary", "result"):
+            if isinstance(result.get(key), str):
+                result[key] = result[key].replace("Super Over", "Super Five")
+        if self.result:
+            self.result = self.result.replace("Super Over", "Super Five")
+        result["balls_per_over"] = 5
+        return result
+
+    def _next_super_over_ball_impl(self):
         """Process next ball in super over — returns rich data for modal UI"""
         # Re-entry guard: between innings the phase is "awaiting_*_selection"
         # and after the decision it is "complete", but super_over_ball and
@@ -8770,7 +8890,7 @@ class Match:
         team_key = "home" if self.super_over_batting_team is self.home_xi else "away"
         other_key = "away" if team_key == "home" else "home"
 
-        if self.super_over_ball >= 6 or self.super_over_wickets[team_key] >= 2:
+        if self.super_over_ball >= self.balls_per_over or self.super_over_wickets[team_key] >= 2:
             return self._end_super_over_innings()
 
         # Innings 2: end immediately if target was already reached on a previous ball
@@ -8801,7 +8921,7 @@ class Match:
             balls_faced=striker_so_stats["balls"],
             so_innings=self.super_over_innings,
             wickets_down=self.super_over_wickets[team_key],
-            balls_remaining=6 - self.super_over_ball,
+            balls_remaining=self.balls_per_over - self.super_over_ball,
             runs_needed=runs_needed,
             score_so_far=self.super_over_scores[team_key],
             history=self.super_over_ball_history,
@@ -8971,7 +9091,7 @@ class Match:
         if is_so_legal:
             self.super_over_ball += 1
 
-        over_complete = self.super_over_ball >= 6
+        over_complete = self.super_over_ball >= self.balls_per_over
         # Innings 2: end immediately when target is reached or exceeded
         target_reached = False
         if self.super_over_innings == 2:
@@ -9147,7 +9267,7 @@ class Match:
                 }
             else:
                 # Another tie — but cap at 5 super overs max
-                if self.super_over_round >= 5:
+                if not self.is_hundred and self.super_over_round >= 5:
                     # After 5 super overs still level, decide by total boundaries
                     # (fours + sixes) hit across ALL super overs — the classic
                     # count-back tie-breaker. Only a dead-level boundary count

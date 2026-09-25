@@ -59,6 +59,7 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     ("add_tournament_creation_token",
      _loader("migrations.add_tournament_creation_token")),
     ("add_tours", _loader("migrations.add_tours")),
+    ("add_hundred_metadata", _loader("migrations.add_hundred_metadata")),
     ("add_scheduled_overs", _loader("migrations.add_scheduled_overs")),
     # One in-flight match per fixture: tournament_fixtures.active_match_id.
     ("add_fixture_active_match",
@@ -182,6 +183,9 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # `python -m migrations.community_board --db <path> --apply`.
     # (add_support_messaging is no longer registered, so nothing recreates them.)
     ("community_board",          _loader("migrations.community_board", "run_on_boot")),
+    # users.guide_state — onboarding guide progress (page tours seen,
+    # new-user journey). NULL means nothing seen, so no backfill.
+    ("add_user_guide_state",     _loader("migrations.add_user_guide_state")),
 ]
 
 

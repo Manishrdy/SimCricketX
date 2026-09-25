@@ -9,7 +9,7 @@ from database import db
 from database.models import Tour, Team, Match, MatchScorecard, Player
 from engine.tournament_engine import TournamentEngine
 
-from engine.format_catalog import TOUR_FORMATS, FORMAT_LABELS
+from engine.format_catalog import TOUR_FORMATS, FORMAT_LABELS, squad_format
 FORMATS = TOUR_FORMATS
 
 
@@ -19,7 +19,7 @@ def team_format_availability(team):
     result = {}
     profiles = {p.format_type: p for p in team.profiles}
     for fmt in FORMATS:
-        profile = profiles.get(fmt)
+        profile = profiles.get(squad_format(fmt))
         players = list(profile.players) if profile else []
         reason = team_squad_readiness_error(team, fmt)
         result[fmt] = {'available': not reason, 'reason': reason or 'Squad ready.',
