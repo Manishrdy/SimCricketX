@@ -118,28 +118,6 @@
         </div>
     </div>
 
-    <div class="a-section">
-        <h3 class="a-section-title"><i class="fas fa-scroll"></i> Recent Admin Actions</h3>
-        <div class="a-table-wrap">
-            <table class="a-table a-table-pro">
-                <thead><tr><th class="sortable">Admin</th><th class="sortable">Action</th><th class="sortable">Target</th><th class="sortable" style="width:120px;">Time</th></tr></thead>
-                <tbody>
-                    {% for entry in audit_log[:15] %}
-                    <tr>
-                        <td class="a-cell-strong">{{ entry.admin_email }}</td>
-                        <td><span class="a-badge a-badge-info">{{ entry.action }}</span></td>
-                        <td class="a-cell-dim a-cell-trunc">{{ entry.target or '—' }}</td>
-                        <td class="a-cell-dim" data-sort="{{ entry.timestamp.isoformat() if entry.timestamp else '' }}">
-                            {% if entry.timestamp %}{{ entry.timestamp.strftime('%m/%d %H:%M') }}{% endif %}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="4"><div class="a-empty"><p>No actions recorded</p></div></td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
 </div>
 
 <script>

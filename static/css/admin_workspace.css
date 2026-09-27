@@ -1,0 +1,27 @@
+.workspace-tabs { display:flex; gap:.4rem; overflow-x:auto; border-bottom:1px solid var(--card-border); margin:1rem 0 1.5rem; }
+.workspace-tabs a { padding:.8rem 1rem; white-space:nowrap; color:var(--fg-secondary); text-decoration:none; border-bottom:3px solid transparent; }
+.workspace-tabs a.selected { color:var(--accent); border-color:var(--accent); font-weight:700; }
+.workspace-tabs a:focus-visible { outline:2px solid var(--accent); outline-offset:-3px; }
+.workspace-header, .workspace-header h1, .workspace-header p, .workspace-panel td { overflow-wrap:anywhere; }
+.workspace-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; margin:1rem 0; }
+.workspace-panel { min-width:0; }
+.workspace-panel .a-card-flat, .workspace-panel .a-section { margin-bottom:1.25rem; min-width:0; }
+.workspace-panel .a-table-wrap { max-width:100%; overflow-x:auto; }
+.workspace-panel .a-table { min-width:480px; }
+.workspace-agent { min-width:180px; max-width:350px; }
+.workspace-links, .workspace-badges, .workspace-filters { display:flex; align-items:center; flex-wrap:wrap; gap:.8rem; }
+.workspace-filters { margin:1.25rem 0; align-items:end; }
+.workspace-filters label, .workspace-action label { display:block; margin-bottom:.7rem; }
+.workspace-action .a-form-input { margin-top:.4rem; }
+.workspace-action button { margin-top:.5rem; }
+.workspace-danger { border:1px solid #c43b45; }
+.workspace-chart-row { display:grid; grid-template-columns:6rem minmax(0,1fr) 3rem; gap:1rem; align-items:center; margin:.75rem 0; }
+.workspace-chart-row meter { width:100%; height:1.5rem; }
+.workspace-panel .a-pagination { flex-wrap:wrap; }
+@media(max-width:700px) { .workspace-grid { grid-template-columns:1fr; } .workspace-header { align-items:flex-start; flex-direction:column; } .workspace-tabs a { padding:.75rem; } .workspace-filters label { width:100%; } }
+
+.workspace-panel .system-task-table { min-width: 860px; }
+.system-task-table th:nth-child(1) { width: 160px; }
+.system-task-table th:nth-child(2) { width: 200px; }
+.system-task-table th:nth-child(3) { width: 220px; }
+.workspace-panel .system-task-table td { overflow-wrap: normal; }

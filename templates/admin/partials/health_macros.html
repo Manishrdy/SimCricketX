@@ -1,0 +1,8 @@
+{% macro metric(label, value, icon, color, detail='') %}
+<div class="a-stat-card" style="--a-stat-accent:{{ color }}; --a-stat-accent-lt:color-mix(in srgb, {{ color }} 10%, transparent)">
+    <div class="a-stat-icon"><i class="fas fa-{{ icon }}" aria-hidden="true"></i></div>
+    <div class="a-stat-header"><div class="a-stat-icon-pill"><i class="fas fa-{{ icon }}" aria-hidden="true"></i></div><div class="a-stat-label">{{ label }}</div></div>
+    <div class="a-stat-value{% if value is none %} health-unavailable{% endif %}">{{ value if value is not none else 'Unavailable' }}</div>
+    {% if detail %}<div class="a-stat-sub">{{ detail }}</div>{% endif %}
+</div>
+{% endmacro %}
