@@ -7,6 +7,8 @@ from database.models import (
 from sqlalchemy import func as sa_func, or_ as sa_or
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
+from fractions import Fraction
+import hashlib
 import itertools
 import logging
 import json
@@ -1261,6 +1263,9 @@ class TournamentEngine:
         T20/ListA: Points (desc) -> Net Run Rate (desc) -> Wins (desc) ->
         runs scored (desc, deterministic).
 
+        Hundred: Points -> NRR -> head-to-head average points ->
+        wicket-taking strike rate -> simulated drawing of lots (ECB 16.9.3).
+
         First-Class (FC): Points (desc) -> Win % = won/played (desc) ->
         Wins (desc) -> runs scored (desc). NRR doesn't translate to
         variable-length Test innings/declarations, so FC never accumulates
@@ -1268,6 +1273,8 @@ class TournamentEngine:
         SQL since tournament team counts are always small.
         """
         tournament = db.session.get(Tournament, tournament_id)
+        if tournament and tournament.format_type == 'Hundred':
+            return self._get_hundred_standings(tournament)
         if tournament and tournament.format_type == 'FC':
             teams = TournamentTeam.query.filter_by(tournament_id=tournament_id).all()
             teams.sort(key=lambda t: (
@@ -1286,6 +1293,60 @@ class TournamentEngine:
             TournamentTeam.won.desc(),
             TournamentTeam.runs_scored.desc()  # Deterministic tie-breaker
         ).all()
+
+    def _get_hundred_standings(self, tournament):
+        """Apply ECB 16.9.3 without re-running head-to-head on reduced ties."""
+        teams = TournamentTeam.query.filter_by(tournament_id=tournament.id).all()
+        by_id = {team.team_id: team for team in teams}
+        head_points = dict.fromkeys(by_id, 0)
+        head_played = dict.fromkeys(by_id, 0)
+        balls = dict.fromkeys(by_id, 0)
+        wickets = dict.fromkeys(by_id, 0)
+        matches = Match.query.join(
+            TournamentFixture, TournamentFixture.match_id == Match.id
+        ).filter(
+            TournamentFixture.tournament_id == tournament.id,
+            TournamentFixture.stage == self.STAGE_LEAGUE,
+            TournamentFixture.status == 'Completed',
+            TournamentFixture.standings_applied.is_(True),
+        ).all()
+        for match in matches:
+            home, away = match.home_team_id, match.away_team_id
+            if home not in by_id or away not in by_id:
+                continue
+            # Use actual deliveries, never the all-out/DLS adjustments for NRR.
+            balls[home] += self.overs_to_balls(match.away_team_overs, unit=5)
+            balls[away] += self.overs_to_balls(match.home_team_overs, unit=5)
+            wickets[home] += match.away_team_wickets or 0
+            wickets[away] += match.home_team_wickets or 0
+            # The comparison pool is ALL teams on equal points, even if NRR
+            # already separates some of them (16.9.3(b)).
+            if by_id[home].points != by_id[away].points:
+                continue
+            for team_id in (home, away):
+                head_played[team_id] += 1
+                if self._is_no_result(match):
+                    head_points[team_id] += 2 * self.POINTS_NO_RESULT
+                elif match.winner_team_id == team_id:
+                    head_points[team_id] += 2 * self.POINTS_WIN
+                elif match.winner_team_id is None:
+                    head_points[team_id] += 2 * self.POINTS_TIE
+
+        def order(team):
+            team_id = team.team_id
+            average = Fraction(head_points[team_id], head_played[team_id] or 1)
+            strike_rate = (Fraction(balls[team_id], wickets[team_id])
+                           if wickets[team_id] else math.inf)
+            # Reproducible electronic lots from persisted tournament identity.
+            # Independent of performance, query order and process RNG; repeated
+            # reads and playoff seeding must never draw a different result.
+            lot = hashlib.sha256(
+                f'hundred-lots-v1:{tournament.id}:{tournament.created_at}:{team_id}'.encode()
+            ).digest()
+            return (-(team.points or 0), -(team.net_run_rate or 0),
+                    -average, strike_rate, lot)
+
+        return sorted(teams, key=order)
 
     def _ensure_team_stats(self, tournament_id: int, team_id: int):
         stats = TournamentTeam.query.filter_by(tournament_id=tournament_id, team_id=team_id).first()

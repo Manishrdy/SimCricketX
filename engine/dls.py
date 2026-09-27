@@ -14,14 +14,25 @@ The embedded table (engine/data/dls_resource_table.json) is the published
 D/L Standard Edition over-by-over reference table: for every combination of
 whole overs remaining (0-50) and wickets lost (0-9) it gives the percentage
 of a full 50-over innings' scoring resources that remain. A T20 innings is
-handled by the same table, exactly as in real DLS: it simply *starts* at
+handled by the same table in this simulation: it starts at
 R(20 overs, 0 wickets) = 56.6% and target maths uses resource ratios, so the
 scale cancels.
 
 Fractional overs (balls within an over) are linearly interpolated between
-adjacent whole-over rows. The official ball-by-ball table differs from
-linear interpolation by at most ~0.1 percentage points, which is well under
-one run in any realistic scenario — this is the documented simplification.
+adjacent whole-over rows. This is a D/L Standard Edition approximation,
+not an implementation of official professional DLS. No bound on target or
+par-score error relative to official DLS has been established. In particular,
+rounding can change a target or result even for small resource differences.
+
+Simulation limitation
+---------------------
+Hundred allocations are converted from legal balls to six-ball-equivalent
+overs before looking up resources. This unit conversion does not validate
+the resource model for The Hundred. Targets, abandonment par scores and
+rain-adjusted NRR may differ from official competition outcomes. The stored
+ECB-2026-men label identifies the playing-conditions baseline, not DLS
+certification. Exact agreement requires independent official reference
+examples; the local table/formula tests do not establish that agreement.
 
 Target rules (Standard Edition)
 -------------------------------
@@ -154,7 +165,7 @@ class ResourceLedger:
 def compute_target(team1_score: int, r1: float, r2: float,
                    g50: Optional[float] = None) -> int:
     """
-    DLS Standard Edition revised target for Team 2.
+    D/L Standard Edition approximate revised target for Team 2.
 
     team1_score : Team 1's final total
     r1, r2      : total resource percentages available to each team

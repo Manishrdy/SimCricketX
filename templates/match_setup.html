@@ -2073,7 +2073,7 @@
 
         const helpText = {
             'T20':   '20 overs per side. Max 4 overs per bowler.',
-            'Hundred': '100 balls per side. Five-ball sets; change ends every ten balls. Uses your T20 squad.',
+            'Hundred': '100 balls per side. Five-ball sets; change ends every ten balls. Uses your T20 squad. Rain targets use a D/L approximation; official DLS outcomes may differ.',
             'T10': '10 overs per side. Max 2 overs per bowler. Powerplay: overs 1–3.',
             'ListA': `${document.getElementById('scheduled-overs').value} overs per side. Max ${Number(document.getElementById('scheduled-overs').value) / 5} overs per bowler.`,
             'FC':    'Multi-day, up to 2 innings per side. No bowler over limit.',
@@ -2161,8 +2161,8 @@
         }
         const helpText = {
             'clear': 'No rain. Every over will be bowled.',
-            'passing_showers': '~25% chance of a short interruption. DLS revises targets if rain arrives.',
-            'rain_around': '~50% chance of rain. Overs may be lost and targets revised by DLS.',
+            'passing_showers': '~25% chance of a short interruption. A D/L approximation revises targets if rain arrives.',
+            'rain_around': '~50% chance of rain. Overs may be lost and targets revised by a D/L approximation.',
             'storm_warning': '~75% chance of heavy rain. Abandonment is a real possibility.',
         };
         weatherHelp.textContent = helpText[weatherSelect.value] || helpText['clear'];

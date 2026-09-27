@@ -65,7 +65,7 @@
         {% for t in tournaments %}
             {% set played = t.fixtures|selectattr('status', 'equalto', 'Completed')|list|length %}
             <a class="ch-competition ch-tournament" href="{{ url_for('tournament_dashboard', tournament_id=t.id) }}">
-                <div class="ch-card-top"><span class="ch-type">TOURNAMENT</span><span class="ch-status {% if t.status == 'Completed' %}is-completed{% endif %}"><span aria-hidden="true"></span>{{ t.status }}</span></div>
+                <div class="ch-card-top"><span class="ch-type">{{ 'CUSTOM HUNDRED COMPETITION' if t.format_type == 'Hundred' else 'TOURNAMENT' }}</span><span class="ch-status {% if t.status == 'Completed' %}is-completed{% endif %}"><span aria-hidden="true"></span>{{ t.status }}</span></div>
                 <h4>{{ t.name }}</h4>
                 <p class="ch-card-description">{{ t.participating_teams|length }} teams · {{ t.mode|replace('_', ' ')|title }}</p>
                 <div class="ch-tags"><span>{{ cricket_format_label(t.format_type, t.scheduled_overs) }}</span></div>
