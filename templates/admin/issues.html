@@ -18,8 +18,8 @@
         <p class="admin-page-subtitle">Automatic exception captures and GitHub sync status.</p>
     </div>
     <div class="admin-page-actions">
-        <a href="/admin/support" class="a-btn a-btn-secondary">
-            <i class="fas fa-comments"></i> Support Inbox
+        <a href="{{ url_for('admin_community') }}" class="a-btn a-btn-secondary">
+            <i class="fas fa-comments"></i> Community Reports
         </a>
         <button type="button" class="a-btn a-btn-secondary" onclick="syncWithGitHub(event)">
             <i class="fas fa-sync"></i> Sync with GitHub
@@ -100,63 +100,59 @@
     </div>
 </form>
 
-<div class="a-table-wrap">
-    <table class="a-table a-table-pro">
-        <thead>
-            <tr>
-                <th class="sortable" style="width:160px;">Type</th>
-                <th class="sortable">Message</th>
-                <th class="sortable" style="width:100px;">Severity</th>
-                <th class="sortable" style="width:100px;">Source</th>
-                <th class="sortable">User</th>
-                <th class="sortable" style="width:70px;text-align:right;">Count</th>
-                <th class="sortable" style="width:130px;">GitHub</th>
-                <th class="sortable" style="width:170px;">Last seen</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in exception_rows %}
-            <tr class="{% if row.resolved %}opacity-muted{% endif %}">
-                <td><a href="{{ url_for('admin_exception_detail', exc_id=row.id) }}"><code class="a-cell-mono">{{ row.exception_type }}</code></a></td>
-                <td class="a-cell-trunc">{{ (row.exception_message or '')[:140] }}</td>
-                <td><span class="a-tag a-tag-{{ row.severity }}">{{ row.severity }}</span></td>
-                <td class="a-cell-dim">{{ row.source }}</td>
-                <td class="a-cell-dim">{{ row.user_email or '—' }}</td>
-                <td class="a-cell-num" data-sort="{{ row.occurrence_count }}">{{ row.occurrence_count }}</td>
-                <td>
-                    {% if row.github_issue_number and row.github_issue_url %}
-                    <a href="{{ row.github_issue_url }}" target="_blank" rel="noopener">#{{ row.github_issue_number }}</a>
-                    {% elif row.github_sync_status == 'failed' %}
-                    <span style="color:#ef4444;">failed</span>
-                    {% else %}
-                    <span style="color:#6b7280;">{{ row.github_sync_status or '—' }}</span>
-                    {% endif %}
-                </td>
-                <td class="a-cell-dim" data-sort="{{ row.timestamp.isoformat() if row.timestamp else '' }}">{{ row.timestamp | localtime if row.timestamp else '—' }}</td>
-            </tr>
+{% if load_error %}
+<div class="a-alert a-alert-error" role="alert" style="display:block">{{ load_error }}</div>
+{% else %}
+<div class="issue-list">
+    {% for row in exception_rows %}
+    <article class="issue-card">
+        <div class="issue-card-heading">
+            <a class="issue-title" href="{{ url_for('admin_exception_detail', exc_id=row.id) }}">
+                #{{ row.id }} · {{ row.exception_type }}
+            </a>
+            <span class="a-tag a-tag-{{ row.severity }}">{{ row.severity }}</span>
+            <span class="a-tag">{{ 'Resolved' if row.resolved else 'Unresolved' }}</span>
+        </div>
+        <p class="issue-message">{{ row.exception_message or 'No message captured.' }}</p>
+        <div class="issue-meta">
+            <span>Source: {{ row.source }}</span>
+            <span>User: {{ row.user_email or 'anonymous' }}</span>
+            <span>Occurrences: {{ row.occurrence_count }}</span>
+            <span>Last seen: {{ row.last_seen_at | localtime if row.last_seen_at else '—' }}</span>
+        </div>
+        <div class="issue-card-actions">
+            <a href="{{ url_for('admin_exception_detail', exc_id=row.id) }}" class="a-btn a-btn-primary a-btn-sm"
+               aria-label="View full details for exception {{ row.id }}">
+                View full details <i class="fas fa-arrow-right"></i>
+            </a>
+            {% if row.github_issue_number and row.github_issue_url %}
+            <a href="{{ row.github_issue_url }}" class="a-btn a-btn-secondary a-btn-sm" target="_blank" rel="noopener noreferrer">
+                GitHub #{{ row.github_issue_number }} <i class="fas fa-external-link-alt"></i>
+            </a>
             {% else %}
-            <tr><td colspan="8"><div class="a-empty"><i class="fas fa-check-circle"></i><p>No exceptions logged</p></div></td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
+            <span class="issue-meta">GitHub: {{ row.github_sync_status or 'Not linked' }}</span>
+            {% endif %}
+        </div>
+    </article>
+    {% else %}
+    <div class="a-empty"><i class="fas fa-search"></i><p>No exceptions match these filters.</p></div>
+    {% endfor %}
 </div>
+{% endif %}
 
 {% if page_count > 1 %}
 <div class="a-pagination" style="justify-content:flex-start;">
     <span style="border:none;background:none;color:var(--fg-secondary);">Page {{ page }} of {{ page_count }} &middot; {{ total_rows }} rows</span>
     {% if page > 1 %}
-    <a href="?page={{ page - 1 }}&q={{ filters.q }}&severity={{ filters.severity }}&source={{ filters.source }}&resolved={{ filters.resolved }}">Prev</a>
+    <a href="{{ url_for('admin_issues', page=page - 1, page_size=page_size, q=filters.q, severity=filters.severity, source=filters.source, resolved=filters.resolved) }}">Prev</a>
     {% endif %}
     {% if page < page_count %}
-    <a href="?page={{ page + 1 }}&q={{ filters.q }}&severity={{ filters.severity }}&source={{ filters.source }}&resolved={{ filters.resolved }}">Next</a>
+    <a href="{{ url_for('admin_issues', page=page + 1, page_size=page_size, q=filters.q, severity=filters.severity, source=filters.source, resolved=filters.resolved) }}">Next</a>
     {% endif %}
 </div>
 {% endif %}
 
-<style>
-.opacity-muted { opacity: 0.55; }
-[data-theme="dark"] .opacity-muted { opacity: 0.4; }
-</style>
+
 
 <script>
 function syncWithGitHub(event) {

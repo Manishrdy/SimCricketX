@@ -53,7 +53,7 @@ def register_admin_issue_routes(app, *, db):
                     ExceptionLog.user_email.ilike(like),
                 )
             )
-        return q.order_by(ExceptionLog.timestamp.desc())
+        return q.order_by(ExceptionLog.last_seen_at.desc(), ExceptionLog.id.desc())
 
     def _compute_stats():
         total = db.session.query(db.func.count(ExceptionLog.id)).scalar() or 0
@@ -95,6 +95,7 @@ def register_admin_issue_routes(app, *, db):
             log_exception(source="backend", context={"scope": "admin_exception_stats"})
             stats = {"exceptions": {"total": 0, "unresolved": 0, "resolved": 0, "failed_sync": 0}, "generated_at": None}
 
+        load_error = None
         exception_rows = []
         total_rows = 0
         try:
@@ -102,6 +103,8 @@ def register_admin_issue_routes(app, *, db):
             total_rows = q.count()
             exception_rows = q.offset((page - 1) * page_size).limit(page_size).all()
         except Exception:
+            db.session.rollback()
+            load_error = "Exceptions could not be loaded. Please retry; existing records have not been removed."
             log_exception(source="backend", context={"scope": "admin_exception_listing"})
 
         page_count = max(1, (total_rows + page_size - 1) // page_size)
@@ -109,6 +112,7 @@ def register_admin_issue_routes(app, *, db):
             "admin/issues.html",
             stats=stats,
             exception_rows=exception_rows,
+            load_error=load_error,
             page=page,
             page_size=page_size,
             page_count=page_count,

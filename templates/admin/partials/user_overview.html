@@ -1,0 +1,21 @@
+{% from 'admin/partials/health_macros.html' import metric %}
+<div class="a-stat-group"><div class="a-stat-group-label">Account totals</div><div class="a-stats-grid">
+    {% for key,label,icon,color in [('teams','Teams','layer-group','#8b5cf6'),('players','Players','users','#6366f1'),('matches','Matches','baseball-ball','#3b82f6'),('tournaments','Tournaments','trophy','#f59e0b')] %}
+    {{ metric(label,data.counts[key],icon,color) }}
+    {% endfor %}
+</div></div>
+<div class="user-grid">
+    <section class="a-section"><h2 class="a-section-title"><i class="fas fa-id-card" aria-hidden="true"></i> Account Summary</h2><div class="a-card-flat">
+        <dl class="user-details">
+            <div><dt>Display name</dt><dd>{{ user.display_name or 'Not set' }}</dd></div>
+            <div><dt>Email address</dt><dd>{{ user.id }}</dd></div>
+            <div><dt>Created</dt><dd>{{ user.created_at|localtime if user.created_at else 'Unknown' }}</dd></div>
+            <div><dt>Last login</dt><dd>{{ user.last_login|localtime if user.last_login else 'Never recorded' }}</dd></div>
+            <div><dt>Active sessions</dt><dd>{{ data.active_sessions }}</dd></div>
+        </dl>
+    </div></section>
+    <section class="a-section"><h2 class="a-section-title"><i class="fas fa-bolt" aria-hidden="true"></i> Manage This Account</h2><div class="a-card-flat user-shortcuts">
+        <a href="{{ url_for('admin_user_detail',user_email=user.id,tab='security') }}"><span class="user-shortcut-icon"><i class="fas fa-shield-alt" aria-hidden="true"></i></span><span><strong>Security &amp; sessions</strong><small>Review access restrictions and manage sessions</small></span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+        <a href="{{ url_for('admin_user_detail',user_email=user.id,tab='actions') }}"><span class="user-shortcut-icon"><i class="fas fa-sliders-h" aria-hidden="true"></i></span><span><strong>Account actions</strong><small>Update credentials, permissions and account data</small></span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+    </div></section>
+</div>

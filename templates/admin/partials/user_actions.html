@@ -1,0 +1,49 @@
+{% macro action(endpoint,label,confirm='',danger=false,redirect='',double=false) %}
+<form method="post" action="{{ url_for(endpoint,user_email=user.id) }}" class="workspace-action" {% if confirm %}data-confirm="{{ confirm }}"{% endif %} {% if double %}data-confirm-final="This cannot be undone. Confirm permanent deletion."{% endif %} {% if redirect %}data-redirect="{{ redirect }}"{% endif %}>
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="a-btn {{ 'a-btn-danger' if danger else 'a-btn-secondary' }} a-btn-sm">{{ label }}</button></form>
+{% endmacro %}
+<section class="a-section">
+    <h2 class="a-section-title"><i class="fas fa-key" aria-hidden="true"></i> Credentials</h2>
+    {% if not user.is_admin %}
+    <div class="user-grid">
+        <div class="a-card-flat user-action-card"><h3>Change email address</h3><p class="user-description">Update the email used to sign in to this account.</p>
+            <form class="workspace-action" action="{{ url_for('admin_change_email',user_email=user.id) }}" method="post" data-new-email-url="{{ url_for('admin_user_detail',user_email='__EMAIL__',tab='actions') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label for="user-new-email">New email<input id="user-new-email" class="a-form-input" name="new_email" type="email" autocomplete="off" placeholder="name@example.com" required></label><button class="a-btn a-btn-primary a-btn-sm">Change email</button>
+            </form>
+        </div>
+        <div class="a-card-flat user-action-card"><h3>Reset password</h3><p class="user-description" id="password-help">Minimum 8 characters, including uppercase, lowercase, and a digit.</p>
+            <form class="workspace-action" action="{{ url_for('admin_reset_password',user_email=user.id) }}" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label for="user-new-password">New password<input id="user-new-password" class="a-form-input" name="new_password" type="password" minlength="8" autocomplete="new-password" aria-describedby="password-help" required></label><button class="a-btn a-btn-primary a-btn-sm">Reset password</button>
+            </form>
+        </div>
+    </div>
+    <div class="a-card-flat user-action-row"><div><h3>Require a password change</h3><p class="user-description">Ask the user to choose a new password when they next sign in.</p></div>{{ action('admin_force_password_reset','Require password change','Require this user to change their password?') }}</div>
+    {% else %}<div class="a-card-flat user-restriction"><i class="fas fa-lock" aria-hidden="true"></i><p>Admin email and password changes are restricted in this panel.</p></div>{% endif %}
+</section>
+<section class="a-section">
+    <h2 class="a-section-title"><i class="fas fa-user-shield" aria-hidden="true"></i> Access &amp; Permissions</h2>
+    <div class="user-grid">
+        <div class="a-card-flat user-action-card"><h3>Account access</h3>
+            {% if not user.is_admin %}
+                {% if user.is_banned %}<p class="user-description">Remove the ban applied to this account.</p>{{ action('admin_unban_user','Unban user','Lift this user’s ban?') }}
+                {% else %}<p class="user-description">Restrict access and revoke the user’s sessions.</p><form class="workspace-action" action="{{ url_for('admin_ban_user',user_email=user.id) }}" method="post" data-confirm="Ban this user and revoke their sessions?">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label for="user-ban-reason">Ban reason<input id="user-ban-reason" class="a-form-input" name="reason" placeholder="Reason for restricting access"></label><label for="user-ban-duration">Duration in days<input id="user-ban-duration" class="a-form-input" type="number" name="duration" min="1" aria-describedby="ban-help"></label><p class="user-description" id="ban-help">Leave blank for a permanent ban.</p><button class="a-btn a-btn-danger a-btn-sm">Ban user</button>
+                </form>{% endif %}
+            {% else %}<p class="user-description">Admin accounts cannot be banned from this panel.</p>{% endif %}
+            {% if locked %}<div class="user-action-divider"><p class="user-description">This account is currently locked.</p>{{ action('admin_unlock_user','Unlock account','Clear this account’s lockout?') }}</div>{% endif %}
+        </div>
+        <div class="a-card-flat user-action-card"><h3>Administrator role</h3><p class="user-description">Current role: <span class="a-badge {{ 'a-badge-admin' if user.is_admin else 'a-badge-user' }}">{{ 'Admin' if user.is_admin else 'User' }}</span></p>
+            {% if user.id != current_user.id %}<p class="user-description">Administrators can manage users and system settings.</p>{{ action('admin_toggle_admin','Demote to user' if user.is_admin else 'Promote to admin','Change this user’s administrator role?') }}{% else %}<p class="user-description">You cannot change your own administrator role.</p>{% endif %}
+        </div>
+    </div>
+</section>
+<section class="a-section"><h2 class="a-section-title"><i class="fas fa-life-ring" aria-hidden="true"></i> Support &amp; Data</h2><div class="user-grid">
+    <div class="a-card-flat user-action-card"><h3>Export user data</h3><p class="user-description">Download a copy of the data associated with this account.</p><a class="a-btn a-btn-secondary a-btn-sm" href="{{ url_for('admin_export_user',user_email=user.id) }}"><i class="fas fa-download" aria-hidden="true"></i> Export user data</a></div>
+    <div class="a-card-flat user-action-card"><h3>Impersonate user</h3>{% if not user.is_admin %}<p class="user-description">Sign in as this user for support. Their existing sessions will be ended.</p>{{ action('admin_impersonate','Impersonate user','Sign in as this user? Their existing sessions will be ended.') }}{% else %}<p class="user-description">Admin accounts cannot be impersonated.</p>{% endif %}</div>
+</div></section>
+{% if not user.is_admin and user.id != current_user.id %}
+<section class="a-section"><h2 class="a-section-title"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Destructive Actions</h2><div class="a-card-flat user-danger-zone">
+    <div class="user-action-row"><div><h3>Wipe user data</h3><p class="user-description">Permanently delete teams, matches and tournaments while keeping the account.</p></div>{{ action('admin_wipe_user_data','Wipe user data','Delete all teams, matches, and tournaments while keeping this account?',true,double=true) }}</div>
+    <div class="user-action-row"><div><h3>Delete account</h3><p class="user-description">Permanently delete this account and its associated data.</p></div>{{ action('admin_delete_user','Delete account','Permanently delete this account and its data?',true,url_for('admin_users'),true) }}</div>
+</div></section>
+{% endif %}

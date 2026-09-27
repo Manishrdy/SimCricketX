@@ -47,7 +47,7 @@ def _import_all_models():
         Team, Player, Match, MatchScorecard, MatchDiagnosticEvent,
         Tournament, TournamentTeam, TournamentFixture,
         MatchPartnership, TournamentPlayerStatsCache,
-        AdminAuditLog, FailedLoginAttempt, BlockedIP,
+        FailedLoginAttempt, BlockedIP,
         ActiveSession, SiteCounter, LoginHistory, IPWhitelistEntry,
         UserGroundConfig, AnnouncementBanner, UserBannerDismissal,
         AuthEventLog, ExceptionLog, IssueWebhookEvent,

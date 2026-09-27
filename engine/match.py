@@ -34,6 +34,7 @@ from engine.fc_delivery import resolve_delivery
 from engine import ground_config as ground_config_engine
 from engine.short_bowler_manager import ShortBowlerManager
 from engine.hundred_bowler_manager import HundredBowlerManager
+from engine.hundred_rules import league_position_decision
 from engine.toss import correct_decision, innings_teams
 from utils.exception_tracker import log_exception
 
@@ -1515,7 +1516,8 @@ class Match:
         return {"rule_version": "ECB-2026-men", "scheduled_balls": 100, "balls_per_set": 5,
                 "innings_limits": self.hundred_innings_limits, "legal_balls": [balls1, balls2],
                 "rain_events": self.rain_events_log, "target": self.target,
-                "nrr": sides, "rain_method": "D/L approximation"}
+                "nrr": sides, "rain_method": "D/L approximation",
+                "knockout": self.data.get("hundred_knockout")}
 
     def _create_match_archive(self):
         """Create complete match archive when match ends"""
@@ -4667,6 +4669,20 @@ class Match:
             "rain_affected": True,
         }
 
+    def _resolve_hundred_abandonment(self):
+        """Resolve terminal rain stoppages without replacing a D/L winner."""
+        if (not self.is_hundred or not self.data.get("is_knockout")
+                or self.data.get("hundred_repeat_super_fives") is True
+                or self.winner_is_home is not None):
+            return
+        decision = league_position_decision(
+            self.data.get("hundred_knockout"), self._get_team_name(self.home_xi),
+            self._get_team_name(self.away_xi), "after abandonment")
+        if decision is not None:
+            winner_is_home, text = decision
+            self._set_outcome(result_text=text, winner_is_home=winner_is_home,
+                              match_status=self.match_status, margin_type="league_pos", margin_value=None)
+
     def _finalize_no_result(self, lines):
         """Rain has washed the match out before a result was possible."""
         washed_out_in_first_innings = (self.innings == 1)
@@ -4680,12 +4696,13 @@ class Match:
         else:
             self._save_second_innings_stats()
         scorecard_data = self._generate_detailed_scorecard()
-        scorecard_data["target_info"] = "Match abandoned due to rain — No Result"
         self._set_outcome(
             result_text="Match abandoned due to rain. No result.",
             winner_is_home=None, match_status='no_result',
             margin_type=None, margin_value=None,
         )
+        self._resolve_hundred_abandonment()
+        scorecard_data["target_info"] = self.result
         self.innings = 3
         self._create_match_archive()
         if washed_out_in_first_innings:
@@ -4727,6 +4744,7 @@ class Match:
                 winner_is_home=(self.bowling_team is self.home_xi),
                 match_status='completed', margin_type='runs', margin_value=margin,
             )
+        self._resolve_hundred_abandonment()
         scorecard_data = self._generate_detailed_scorecard()
         scorecard_data["target_info"] = self.result
         self.innings = 3
@@ -8567,6 +8585,9 @@ class Match:
 
     def start_super_over(self, first_batting_team, batsmen_names=None, bowler_name=None):
         """Start the super over with user-chosen or auto-selected players"""
+        if (self.is_hundred and self.super_over_round >= 2
+                and self.data.get("hundred_repeat_super_fives") is not True):
+            return {"error": "The Hundred permits at most two Super Fives."}
         # Re-entry guard: a duplicate POST would increment super_over_round and
         # reset the round's scores mid-flight. Only valid while awaiting the
         # innings-1 selection (set by _setup_super_over / a tied-again round).
@@ -8717,6 +8738,7 @@ class Match:
     def _init_super_over_innings_state(self):
         """Initialize/reset super over innings state"""
         self.super_over_ball = 0
+        self.super_five_free_hit_active = False
         # This Super Over innings' own delivery-by-delivery history — feeds
         # the micro-GSME momentum layer. Deliberately NOT the main match's
         # ball_history: momentum should reflect this shootout, not the
@@ -8930,6 +8952,17 @@ class Match:
             pressure_engine=self.pressure_engine,
             ground_config_override=self.ground_config,
         )
+        # Enforce protection before history, commentary or scorekeeping sees
+        # the outcome. Older Hundred checkpoints have no dedicated flag.
+        was_free_hit = self.is_hundred and getattr(self, "super_five_free_hit_active", False)
+        if was_free_hit:
+            outcome["free_hit"] = True
+            if outcome.get("batter_out") and outcome.get("wicket_type") != "Run Out":
+                outcome["batter_out"] = False
+                outcome["wicket_type"] = None
+                outcome["type"] = "extra" if outcome.get("is_extra") else "run"
+                outcome.pop("fielder_name", None)
+                outcome["description"] = "Free hit! Batter survives."
         self.super_over_ball_history.append(make_ball_event(outcome))
 
         runs, wicket, extra = outcome["runs"], outcome["batter_out"], outcome["is_extra"]
@@ -8971,6 +9004,9 @@ class Match:
                 commentary_line = f"{commentary_prefix}{outcome.get('description', '')}"
         else:
             commentary_line = f"{commentary_prefix}{outcome.get('description', '')}"
+
+        if was_free_hit:
+            commentary_line = "Free hit! " + commentary_line
 
         if wicket:
             self.super_over_wickets[team_key] += 1
@@ -9091,6 +9127,12 @@ class Match:
         if is_so_legal:
             self.super_over_ball += 1
 
+        if self.is_hundred:
+            if extra and extra_type == "No Ball":
+                self.super_five_free_hit_active = True
+            elif is_so_legal:
+                self.super_five_free_hit_active = False
+
         over_complete = self.super_over_ball >= self.balls_per_over
         # Innings 2: end immediately when target is reached or exceeded
         target_reached = False
@@ -9109,6 +9151,7 @@ class Match:
 
         return {
             "super_over_ball_complete": True,
+            **({"free_hit": was_free_hit} if self.is_hundred else {}),
             "wicket": wicket,
             "runs": runs,
             "commentary": commentary_line,
@@ -9128,6 +9171,7 @@ class Match:
             "bowler_wickets": self.super_over_bowler_wickets,
             "bowler_overs": f"0.{self.super_over_ball}",
             "ball_data": {
+                **({"free_hit": was_free_hit} if self.is_hundred else {}),
                 "runs": runs,
                 "batter_out": wicket,
                 "extra_type": extra_type if extra else None,
@@ -9170,6 +9214,18 @@ class Match:
     def _end_super_over_innings(self):
         """Handle end of super over innings"""
         team_key = "home" if self.super_over_batting_team is self.home_xi else "away"
+
+        league_tiebreak = (self.is_hundred and self.super_over_innings == 2
+                          and self.data.get("hundred_repeat_super_fives") is not True
+                          and self.super_over_round >= 2
+                          and self.super_over_scores["home"] == self.super_over_scores["away"])
+        if league_tiebreak:
+            decision = league_position_decision(
+                self.data.get("hundred_knockout"), self._get_team_name(self.home_xi),
+                self._get_team_name(self.away_xi), "after two tied Super Fives")
+            if decision is None:
+                # Do not guess a winner or accumulate the innings twice on retry.
+                return {"error": "League positions are required to resolve two tied Super Fives."}
 
         # Save innings 1 scorecard before swapping
         innings_scorecard = self._get_super_over_innings_scorecard()
@@ -9230,18 +9286,24 @@ class Match:
             home_name = self.data["team_home"].split("_")[0]
             away_name = self.data["team_away"].split("_")[0]
 
-            if home_score != away_score:
-                if home_score > away_score:
+            if home_score != away_score or league_tiebreak:
+                if league_tiebreak:
+                    winner_is_home, result = decision
+                    margin = None
+                elif home_score > away_score:
                     winner = home_name
                     margin = home_score - away_score
+                    winner_is_home = True
                 else:
                     winner = away_name
                     margin = away_score - home_score
+                    winner_is_home = False
 
-                result = f"{winner} won by Super Over"
+                if not league_tiebreak:
+                    result = f"{winner} won by Super Over"
                 self._set_outcome(
-                    result_text=result, winner_is_home=(winner == home_name),
-                    match_status='completed', margin_type='runs', margin_value=margin,
+                    result_text=result, winner_is_home=winner_is_home,
+                    match_status='completed', margin_type='league_pos' if league_tiebreak else 'runs', margin_value=margin,
                 )
                 self.innings = 5
                 self.super_over_phase = "complete"

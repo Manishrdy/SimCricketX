@@ -1,0 +1,47 @@
+/* User workspaces share the dashboard's admin components and theme tokens. */
+.user-workspace { min-width: 0; }
+.user-profile { display: flex; align-items: center; gap: 1rem; }
+.user-avatar { width: 58px; height: 58px; flex-shrink: 0; display: grid; place-items: center; border-radius: var(--a-r-lg); background: var(--accent-light); color: var(--accent); font-size: 1.5rem; font-weight: 700; }
+.user-identity { min-width: 0; }
+.user-identity h2 { margin: 0 0 .25rem; font-size: 1.15rem; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.user-identity p { margin: 0 0 .65rem; color: var(--fg-secondary); font-size: .8rem; overflow-wrap: anywhere; }
+.user-badges { display: flex; flex-wrap: wrap; gap: .4rem; }
+.user-profile-meta { display: flex; flex-direction: column; gap: .35rem; margin-left: auto; padding-left: 1rem; text-align: right; font-size: .74rem; color: var(--fg-secondary); }
+.user-profile-meta strong { color: var(--fg); font-size: .82rem; font-weight: 600; }
+.user-tabs a { display: flex; align-items: center; gap: .5rem; font-size: .82rem; }
+.user-tabs i { font-size: .75rem; }
+.user-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.user-grid > * { min-width: 0; }
+.user-details { margin: 0; font-size: .82rem; }
+.user-details > div { display: flex; justify-content: space-between; gap: 1rem; padding: .7rem 0; border-bottom: 1px solid var(--card-border); }
+.user-details > div:first-child { padding-top: 0; }
+.user-details > div:last-child { border-bottom: 0; }
+.user-details dt { color: var(--fg-secondary); flex-shrink: 0; }
+.user-details dd { margin: 0; text-align: right; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.user-shortcuts a { display: flex; align-items: center; gap: .85rem; padding: .8rem 0; color: var(--fg); text-decoration: none; }
+.user-shortcuts a + a { border-top: 1px solid var(--card-border); }
+.user-shortcuts strong { display: block; font-size: .85rem; }
+.user-shortcuts small { display: block; margin-top: .35rem; color: var(--fg-secondary); font-size: .75rem; line-height: 1.5; }
+.user-shortcuts a > i:last-child { margin-left: auto; color: var(--accent); font-size: .75rem; }
+.user-shortcut-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--a-r-md); background: var(--accent-light); color: var(--accent); flex-shrink: 0; }
+.user-shortcuts a:hover strong { color: var(--accent); }
+.user-workspace a:focus-visible, .user-workspace button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.user-description { color: var(--fg-secondary); font-size: .78rem; line-height: 1.6; margin: 0 0 .85rem; }
+.user-workspace h3 { margin: 0 0 .4rem; font-size: .9rem; font-weight: 650; }
+.user-workspace .workspace-action label { font-size: .78rem; font-weight: 600; }
+.user-workspace .workspace-action button { margin-top: .15rem; }
+.user-workspace .workspace-action-feedback { font-size: .78rem; line-height: 1.5; margin-top: .7rem; }
+.user-workspace .user-action-card { margin-bottom: 0; }
+.user-action-row { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; }
+.user-action-row > .workspace-action { flex-shrink: 0; max-width: 100%; }
+.user-action-row .user-description { margin-bottom: 0; }
+.user-grid + .user-action-row { margin-top: 1rem; }
+.user-action-divider { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--card-border); }
+.user-restriction { display: flex; align-items: center; gap: .75rem; color: var(--fg-secondary); font-size: .8rem; }
+.user-restriction p { margin: 0; }
+.user-danger-zone { border-color: color-mix(in srgb, var(--a-c-security) 45%, var(--card-border)); }
+.user-danger-zone .user-action-row + .user-action-row { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--card-border); }
+.user-workspace .user-session-table { min-width: 680px; }
+.user-session-table .workspace-agent { max-width: 320px; font-size: .75rem; }
+@media (max-width: 850px) { .user-profile { flex-wrap: wrap; } .user-profile-meta { flex-basis: 100%; margin: 0; padding: .75rem 0 0; text-align: left; border-top: 1px solid var(--card-border); } .user-grid { grid-template-columns: minmax(0, 1fr); } .user-action-row { flex-direction: column; align-items: flex-start; gap: .8rem; } }
+@media (max-width: 480px) { .user-avatar { width: 42px; height: 42px; font-size: 1.15rem; } .user-identity { flex: 1; } .user-details > div { flex-direction: column; gap: .35rem; } .user-details dd { text-align: left; } .user-tabs a { gap: .3rem; padding: .75rem .55rem; font-size: .75rem; } }
