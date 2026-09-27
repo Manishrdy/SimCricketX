@@ -1,0 +1,19 @@
+/* Health uses the dashboard's shared admin components; only content-specific rules live here. */
+.health-updated { font-size: .72rem; color: var(--fg-secondary); }
+.health-workspace .a-section { min-width: 0; }
+.health-workspace .a-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.health-workspace .health-unavailable { font-size: 1.15rem; }
+.health-note { margin: 0 0 .8rem; color: var(--fg-secondary); font-size: .78rem; line-height: 1.6; }
+.health-note:last-child { margin-bottom: 0; }
+.health-note i { margin-right: .3rem; }
+.health-details { margin: 0; }
+.health-detail-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem .8rem; padding: .45rem 0; font-size: .82rem; }
+.health-detail-row + .health-detail-row { border-top: 1px solid var(--card-border); }
+.health-detail-row dt, .health-detail-row > span:not(.a-badge) { color: var(--fg-secondary); }
+.health-detail-row dd { margin: 0; font-weight: 600; }
+.health-quick-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
+.health-meter { display: block; width: 100%; height: 14px; margin: .5rem 0; accent-color: var(--a-c-database); }
+.health-meter::-webkit-meter-bar { background: var(--bg-secondary); border: 0; border-radius: 8px; }
+.health-meter::-webkit-meter-optimum-value { background: var(--a-c-database); border-radius: 8px; }
+.health-meter::-moz-meter-bar { background: var(--a-c-database); }
+@media (max-width: 700px) { .health-workspace .a-grid-2 { grid-template-columns: minmax(0, 1fr); } }

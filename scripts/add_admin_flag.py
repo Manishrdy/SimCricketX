@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Migration Script: Add is_admin flag and admin_audit_log table
+Migration Script: Add is_admin flag
 Sets the first registered user (or admin@projectx.com) as admin if no admin exists.
 """
 
@@ -51,29 +51,6 @@ def add_admin_flag_migration():
                     "CREATE INDEX IF NOT EXISTS ix_users_is_admin ON users (is_admin)"
                 ))
                 conn.commit()
-
-        # --- admin_audit_log table ---
-        if table_exists('admin_audit_log'):
-            logger.info("Table 'admin_audit_log' already exists")
-        else:
-            logger.info("Creating 'admin_audit_log' table...")
-            with db.engine.connect() as conn:
-                conn.execute(text("""
-                    CREATE TABLE admin_audit_log (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        admin_email VARCHAR(120) NOT NULL,
-                        action VARCHAR(50) NOT NULL,
-                        target VARCHAR(200),
-                        details TEXT,
-                        ip_address VARCHAR(50),
-                        timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-                    )
-                """))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_audit_timestamp ON admin_audit_log (timestamp)"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_audit_admin ON admin_audit_log (admin_email)"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_audit_admin_action ON admin_audit_log (admin_email, action)"))
-                conn.commit()
-            logger.info("Created 'admin_audit_log' table")
 
         # --- Ensure at least one admin exists ---
         admin_count = db.session.query(User).filter_by(is_admin=True).count()

@@ -1,0 +1,32 @@
+{% macro started(value) %}<span class="a-badge {{ 'a-badge-success' if value is sameas true else ('a-badge-warning' if value is sameas false else 'a-badge-neutral') }}">{{ 'Started in this process' if value is sameas true else ('Not started in this process' if value is sameas false else 'Unavailable') }}</span>{% endmacro %}
+<p class="health-note"><i class="fas fa-info-circle" aria-hidden="true"></i> Scheduler state is local to this process. Started does not mean a job completed successfully.</p>
+<div class="a-grid-2">
+    <section class="a-section">
+        <h2 class="a-section-title"><i class="fas fa-archive" aria-hidden="true"></i> Database Backup</h2>
+        <div class="a-card-flat">
+            <div class="health-detail-row"><strong>Every {{ data.backup_hours }} hours</strong>{{ started(data.backup_started) }}</div>
+            <dl class="health-details"><div class="health-detail-row"><dt>Latest saved backup</dt><dd>{% if data.backup is none %}Unavailable{% elif data.backup.timestamp %}{{ data.backup.timestamp|localtime }}{% else %}Not recorded{% endif %}</dd></div></dl>
+        </div>
+    </section>
+    <section class="a-section">
+        <h2 class="a-section-title"><i class="fas fa-broom" aria-hidden="true"></i> Match Cleanup</h2>
+        <div class="a-card-flat">
+            <div class="health-detail-row"><strong>Every {{ data.cleanup_hours }} hours</strong>{{ started(data.cleanup_started) }}</div>
+            <dl class="health-details"><div class="health-detail-row"><dt>Last recorded cleanup</dt><dd>{{ data.cleanup_last_run|localtime if data.cleanup_last_run else 'Not recorded' }}</dd></div></dl>
+        </div>
+    </section>
+    <section class="a-section">
+        <h2 class="a-section-title"><i class="fas fa-history" aria-hidden="true"></i> Backup Retention</h2>
+        <div class="a-card-flat">
+            <div class="health-detail-row"><strong>Older than {{ data.retention_days }} days</strong><span class="a-badge a-badge-neutral">Runs during backup</span></div>
+            <p class="health-note">Remove backups older than {{ data.retention_days }} days. No independent run timestamp.</p>
+        </div>
+    </section>
+    <section class="a-section">
+        <h2 class="a-section-title"><i class="fas fa-desktop" aria-hidden="true"></i> Stale-session Cleanup</h2>
+        <div class="a-card-flat">
+            <div class="health-detail-row"><strong>Inactive for more than {{ data.stale_days }} days</strong><span class="a-badge a-badge-neutral">Manual</span></div>
+            <a class="a-btn a-btn-secondary a-btn-sm" href="{{ url_for('admin_sessions') }}"><i class="fas fa-desktop" aria-hidden="true"></i> Manage sessions</a>
+        </div>
+    </section>
+</div>

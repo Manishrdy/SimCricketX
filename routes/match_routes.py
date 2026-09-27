@@ -2575,8 +2575,6 @@ def register_match_routes(
         
 
 
-    # Note: Database backup endpoint has been moved to admin routes section
-    # See /admin/backup-database route above with admin_required decorator
 
 
 

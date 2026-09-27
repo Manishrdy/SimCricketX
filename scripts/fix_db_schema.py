@@ -28,7 +28,7 @@ def ensure_schema(engine, db_obj=None):
 
     # ── Ensure all tables exist before running table-specific DDL/backfills ──
     all_required_tables = (
-        "tournament_player_stats_cache", "admin_audit_log",
+        "tournament_player_stats_cache",
         "match_partnerships", "failed_login_attempts",
         "blocked_ips", "active_sessions", "site_counters",
         "login_history", "ip_whitelist", "announcement_banner",
@@ -39,7 +39,7 @@ def ensure_schema(engine, db_obj=None):
     if missing and db_obj is not None:
         # Import all models so SQLAlchemy knows about them
         from database.models import (  # noqa: F401
-            TournamentPlayerStatsCache, AdminAuditLog, MatchPartnership,
+            TournamentPlayerStatsCache, MatchPartnership,
             FailedLoginAttempt, BlockedIP, ActiveSession, SiteCounter,
             LoginHistory, IPWhitelistEntry, AnnouncementBanner,
             UserBannerDismissal, AuthEventLog, ExceptionLog,
