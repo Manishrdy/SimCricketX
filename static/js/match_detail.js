@@ -2807,12 +2807,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 innings_number: state.innings,
                 target: state.target,
                 total_overs: state.total_overs || matchData.overs || 20,
-                // FC has no fielding-circle phases — mirrors the null the
-                // server sends on every live ball (see engine/match.py's
-                // "phase_name": None if self.is_fc else ...). Without this,
-                // updateScoreBanner()'s phase_name === undefined fallback
-                // would misread FC's raw over count as T20 powerplay/death.
-                phase_name: getMatchFormat() === 'FC' ? null : undefined,
+                legal_balls: state.legal_balls,
+                innings_ball_limit: state.innings_ball_limit,
+                timeout_active: state.timeout_active,
+                timeout_available: state.timeout_available,
+                // Preserve the server's format-aware phase, including null.
+                // FC also needs null for older snapshots without a phase.
+                phase_name: state.phase_name !== undefined
+                    ? state.phase_name
+                    : (getMatchFormat() === 'FC' ? null : undefined),
                 // updateScoreBanner() reads these as flat name strings + flat
                 // stat fields (striker_runs, bowler_overs, etc.) — mirroring
                 // the shape the live ball_result payload sends. Nesting them

@@ -6,6 +6,18 @@
     <p><a href="{{ url_for('tour_dashboard', tour_id=tournament.tour_id) }}">← {{ tournament.tour.name }}</a> · Complete earlier tour series before starting this series.</p>
     {% endif %}
 
+    {% if tournament.format_type == 'Hundred' %}
+    <div class="hundred-competition-notice">
+        <p><strong>Custom Hundred competition · {{ tournament.mode|replace('_', ' ')|title }}</strong></p>
+        {% if tournament.mode in ['round_robin_knockout', 'double_round_robin_knockout'] %}
+        <p>The top four qualify for semifinals: 1st vs 4th and 2nd vs 3rd. The winners meet in the final.</p>
+        {% elif tournament.mode == 'ipl_style' %}
+        <p>The top four qualify. Q1: 1st vs 2nd; Eliminator: 3rd vs 4th. The Q1 loser meets the Eliminator winner in Q2; the Q1 and Q2 winners meet in the final.</p>
+        {% endif %}
+        <p>The official Hundred three-team playoff preset is not available: 1st directly to the final, with 2nd vs 3rd in an Eliminator.</p>
+    </div>
+    {% endif %}
+
     <!-- Hero Header -->
     <div class="tournament-hero">
         <div class="hero-content">

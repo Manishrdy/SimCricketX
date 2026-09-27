@@ -24,6 +24,22 @@ Baseline: [ECB playing conditions effective 1 April 2026](https://resources.ecb.
 | 28.4 | Supported abstraction | Two outside during powerplay, five afterwards. Exact reduced-powerplay boundaries drive format phases even inside a set. |
 | 26, 40–42; appendices | Excluded | Practice, timed-out administration, discipline, real-time penalties and competition administration. |
 
+## Custom competition structure
+
+Hundred tournaments currently use the simulator's custom competition modes. An official three-team Hundred playoff preset is **not implemented**. The official structure sends first place directly to the final; second and third play an Eliminator for the other final place.
+
+The available league-plus-semifinal modes instead qualify four teams (1st vs 4th and 2nd vs 3rd), followed by a final. IPL-style mode also qualifies four teams, using Q1, Eliminator, Q2 and Final. Pure leagues, knockouts and custom series retain their selected structures. Selecting the Hundred match format or storing `ECB-2026-men` does not change those structures into the official competition. Creation, competition cards and Hundred dashboards identify these as custom competitions.
+
+## Rain calculation limitation
+
+`ECB-2026-men` identifies the playing-conditions baseline used by the simulator; it does **not** certify full ECB compliance or an official DLS implementation. Archived `rain_method: "D/L approximation"` is the applicable description of rain calculations.
+
+Rain targets and abandonment par scores use the embedded D/L Standard Edition resource table, with linear interpolation between whole-over rows. Hundred legal balls are converted to six-ball-equivalent overs for that lookup. Where the target formula needs an expected full-innings score, it uses the simulator's expected score scaled to 50-over resources. These are simulation choices, not validated professional DLS outputs.
+
+Exact agreement with official Hundred DLS reference examples has **not been established**, and no maximum error bound is claimed. Targets, tie/win decisions at abandonment, and rain-adjusted NRR (and therefore standings) can differ from official outcomes. Use these results as simulation outcomes, not official match adjudication.
+
+The resource-table anchors, interpolation tests and target-formula tests validate the implemented approximation only. Claiming official equivalence would require independently sourced official examples covering shortened allocations, interruptions in both innings, wickets lost, abandonment and rounding boundaries.
+
 ## Units and persistence
 
 `balls_per_over` is retained as an internal compatibility field; for Hundred it denotes a five-ball **set**, never a fractional T20 over. Saved/live state also carries explicit legal balls, scheduled/revised limits, set position, bowling end, consecutive sets and `ECB-2026-men` rule version. Stats and innings termination derive from legal deliveries. Run-driven strike rotation remains separate from end changes.
