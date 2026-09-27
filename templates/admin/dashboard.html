@@ -218,13 +218,9 @@
         <div class="a-card-flat">
             <div class="dash-quick-actions">
                 <a href="/admin/users"            class="a-btn a-btn-primary a-btn-sm"><i class="fas fa-users"></i> Manage Users</a>
-                <a href="/admin/database/stats"   class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-database"></i> Database</a>
+                <a href="/admin/health?tab=database"   class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-database"></i> Database</a>
                 <a href="/admin/backups"          class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-archive"></i> Backups</a>
                 <a href="/admin/health"           class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-heartbeat"></i> Health</a>
-                <a href="/admin/audit-log"        class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-scroll"></i> Audit Log</a>
-                <button onclick="downloadDatabase()" class="a-btn a-btn-secondary a-btn-sm">
-                    <i class="fas fa-download"></i> Download DB
-                </button>
             </div>
         </div>
     </div>
@@ -253,49 +249,6 @@
         </div>
     </div>
 
-</div>
-
-{# ── Audit trail ── #}
-<div class="a-section" style="margin-top:.25rem;">
-    <h3 class="a-section-title">
-        <i class="fas fa-scroll"></i> Recent Admin Actions
-        <a href="/admin/audit-log" class="a-btn a-btn-ghost a-btn-sm" style="margin-left:auto;">
-            View All <i class="fas fa-arrow-right"></i>
-        </a>
-    </h3>
-    <div class="a-table-wrap">
-        <table class="a-table a-table-pro">
-            <thead>
-                <tr>
-                    <th class="sortable">Admin</th>
-                    <th class="sortable">Action</th>
-                    <th class="sortable">Target</th>
-                    <th class="sortable">When</th>
-                </tr>
-            </thead>
-            <tbody id="live-audit-tbody">
-                {% if audit_entries %}
-                    {% for e in audit_entries %}
-                    <tr>
-                        <td class="a-cell-strong">{{ e.admin }}</td>
-                        <td><span class="a-badge a-badge-info">{{ e.action }}</span></td>
-                        <td class="a-cell-dim a-cell-trunc">{{ e.target or '—' }}</td>
-                        <td class="a-cell-dim">{{ e.time }}</td>
-                    </tr>
-                    {% endfor %}
-                {% else %}
-                <tr>
-                    <td colspan="4">
-                        <div class="a-empty" style="padding:1.5rem;">
-                            <i class="fas fa-check-circle"></i>
-                            <p>No admin actions recorded yet</p>
-                        </div>
-                    </td>
-                </tr>
-                {% endif %}
-            </tbody>
-        </table>
-    </div>
 </div>
 
 {# ── SSE live-update script ── #}
@@ -402,21 +355,6 @@
         let d;
         try { d = JSON.parse(e.data); } catch { return; }
         if (!d) return;
-
-        if (Array.isArray(d.audit)) {
-            const tbody = document.getElementById('live-audit-tbody');
-            if (tbody) {
-                tbody.innerHTML = d.audit.length === 0
-                    ? '<tr><td colspan="4"><div class="a-empty" style="padding:1.5rem"><i class="fas fa-check-circle"></i><p>No admin actions recorded yet</p></div></td></tr>'
-                    : d.audit.map(row => `
-                        <tr>
-                            <td class="a-cell-strong">${escHtml(row.admin)}</td>
-                            <td><span class="a-badge a-badge-info">${escHtml(row.action)}</span></td>
-                            <td class="a-cell-dim a-cell-trunc">${escHtml(row.target || '—')}</td>
-                            <td class="a-cell-dim">${relTime(row.ts)}</td>
-                        </tr>`).join('');
-            }
-        }
 
         if (Array.isArray(d.logins)) {
             const wrap = document.getElementById('live-logins-wrap');

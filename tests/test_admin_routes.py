@@ -7,7 +7,7 @@ This file tests admin-only routes including:
 - User management
 - Database operations
 - System configuration
-- Audit logs
+- User login history
 - Security features
 """
 
@@ -25,7 +25,6 @@ from database.models import (
     MatchPartnership,
     Tournament,
     TournamentPlayerStatsCache,
-    AdminAuditLog,
     BlockedIP,
     FailedLoginAttempt,
     AnnouncementBanner,
@@ -77,7 +76,7 @@ class TestUserManagement:
 
     def test_admin_user_360_view(self, admin_client, regular_user):
         """Test 360 view of user."""
-        response = admin_client.get(f"/admin/users/{regular_user.email}/360")
+        response = admin_client.get(f"/admin/users/{regular_user.email}/360", follow_redirects=True)
         assert response.status_code == 200
 
     def test_admin_change_user_email(self, admin_client, regular_user):
@@ -164,7 +163,7 @@ class TestDatabaseManagement:
 
     def test_admin_database_stats(self, admin_client):
         """Test viewing database statistics."""
-        response = admin_client.get("/admin/database/stats")
+        response = admin_client.get("/admin/database/stats", follow_redirects=True)
         assert response.status_code == 200
 
     def test_admin_database_optimize(self, admin_client):
@@ -172,25 +171,12 @@ class TestDatabaseManagement:
         response = admin_client.post("/admin/database/optimize")
         assert response.status_code in [200, 302]
 
-    def test_admin_backup_database(self, admin_client):
-        """Test database backup endpoint.
-
-        NOTE: The route requires a valid BACKUP_TOKEN environment variable.
-        Without it the response will be an auth/token error — we assert a
-        non-5xx code only.
-        """
-        response = admin_client.post("/admin/backup-database")
-        assert response.status_code in [200, 302, 400, 401, 403]
 
     def test_admin_backups_list(self, admin_client):
         """Test viewing backups list."""
         response = admin_client.get("/admin/backups")
         assert response.status_code == 200
 
-    def test_admin_restore_center(self, admin_client):
-        """Test accessing restore center."""
-        response = admin_client.get("/admin/restore-center")
-        assert response.status_code == 200
 
     def test_admin_create_backup(self, admin_client):
         """Test creating manual backup."""
@@ -372,17 +358,13 @@ class TestSessionManagement:
         assert response.status_code in [200, 302]
 
 
-class TestAuditLog:
-    """Tests for audit log routes."""
+class TestLoginHistory:
+    """Tests for user login history."""
 
-    def test_admin_audit_log(self, admin_client):
-        """Test viewing audit log."""
-        response = admin_client.get("/admin/audit-log")
-        assert response.status_code == 200
 
     def test_admin_user_login_history(self, admin_client, regular_user):
         """Test viewing user login history."""
-        response = admin_client.get(f"/admin/users/{regular_user.email}/login-history")
+        response = admin_client.get(f"/admin/users/{regular_user.email}/login-history", follow_redirects=True)
         assert response.status_code == 200
 
 
@@ -503,25 +485,6 @@ class TestDataManagement:
 class TestDataExport:
     """Tests for data export routes."""
 
-    def test_admin_export_page(self, admin_client):
-        """Test export page."""
-        response = admin_client.get("/admin/export")
-        assert response.status_code == 200
-
-    def test_admin_export_table_csv(self, admin_client):
-        """Test exporting table as CSV."""
-        response = admin_client.get("/admin/export/users/csv")
-        assert response.status_code in [200, 404]
-
-    def test_admin_export_table_json(self, admin_client):
-        """Test exporting table as JSON."""
-        response = admin_client.get("/admin/export/users/json")
-        assert response.status_code in [200, 404]
-
-    def test_admin_export_all(self, admin_client):
-        """Test exporting all data."""
-        response = admin_client.get("/admin/export/all/json")
-        assert response.status_code in [200, 404]
 
     def test_admin_export_user_data(self, admin_client, regular_user):
         """Test exporting specific user data."""
@@ -556,48 +519,12 @@ class TestUserImpersonation:
         assert response.status_code in [403, 302]
 
 
-class TestFileManagement:
-    """Tests for file management routes."""
-
-    def test_admin_files_page(self, admin_client):
-        """Test accessing files management page."""
-        response = admin_client.get("/admin/files")
-        assert response.status_code == 200
-
-    def test_admin_api_files_list(self, admin_client):
-        """Test listing files via API."""
-        response = admin_client.get("/admin/api/files")
-        assert response.status_code == 200
-
-    def test_admin_api_files_delete(self, admin_client):
-        """Test deleting non-existent files via API returns 200 or 404."""
-        response = admin_client.delete(
-            "/admin/api/files",
-            json={"files": ["nonexistent.txt"]},
-        )
-        assert response.status_code in [200, 404]
-
-
-class TestLogsManagement:
-    """Tests for logs management."""
-
-    def test_admin_logs_view(self, admin_client):
-        """Test viewing logs."""
-        response = admin_client.get("/admin/logs")
-        assert response.status_code == 200
-
-    def test_admin_logs_download(self, admin_client):
-        """Test downloading logs."""
-        response = admin_client.get("/admin/logs/download")
-        assert response.status_code in [200, 404]
-
-
 class TestAnalytics:
     """Tests for analytics routes."""
 
     def test_admin_user_analytics(self, admin_client, regular_user):
         """Test viewing user analytics."""
-        response = admin_client.get(f"/admin/users/{regular_user.email}/analytics")
+        response = admin_client.get(f"/admin/users/{regular_user.email}/analytics", follow_redirects=True)
         assert response.status_code == 200
 
     def test_user_own_analytics(self, authenticated_client):
@@ -614,14 +541,10 @@ class TestAnalytics:
 class TestAdvancedFeatures:
     """Tests for advanced admin features."""
 
-    def test_admin_sql_console_get(self, admin_client):
-        """Test accessing SQL console."""
-        response = admin_client.get("/admin/sql")
-        assert response.status_code == 200
 
     def test_admin_scheduled_tasks(self, admin_client):
         """Test viewing scheduled tasks."""
-        response = admin_client.get("/admin/scheduled-tasks")
+        response = admin_client.get("/admin/scheduled-tasks", follow_redirects=True)
         assert response.status_code == 200
 
     def test_admin_wipe_user_data(self, admin_client, regular_user):

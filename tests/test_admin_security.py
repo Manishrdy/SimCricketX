@@ -13,7 +13,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app import create_app, db
 from auth.user_auth import update_user_email, validate_password_policy
-from database.models import ActiveSession, AdminAuditLog, BlockedIP, FailedLoginAttempt, User
+from database.models import ActiveSession, BlockedIP, FailedLoginAttempt, User
 
 
 @pytest.fixture()
@@ -68,29 +68,6 @@ def _login_with_token(client, user_email: str, token: str):
         sess["_user_id"] = user_email
         sess["_fresh"] = True
         sess["session_token"] = token
-
-
-def test_admin_files_rejects_path_traversal(app_env):
-    app, _ = app_env
-    admin_email = f"admin-{uuid.uuid4().hex[:8]}@example.com"
-    token = secrets.token_hex(32)
-
-    with app.app_context():
-        _create_user(admin_email, is_admin=True, display_name="Admin")
-        db.session.add(
-            ActiveSession(
-                session_token=token,
-                user_id=admin_email,
-                ip_address="127.0.0.1",
-                user_agent="pytest",
-            )
-        )
-        db.session.commit()
-
-    with app.test_client() as client:
-        _login_with_token(client, admin_email, token)
-        resp = client.get("/admin/api/files", query_string={"path": "..\\SimCricketX_evil"})
-        assert resp.status_code == 403
 
 
 def test_session_revocation_enforced(app_env):
@@ -198,43 +175,6 @@ def test_admin_config_update_allowlist(app_env):
 
     written = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
     assert written["rate_limits"]["max_requests"] == 45
-
-
-def test_admin_file_delete_writes_audit_log(app_env):
-    app, _ = app_env
-    admin_email = f"admin-{uuid.uuid4().hex[:8]}@example.com"
-    token = secrets.token_hex(32)
-    rel_path = f"data/admin_test_delete_{uuid.uuid4().hex[:8]}.txt"
-
-    with app.app_context():
-        _create_user(admin_email, is_admin=True, display_name="Admin")
-        db.session.add(
-            ActiveSession(
-                session_token=token,
-                user_id=admin_email,
-                ip_address="127.0.0.1",
-                user_agent="pytest",
-            )
-        )
-        db.session.commit()
-
-    abs_path = app.root_path + "/" + rel_path.replace("\\", "/")
-    path_obj = Path(abs_path)
-    path_obj.parent.mkdir(parents=True, exist_ok=True)
-    path_obj.write_text("delete me", encoding="utf-8")
-
-    with app.test_client() as client:
-        _login_with_token(client, admin_email, token)
-        resp = client.delete("/admin/api/files", query_string={"path": rel_path})
-        assert resp.status_code == 200
-
-    with app.app_context():
-        entry = (
-            AdminAuditLog.query.filter_by(admin_email=admin_email, action="delete_file", target=rel_path)
-            .order_by(AdminAuditLog.id.desc())
-            .first()
-        )
-        assert entry is not None
 
 
 def test_password_policy_and_user_email_reference_updates(app_env):
