@@ -2,7 +2,8 @@
 Unit tests for engine/dls.py — Duckworth-Lewis Standard Edition math.
 
 Golden values come directly from the published D/L Standard Edition
-over-by-over resource table.
+over-by-over resource table. These checks validate the local approximation,
+not agreement with official professional DLS or Hundred reference outcomes.
 """
 
 import math

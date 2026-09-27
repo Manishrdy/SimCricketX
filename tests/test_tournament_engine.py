@@ -1745,3 +1745,111 @@ def test_reversal_never_leaves_a_completed_stage_on_a_live_tournament(
         f"{mode}: tournament has {unplayed} unplayed fixture(s) but "
         f"current_stage is {tournament.current_stage!r}"
     )
+
+
+class TestHundredStandings:
+    def setup_table(self, teams, owner):
+        tournament = Tournament(name='Hundred tiebreakers', user_id=owner.id,
+                                format_type='Hundred', mode='round_robin_knockout')
+        db.session.add(tournament)
+        db.session.flush()
+        rows = [TournamentTeam(tournament_id=tournament.id, team_id=team.id,
+                               points=8, net_run_rate=0, won=1, runs_scored=100)
+                for team in teams]
+        db.session.add_all(rows)
+        db.session.flush()
+        return tournament, rows
+
+    def match(self, tournament, home, away, winner=None, **kwargs):
+        stage = kwargs.pop('stage', 'league')
+        applied = kwargs.pop('applied', True)
+        match = DBMatch(id=str(uuid.uuid4()), tournament_id=tournament.id,
+                        home_team_id=home.team_id, away_team_id=away.team_id,
+                        winner_team_id=winner.team_id if winner else None,
+                        match_format='Hundred', match_status='completed',
+                        home_team_overs='20.0', away_team_overs='20.0',
+                        home_team_wickets=5, away_team_wickets=5)
+        for key, value in kwargs.items():
+            setattr(match, key, value)
+        db.session.add(match)
+        db.session.flush()
+        db.session.add(TournamentFixture(
+            tournament_id=tournament.id, home_team_id=home.team_id,
+            away_team_id=away.team_id, match_id=match.id, stage=stage,
+            status='Completed', standings_applied=applied))
+        db.session.flush()
+        return match
+
+    def test_head_to_head_overrides_wins_and_runs_at_playoff_cutoff(
+            self, app, engine, six_teams, regular_user):
+        tournament, rows = self.setup_table(six_teams, regular_user)
+        a, b = rows[3:5]
+        for row, points in zip(rows, [20, 16, 12, 8, 8, 0]):
+            row.points = points
+        a.won, a.runs_scored = 2, 1000
+        self.match(tournament, a, b, b)
+        db.session.add_all([TournamentFixture(tournament_id=tournament.id, stage=stage)
+                            for stage in ('semifinal_1', 'semifinal_2')])
+        db.session.flush()
+        assert engine.get_standings(tournament.id)[3] == b
+        assert engine._check_league_completion(tournament)
+        semifinal = TournamentFixture.query.filter_by(
+            tournament_id=tournament.id, stage='semifinal_1').one()
+        assert semifinal.away_team_id == b.team_id
+
+    def test_average_uses_all_equal_points_teams_even_with_different_nrr(
+            self, app, engine, four_teams, regular_user):
+        tournament, (a, b, c, d) = self.setup_table(four_teams, regular_user)
+        c.net_run_rate, d.points = 1, 0
+        # A: 4 / 3; B: 4 / 2. Comparing only A vs B incorrectly prefers A.
+        self.match(tournament, a, b, a)
+        self.match(tournament, a, c, c)
+        self.match(tournament, a, c, c)
+        self.match(tournament, b, c, b)
+        assert engine.get_standings(tournament.id) == [c, b, a, d]
+
+    def test_remaining_tie_moves_to_strike_rate_without_recomputing_head_to_head(
+            self, app, engine, four_teams, regular_user):
+        tournament, (a, b, c, d) = self.setup_table(four_teams, regular_user)
+        d.points = 0
+        self.match(tournament, a, b, a, home_team_wickets=10, away_team_wickets=1)
+        self.match(tournament, a, c, c, away_team_wickets=1)
+        self.match(tournament, b, c, b, away_team_wickets=10)
+        # All three average 2 points; B has the best bowling strike rate,
+        # despite losing to A. A has the worst.
+        assert engine.get_standings(tournament.id) == [b, c, a, d]
+
+    def test_strike_rate_uses_actual_five_ball_sets_and_handles_zero_wickets(
+            self, app, engine, four_teams, regular_user):
+        tournament, (a, b, c, d) = self.setup_table(four_teams, regular_user)
+        d.points = 0
+        self.match(tournament, a, d, a, away_team_overs='1.4', away_team_wickets=1)
+        self.match(tournament, b, d, b, away_team_overs='3.0', away_team_wickets=2)
+        self.match(tournament, c, d, c, away_team_overs='0.1', away_team_wickets=0)
+        # B: 15/2 < A: 9/1; interpreting sets as six balls reverses this.
+        assert engine.get_standings(tournament.id) == [b, a, c, d]
+
+    def test_ties_and_no_results_count_in_head_to_head_average(
+            self, app, engine, four_teams, regular_user):
+        tournament, (a, b, c, d) = self.setup_table(four_teams, regular_user)
+        c.net_run_rate, d.points = 1, 0
+        self.match(tournament, a, c, a)
+        self.match(tournament, a, c, match_status='no_result')
+        self.match(tournament, a, c, match_status='tied')
+        self.match(tournament, b, c, b)
+        # A averages 8/3, B averages 4 (total points would prefer A).
+        assert engine.get_standings(tournament.id) == [c, b, a, d]
+
+    def test_lots_are_stable_and_ignore_nonleague_or_unapplied_matches(
+            self, app, engine, four_teams, regular_user):
+        tournament, rows = self.setup_table(four_teams, regular_user)
+        initial = engine.get_standings(tournament.id)
+        first, last = initial[0], initial[-1]
+        self.match(tournament, first, last, last, stage='final', home_team_wickets=10)
+        self.match(tournament, first, last, last, applied=False, home_team_wickets=10)
+        last.won, last.runs_scored = 99, 99999
+        db.session.commit()
+        db.session.expire_all()
+        assert TournamentEngine().get_standings(tournament.id) == initial
+        tournament.format_type = 'T20'
+        assert engine.get_standings(tournament.id)[0] == last

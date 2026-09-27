@@ -55,6 +55,12 @@
             </div>
         </div>
 
+        <div class="form-section" id="hundred-competition-notice" hidden>
+            <h2>Custom Hundred competition</h2>
+            <p>Choose your own competition structure below. The official Hundred three-team playoff preset is not available: it sends 1st directly to the final and 2nd versus 3rd to an Eliminator.</p>
+            <p>League + Semis and Double League + Playoffs qualify the top four for semifinals (1st vs 4th, 2nd vs 3rd). IPL Style qualifies the top four for Q1, Eliminator, Q2 and Final.</p>
+        </div>
+
         <div class="form-section" id="lista-length-setting">
             <label for="scheduled-overs">List A innings length</label>
             <select id="scheduled-overs" name="scheduled_overs">
@@ -66,7 +72,10 @@
         document.addEventListener('DOMContentLoaded', () => {
             const selector = document.getElementById('scheduled-overs');
             const sync = () => {
-                const active = document.querySelector('input[name="match_format_radio"]:checked')?.value === 'ListA';
+                const format = document.querySelector('input[name="match_format_radio"]:checked')?.value;
+                const notice = document.getElementById('hundred-competition-notice');
+                if (notice) notice.hidden = format !== 'Hundred';
+                const active = format === 'ListA';
                 selector.disabled = !active;
                 document.getElementById('lista-length-setting').hidden = !active;
             };
