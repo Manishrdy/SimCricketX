@@ -1310,6 +1310,42 @@ class TournamentEngine:
         db.session.add(stats)
         return stats
 
+    def hundred_knockout_context(self, fixture):
+        """Freeze the league order used by Hundred knockout decisions."""
+        if not fixture or fixture.stage == self.STAGE_LEAGUE or fixture.tournament.mode == self.MODE_KNOCKOUT:
+            return None
+        league = [f for f in fixture.tournament.fixtures if f.stage == self.STAGE_LEAGUE]
+        if not league or any(f.status != 'Completed' for f in league):
+            return None
+        positions = {row.team_id: i for i, row in enumerate(self.get_standings(fixture.tournament_id), 1)}
+        home, away = positions.get(fixture.home_team_id), positions.get(fixture.away_team_id)
+        if not home or not away or home == away:
+            return None
+        return dict(stage=fixture.stage, home_position=home, away_position=away)
+
+    def _resolve_hundred_abandonment(self, match, fixture):
+        """Also cover completion/repair callers without a live match engine."""
+        if (match.match_format != 'Hundred' or match.winner_team_id is not None
+                or fixture.stage == self.STAGE_LEAGUE or fixture.tournament.mode == self.MODE_KNOCKOUT):
+            return
+        metadata = match.format_metadata or {}
+        tied_at_abandonment = (match.match_status == 'tied' and any(
+            event.get('outcome') == 'chase_terminated' for event in metadata.get('rain_events', [])))
+        if not self._is_no_result(match) and not tied_at_abandonment:
+            return
+        from engine.hundred_rules import league_position_decision
+        context = metadata.get('knockout') or self.hundred_knockout_context(fixture)
+        decision = league_position_decision(context, fixture.home_team.short_code,
+                                          fixture.away_team.short_code, 'after abandonment')
+        if decision is None:
+            return
+        winner_is_home, text = decision
+        match.winner_team_id = fixture.home_team_id if winner_is_home else fixture.away_team_id
+        match.result_description = text
+        match.margin_type = 'league_pos'
+        match.margin_value = None
+        match.format_metadata = dict(metadata, knockout=context)
+
     def update_standings(self, match, commit=True):
         """
         Updates the standings table based on a completed match.
@@ -1349,7 +1385,9 @@ class TournamentEngine:
                 )
                 return False
             
-            # A knockout/playoff fixture that ended with no winner (an
+            self._resolve_hundred_abandonment(match, fixture)
+
+            # Remaining knockout/playoff fixtures with no winner (an
             # abandoned/no-result match a super over couldn't resolve) must
             # stay 'Scheduled' rather than 'Completed', so the dashboard
             # offers "Play Now" again directly instead of showing it as
