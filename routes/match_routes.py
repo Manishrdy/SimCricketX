@@ -56,6 +56,18 @@ def register_match_routes(
     from engine.format_catalog import SUPPORTED_FORMATS, squad_format
     MATCH_SETUP_FORMATS = set(SUPPORTED_FORMATS)
 
+    def _hundred_knockout_context(fixture):
+        """Freeze the existing league order for this knockout's tie-breaker."""
+        from engine.tournament_engine import TournamentEngine
+        return TournamentEngine().hundred_knockout_context(fixture)
+
+    def _restore_hundred_knockout_context(match):
+        if match.is_hundred and match.data.get("is_knockout") and not match.data.get("hundred_knockout"):
+            fixture = db.session.get(TournamentFixture, match.data.get("fixture_id")) if match.data.get("fixture_id") else None
+            if fixture and fixture.tournament.user_id == current_user.id:
+                match.data["hundred_knockout"] = _hundred_knockout_context(fixture)
+                match.data["hundred_repeat_super_fives"] = fixture.tournament.mode == "knockout"
+
     @app.route("/match/setup", methods=["GET", "POST"])
     @login_required
     def match_setup():
@@ -272,9 +284,15 @@ def register_match_routes(
             data["team_away"] = f"{away_code}_{away_db.user_id}"
 
             data["is_knockout"] = False
+            # Never trust league positions supplied by the client.
+            data.pop("hundred_knockout", None)
+            data.pop("hundred_repeat_super_fives", None)
             if data.get("fixture_id"):
                 hundred_fixture = db.session.get(TournamentFixture, data["fixture_id"])
                 data["is_knockout"] = bool(hundred_fixture and hundred_fixture.stage != "league")
+                if data["match_format"] == "Hundred":
+                    data["hundred_knockout"] = _hundred_knockout_context(hundred_fixture)
+                    data["hundred_repeat_super_fives"] = hundred_fixture.tournament.mode == "knockout"
             _fmt = data.get("match_format", "T20")
 
             home_profile = next((p for p in home_db.profiles if p.format_type == squad_format(_fmt)), None)
@@ -1473,6 +1491,7 @@ def register_match_routes(
         with MATCH_INSTANCES_LOCK:
             match = MATCH_INSTANCES.get(match_id)
             if match is not None:
+                _restore_hundred_knockout_context(match)
                 match.last_accessed = time.time()
                 return match, None
 
@@ -1490,6 +1509,7 @@ def register_match_routes(
                 except (ValueError, KeyError, TypeError) as exc:
                     app.logger.exception("Hundred checkpoint restore failed")
                     return None, (jsonify(error="Hundred state could not be restored"), 500)
+            _restore_hundred_knockout_context(match)
             snap = match_data.get("super_over_snapshot")
             if snap:
                 try:
