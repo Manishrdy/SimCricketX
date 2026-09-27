@@ -1,0 +1,45 @@
+{% from 'admin/partials/health_macros.html' import metric %}
+<div class="a-stat-group">
+    <div class="a-stat-group-label">Application Worker</div>
+    <div class="a-stats-grid">
+        {{ metric('Process uptime',data.uptime_hours,'stopwatch','#6366f1','Hours since startup') }}
+        {{ metric('Process memory',data.memory_mb,'memory','#8b5cf6','MB resident memory') }}
+        {{ metric('Process CPU',data.cpu,'microchip','#06b6d4','% sampled utilization') }}
+        {{ metric('In-memory matches',data.matches,'play-circle','#f97316','Matches in this worker') }}
+    </div>
+</div>
+<p class="health-note"><i class="fas fa-info-circle" aria-hidden="true"></i> Process measurements describe this application worker only, not all workers in the deployment.</p>
+<div class="a-grid-2">
+    <section class="a-section">
+        <h2 class="a-section-title"><i class="fas fa-hdd" aria-hidden="true"></i> Disk Capacity</h2>
+        <div class="a-card-flat">
+            {% if data.disk %}
+            <div class="health-detail-row"><strong>{{ data.disk.percent }}% used</strong><span>{{ (data.disk.total / 1024**3)|round(1) }} GB total</span></div>
+            <meter class="health-meter" min="0" max="100" value="{{ data.disk.percent }}" aria-label="Disk space used">{{ data.disk.percent }}%</meter>
+            <div class="health-detail-row"><span>{{ (data.disk.used / 1024**3)|round(1) }} GB used</span><span>{{ (data.disk.free / 1024**3)|round(1) }} GB available</span></div>
+            {% else %}<p class="health-note">Disk measurements unavailable</p>{% endif %}
+        </div>
+    </section>
+    <section class="a-section">
+        <h2 class="a-section-title"><i class="fas fa-folder-open" aria-hidden="true"></i> Application Storage</h2>
+        <div class="a-card-flat"><dl class="health-details">
+            <div class="health-detail-row"><dt>Data directory</dt><dd>{{ data.data_mb if data.data_mb is not none else 'Unavailable' }}{% if data.data_mb is not none %} MB{% endif %}</dd></div>
+            <div class="health-detail-row"><dt>Execution log</dt><dd>{{ data.log_mb if data.log_mb is not none else 'Unavailable' }}{% if data.log_mb is not none %} MB{% endif %}</dd></div>
+        </dl></div>
+    </section>
+    <section class="a-section">
+        <h2 class="a-section-title"><i class="fas fa-shield-alt" aria-hidden="true"></i> Latest Saved Backup</h2>
+        <div class="a-card-flat">
+            {% if data.backup is none %}<p class="health-note">Unavailable</p>{% elif data.backup.timestamp %}<div class="health-detail-row"><strong>{{ data.backup.timestamp|localtime }}</strong><span class="a-badge a-badge-neutral">{{ data.backup.age_hours }} hours ago</span></div>{% else %}<p class="health-note">No saved backups found.</p>{% endif %}
+            <p class="health-note">A saved file does not by itself verify a successful recovery.</p>
+        </div>
+    </section>
+    <section class="a-section">
+        <h2 class="a-section-title"><i class="fas fa-bolt" aria-hidden="true"></i> Quick Actions</h2>
+        <div class="a-card-flat health-quick-actions">
+            <a href="{{ url_for('admin_backups') }}" class="a-btn a-btn-primary a-btn-sm"><i class="fas fa-archive" aria-hidden="true"></i> Manage Backups</a>
+            <a href="{{ url_for('admin_health',tab='database') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-database" aria-hidden="true"></i> Database</a>
+            <a href="{{ url_for('admin_health',tab='tasks') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-calendar-check" aria-hidden="true"></i> Tasks</a>
+        </div>
+    </section>
+</div>

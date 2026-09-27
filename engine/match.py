@@ -8717,6 +8717,7 @@ class Match:
     def _init_super_over_innings_state(self):
         """Initialize/reset super over innings state"""
         self.super_over_ball = 0
+        self.super_five_free_hit_active = False
         # This Super Over innings' own delivery-by-delivery history — feeds
         # the micro-GSME momentum layer. Deliberately NOT the main match's
         # ball_history: momentum should reflect this shootout, not the
@@ -8930,6 +8931,17 @@ class Match:
             pressure_engine=self.pressure_engine,
             ground_config_override=self.ground_config,
         )
+        # Enforce protection before history, commentary or scorekeeping sees
+        # the outcome. Older Hundred checkpoints have no dedicated flag.
+        was_free_hit = self.is_hundred and getattr(self, "super_five_free_hit_active", False)
+        if was_free_hit:
+            outcome["free_hit"] = True
+            if outcome.get("batter_out") and outcome.get("wicket_type") != "Run Out":
+                outcome["batter_out"] = False
+                outcome["wicket_type"] = None
+                outcome["type"] = "extra" if outcome.get("is_extra") else "run"
+                outcome.pop("fielder_name", None)
+                outcome["description"] = "Free hit! Batter survives."
         self.super_over_ball_history.append(make_ball_event(outcome))
 
         runs, wicket, extra = outcome["runs"], outcome["batter_out"], outcome["is_extra"]
@@ -8971,6 +8983,9 @@ class Match:
                 commentary_line = f"{commentary_prefix}{outcome.get('description', '')}"
         else:
             commentary_line = f"{commentary_prefix}{outcome.get('description', '')}"
+
+        if was_free_hit:
+            commentary_line = "Free hit! " + commentary_line
 
         if wicket:
             self.super_over_wickets[team_key] += 1
@@ -9091,6 +9106,12 @@ class Match:
         if is_so_legal:
             self.super_over_ball += 1
 
+        if self.is_hundred:
+            if extra and extra_type == "No Ball":
+                self.super_five_free_hit_active = True
+            elif is_so_legal:
+                self.super_five_free_hit_active = False
+
         over_complete = self.super_over_ball >= self.balls_per_over
         # Innings 2: end immediately when target is reached or exceeded
         target_reached = False
@@ -9109,6 +9130,7 @@ class Match:
 
         return {
             "super_over_ball_complete": True,
+            **({"free_hit": was_free_hit} if self.is_hundred else {}),
             "wicket": wicket,
             "runs": runs,
             "commentary": commentary_line,
@@ -9128,6 +9150,7 @@ class Match:
             "bowler_wickets": self.super_over_bowler_wickets,
             "bowler_overs": f"0.{self.super_over_ball}",
             "ball_data": {
+                **({"free_hit": was_free_hit} if self.is_hundred else {}),
                 "runs": runs,
                 "batter_out": wicket,
                 "extra_type": extra_type if extra else None,

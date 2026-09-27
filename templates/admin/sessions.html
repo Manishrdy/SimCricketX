@@ -20,6 +20,9 @@
                 <i class="fas fa-bars"></i>
             </button>
         </div>
+        <button type="button" onclick="terminateNonAdminSessions(this)" class="a-btn a-btn-danger">
+            <i class="fas fa-users-slash"></i> Terminate all non-admin sessions
+        </button>
         <button onclick="cleanupSessions()" class="a-btn a-btn-secondary">
             <i class="fas fa-broom"></i> Cleanup Stale
         </button>
@@ -169,6 +172,14 @@ async function terminateSession(id) {
     const { ok, data, error } = await adminFetchJson(`/admin/sessions/${id}/terminate`, { method: 'POST' });
     if (ok) { document.getElementById('session-' + id)?.remove(); showAlert(data.message, 'success'); }
     else showAlert(error, 'error');
+}
+
+async function terminateNonAdminSessions(button) {
+    if (!confirm('Log out all non-admin users on every device? All admin sessions will remain active.')) return;
+    button.disabled = true;
+    const { ok, data, error } = await adminFetchJson('/admin/sessions/terminate-non-admins', { method: 'POST' });
+    if (ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
+    else { showAlert(error, 'error'); button.disabled = false; }
 }
 
 async function cleanupSessions() {

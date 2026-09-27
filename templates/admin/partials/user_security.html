@@ -1,0 +1,22 @@
+{% from 'admin/partials/workspace_macros.html' import pagination %}
+<div class="user-grid">
+    <section class="a-section"><h2 class="a-section-title"><i class="fas fa-lock" aria-hidden="true"></i> Authentication</h2><div class="a-card-flat"><dl class="user-details">
+        <div><dt>Email verification</dt><dd><span class="a-badge {{ 'a-badge-success' if user.email_verified else 'a-badge-warning' }}">{{ 'Verified' if user.email_verified else 'Unverified' }}</span></dd></div>
+        <div><dt>Last login</dt><dd>{{ user.last_login|localtime if user.last_login else 'Never recorded' }}</dd></div>
+        <div><dt>Password change required</dt><dd>{{ 'Yes' if user.force_password_reset else 'No' }}</dd></div>
+        <div><dt>Lockout</dt><dd>{{ user.lockout_until|localtime if locked else 'Not locked' }}</dd></div>
+    </dl></div></section>
+    <section class="a-section"><h2 class="a-section-title"><i class="fas fa-user-shield" aria-hidden="true"></i> Access Restrictions</h2><div class="a-card-flat"><dl class="user-details">
+        <div><dt>Ban reason</dt><dd>{{ user.ban_reason or 'None' }}</dd></div>
+        <div><dt>Ban ends</dt><dd>{{ user.banned_until|localtime if user.banned_until else ('Permanent' if user.is_banned else 'Not applicable') }}</dd></div>
+    </dl><a class="a-btn a-btn-secondary a-btn-sm" href="{{ url_for('admin_user_detail',user_email=user.id,tab='actions') }}"><i class="fas fa-sliders-h" aria-hidden="true"></i> Manage account access</a></div></section>
+</div>
+<section class="a-section"><h2 class="a-section-title"><i class="fas fa-desktop" aria-hidden="true"></i> Sessions <span class="count">{{ data.sessions.total }}</span></h2>
+<p class="user-description">Active means within the configured inactivity window. Older records are stale.</p>
+<div class="a-table-wrap" tabindex="0" role="region" aria-label="User sessions; scroll horizontally on small screens"><table class="a-table a-table-pro user-session-table"><thead><tr><th>Status</th><th>IP address</th><th>Session started</th><th>Last activity</th><th>Browser / device</th><th>Action</th></tr></thead><tbody>
+{% for row in data.sessions['items'] %}
+<tr><td><span class="a-badge {{ 'a-badge-success' if row.last_active and row.last_active >= data.cutoff else 'a-badge-neutral' }}">{{ 'Active' if row.last_active and row.last_active >= data.cutoff else 'Stale' }}</span></td><td>{{ row.ip_address or 'Unknown' }}</td><td>{{ row.login_at|localtime if row.login_at else 'Unknown' }}</td><td>{{ row.last_active|localtime if row.last_active else 'Unknown' }}</td><td class="workspace-agent">{{ row.user_agent or 'Unknown' }}</td><td><form class="workspace-action" action="{{ url_for('admin_terminate_session',session_id=row.id) }}" method="post" data-confirm="Terminate this session? The user will be logged out."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="a-btn a-btn-danger a-btn-sm">Terminate</button></form></td></tr>
+{% else %}<tr><td colspan="6"><div class="a-empty"><i class="fas fa-desktop" aria-hidden="true"></i><p>No sessions recorded.</p></div></td></tr>{% endfor %}
+</tbody></table></div>
+{{ pagination(data.sessions,'sessions_page',page_url) }}
+</section>

@@ -1,0 +1,22 @@
+{% extends 'admin/layout.html' %}
+{% from 'admin/partials/workspace_macros.html' import tabs %}
+{% block extra_css %}{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_workspace.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_health.css') }}">
+{% endblock %}
+{% block admin_content %}
+<div class="health-workspace">
+    <div class="a-breadcrumb"><a href="{{ url_for('admin_dashboard') }}"><i class="fas fa-shield-alt" aria-hidden="true"></i> Admin</a><span class="sep">/</span><span class="current">System Health</span></div>
+    <div class="admin-page-header">
+        <div><h1 class="admin-page-title">System Health</h1><p class="admin-page-subtitle">Process, storage and scheduled operations</p></div>
+        <div class="admin-page-actions">
+            <span class="health-updated">Snapshot updated {{ updated_at|localtime }}</span>
+            <a class="a-btn a-btn-secondary a-btn-sm" href="{{ url_for('admin_health',tab=tab) }}"><i class="fas fa-sync-alt" aria-hidden="true"></i> Refresh</a>
+            <a class="a-btn a-btn-primary a-btn-sm" href="{{ url_for('admin_backups') }}"><i class="fas fa-archive" aria-hidden="true"></i> Backups</a>
+        </div>
+    </div>
+    {{ tabs([('overview','Overview',url_for('admin_health',tab='overview')),('database','Database',url_for('admin_health',tab='database')),('tasks','Tasks',url_for('admin_health',tab='tasks'))],tab) }}
+    {% include 'admin/partials/system_' ~ tab ~ '.html' %}
+</div>
+<script src="{{ url_for('static',filename='js/admin_workspace.js') }}" defer></script>
+{% endblock %}

@@ -9,7 +9,7 @@
 <div class="a-breadcrumb">
     <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
     <span class="sep">/</span>
-    <a href="{{ url_for('admin_issues', kind='exceptions') }}">Issues</a>
+    <a href="{{ url_for('admin_issues') }}">Issues</a>
     <span class="sep">/</span>
     <span class="current">{{ row.exception_type }}</span>
 </div>
@@ -28,7 +28,7 @@
         </p>
     </div>
     <div class="admin-page-actions">
-        <a href="{{ url_for('admin_issues', kind='exceptions') }}" class="a-btn a-btn-secondary">
+        <a href="{{ url_for('admin_issues') }}" class="a-btn a-btn-secondary">
             <i class="fas fa-arrow-left"></i> Back
         </a>
         {% if row.github_issue_url %}
@@ -44,6 +44,7 @@
 </div>
 
 <div id="alertContainer"></div>
+<p class="issue-meta">Exception #{{ row.id }} · Full captured diagnostic details</p>
 
 <div class="a-stats-grid" style="margin-bottom:1rem;">
     <div class="a-stat-card">
@@ -69,14 +70,6 @@
         </div>
         <div class="a-stat-value" style="font-size: 1rem;">{{ row.first_seen_at | localtime if row.first_seen_at else '—' }}</div>
         <div class="a-stat-sub">{{ row.fingerprint[:12] if row.fingerprint else '' }}</div>
-    </div>
-    <div class="a-stat-card">
-        <div class="a-stat-header">
-            <div class="a-stat-icon-pill"><i class="fas fa-link"></i></div>
-            <div class="a-stat-label">Linked reports</div>
-        </div>
-        <div class="a-stat-value">{{ related_reports | length }}</div>
-        <div class="a-stat-sub">last 7 days</div>
     </div>
     <div class="a-stat-card">
         <div class="a-stat-header">

@@ -7,7 +7,7 @@ import secrets
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from werkzeug.security import check_password_hash, generate_password_hash
-from database.models import User, AdminAuditLog
+from database.models import User
 from database import db
 import json
 from utils.exception_tracker import log_exception
@@ -56,22 +56,8 @@ def validate_password_policy(password: str) -> tuple[bool, str]:
     return True, ""
 
 def log_admin_action(admin_email: str, action: str, target: str = None, details: str = None, ip_address: str = None):
-    """Record an admin action in the persistent audit log."""
-    try:
-        entry = AdminAuditLog(
-            admin_email=admin_email,
-            action=action,
-            target=target,
-            details=details,
-            ip_address=ip_address or get_ip_address(),
-            timestamp=datetime.now(timezone.utc)
-        )
-        db.session.add(entry)
-        db.session.commit()
-    except Exception as e:
-        log_exception(e)
-        db.session.rollback()
-        logging.error(f"[AuditLog] Failed to record action: {e}")
+    """Emit an operational message without storing database audit records."""
+    logging.info("[AdminAction] actor=%r action=%r target=%r", admin_email, action, target)
 
 # --- Core Auth Functions ---
 
@@ -261,7 +247,6 @@ def update_user_email(old_email: str, new_email: str, admin_email: str = None) -
         db.session.execute(text("UPDATE active_sessions SET user_id = :new WHERE user_id = :old"), {"new": new_email, "old": old_email})
         db.session.execute(text("UPDATE blocked_ips SET blocked_by = :new WHERE blocked_by = :old"), {"new": new_email, "old": old_email})
         db.session.execute(text("UPDATE failed_login_attempts SET email = :new WHERE email = :old"), {"new": new_email, "old": old_email})
-        db.session.execute(text("UPDATE admin_audit_log SET admin_email = :new WHERE admin_email = :old"), {"new": new_email, "old": old_email})
         db.session.execute(text("UPDATE login_history SET user_id = :new WHERE user_id = :old"), {"new": new_email, "old": old_email})
         # auth_event_log.user_id has ondelete='SET NULL' so we update it explicitly
         db.session.execute(text("UPDATE auth_event_log SET user_id = :new WHERE user_id = :old"), {"new": new_email, "old": old_email})

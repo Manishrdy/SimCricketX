@@ -1,0 +1,27 @@
+{% from 'admin/partials/health_macros.html' import metric %}
+<div class="a-stat-group">
+    <div class="a-stat-group-label">Database · {{ data.kind }}</div>
+    <div class="a-stats-grid">
+        {{ metric('Database size',data.size_mb,'database','#10b981','MB') }}
+        {{ metric('Tables',data.tables,'table','#06b6d4','Current database schema') }}
+    </div>
+</div>
+{% if data.kind == 'SQLite in-memory' %}<p class="health-note">This database is in memory; no database file size is available.</p>{% endif %}
+<div class="a-stat-group">
+    <div class="a-stat-group-label">Stored Records</div>
+    <div class="a-stats-grid">
+        {% for name,icon,color in [('users','users','#6366f1'),('teams','layer-group','#8b5cf6'),('matches','baseball-ball','#3b82f6'),('tournaments','trophy','#f59e0b')] %}
+        {{ metric(name|title,data.counts[name],icon,color) }}
+        {% endfor %}
+    </div>
+</div>
+<section class="a-section">
+    <h2 class="a-section-title"><i class="fas fa-wrench" aria-hidden="true"></i> Database Maintenance</h2>
+    <div class="a-card-flat">
+        <p class="health-note">Optimization runs SQLite VACUUM and may temporarily block database access. Run it during a quiet period.</p>
+        <form class="workspace-action" action="{{ url_for('admin_optimize_database') }}" method="post" data-confirm="Optimize the database now? This can temporarily block database access.">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-wrench" aria-hidden="true"></i> Optimize Database</button>
+        </form>
+    </div>
+</section>
