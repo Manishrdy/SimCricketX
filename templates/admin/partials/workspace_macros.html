@@ -1,0 +1,15 @@
+{% macro tabs(items, selected) %}
+<nav class="workspace-tabs" aria-label="Page sections">
+{% for key, label, href in items %}<a href="{{ href }}" {% if key == selected %}aria-current="page" class="selected"{% endif %}>{{ label }}</a>{% endfor %}
+</nav>
+{% endmacro %}
+{% macro pagination(result, key, page_url) %}
+<nav class="a-pagination" aria-label="{{ key|replace('_page','')|title }} pages">
+<span>{{ result.total }} records · Page {{ result.page }} of {{ result.pages }}</span>
+{% if result.page > 1 %}<a href="{{ page_url(key, result.page - 1) }}">Previous</a>{% endif %}
+{% if result.page < result.pages %}<a href="{{ page_url(key, result.page + 1) }}">Next</a>{% endif %}
+</nav>
+{% endmacro %}
+{% macro counts(values) %}
+<div class="a-stats-grid">{% for label, count in values.items() %}<div class="a-stat-card"><div class="a-stat-label">{{ label|replace('_',' ')|title }}</div><div class="a-stat-value">{{ count if count is not none else 'Unavailable' }}</div></div>{% endfor %}</div>
+{% endmacro %}

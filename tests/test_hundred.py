@@ -156,15 +156,16 @@ def test_mid_innings_rain_remains_completion_safe(at,lost,monkeypatch):
     else:pytest.fail('rain allocation deadlock')
 
 
-def test_repeated_super_fives_no_countback(monkeypatch):
+@pytest.mark.parametrize("stage,positions", [("eliminator", (2,3)), ("final", (2,1)), ("semi_final", (4,1))])
+def test_two_tied_super_fives_use_league_position(monkeypatch, stage, positions):
     monkeypatch.setattr(module,'calculate_outcome',dot)
     monkeypatch.setattr(module,'calculate_super_over_outcome',dot)
-    m=make(is_knockout=True)
+    m=make(is_knockout=True, hundred_knockout=dict(stage=stage, home_position=positions[0], away_position=positions[1]))
     for _ in range(210):
         r=m.next_ball()
         if r.get('super_over_required'):break
     assert r.get('super_over_required')
-    for round_number in range(1,8):
+    for round_number in range(1,3):
         r=m.start_super_over(m._super_over_next_first_batting)
         assert not r.get('error'),r
         for _ in range(6):r=m.next_super_over_ball()
@@ -172,9 +173,25 @@ def test_repeated_super_fives_no_countback(monkeypatch):
         r=m.start_super_over_innings2()
         assert not r.get('error'),r
         for _ in range(6):r=m.next_super_over_ball()
-        assert m.super_over_phase=='awaiting_innings1_selection',r
         assert m.super_over_round==round_number
-        assert not r.get('match_over')
+        if round_number == 1:
+            assert m.super_over_phase=='awaiting_innings1_selection',r
+            assert not r.get('match_over')
+            # Restart with the frozen league positions before the deciding round.
+            restored = make()
+            restore(restored, json.loads(json.dumps(serialize(m))))
+            m = restored
+            # Boundary count must not override league position.
+            lower_side = "away" if positions[0] < positions[1] else "home"
+            m.super_over_team_boundaries[lower_side] = 99
+        else:
+            assert m.super_over_phase == 'complete'
+            assert r['match_over'] and r['super_over_complete']
+            assert m.winner_is_home is (positions[0] < positions[1])
+            assert m.margin_type == 'league_pos' and m.margin_value is None
+            assert 'league position' in r['result']
+            assert m.start_super_over('home').get('error')
+            assert m.super_over_round == 2
 
 
 def test_hundred_dew_fixed_ball_clock():
@@ -189,3 +206,119 @@ def test_hundred_dew_fixed_ball_clock():
     assert peak['Four']==pytest.approx(1.05)
     assert _apply_hundred_dew(weights,2,70,True)['Extras']==pytest.approx(1.1)
     assert _apply_hundred_dew(weights,2,99,True)==peak
+
+
+@pytest.mark.parametrize('decisive_round', [1, 2])
+def test_super_five_score_winner_precedes_league_position(monkeypatch, decisive_round):
+    monkeypatch.setattr(module, 'calculate_outcome', dot)
+    m = make(is_knockout=True, hundred_knockout=dict(stage='final', home_position=1, away_position=2))
+    for _ in range(210):
+        if m.next_ball().get('super_over_required'):
+            break
+    def outcome(**kw):
+        runs = int(m.super_over_round == decisive_round and m.super_over_batting_team is m.away_xi)
+        return dict(runs=runs, batter_out=False, is_extra=False, description='Run' if runs else 'Dot')
+    monkeypatch.setattr(module, 'calculate_super_over_outcome', outcome)
+    for _ in range(decisive_round):
+        assert not m.start_super_over(m._super_over_next_first_batting).get('error')
+        for _ in range(6):
+            r = m.next_super_over_ball()
+            if r.get('super_over_innings_end'):
+                break
+        assert not m.start_super_over_innings2().get('error')
+        for _ in range(6):
+            r = m.next_super_over_ball()
+            if r.get('match_over'):
+                break
+    assert r['match_over'] and m.winner_is_home is False
+    assert m.margin_type == 'runs'
+
+
+def test_missing_league_positions_cannot_guess_winner_or_double_count(monkeypatch):
+    monkeypatch.setattr(module, 'calculate_outcome', dot)
+    monkeypatch.setattr(module, 'calculate_super_over_outcome', dot)
+    m = make(is_knockout=True)
+    for _ in range(210):
+        if m.next_ball().get('super_over_required'):
+            break
+    for _ in range(2):
+        m.start_super_over(m._super_over_next_first_batting)
+        for _ in range(6):
+            m.next_super_over_ball()
+        m.start_super_over_innings2()
+        for _ in range(6):
+            r = m.next_super_over_ball()
+    assert 'League positions' in r['error']
+    before = copy.deepcopy(m.super_over_career_batting)
+    assert m.next_super_over_ball()['error'] == r['error']
+    assert m.super_over_career_batting == before
+    m.data['hundred_knockout'] = dict(stage='final', home_position=2, away_position=1)
+    assert m.next_super_over_ball()['match_over']
+    assert m.winner_is_home is False
+
+
+def test_pure_knockout_super_fives_can_repeat(monkeypatch):
+    monkeypatch.setattr(module, 'calculate_outcome', dot)
+    monkeypatch.setattr(module, 'calculate_super_over_outcome', dot)
+    m = make(is_knockout=True, hundred_repeat_super_fives=True)
+    for _ in range(210):
+        if m.next_ball().get('super_over_required'):
+            break
+    for round_number in range(1, 4):
+        assert not m.start_super_over(m._super_over_next_first_batting).get('error')
+        for _ in range(6):
+            m.next_super_over_ball()
+        assert not m.start_super_over_innings2().get('error')
+        for _ in range(6):
+            r = m.next_super_over_ball()
+        assert r['super_over_tied_again'] and not r['match_over']
+        assert m.super_over_round == round_number
+
+
+@pytest.mark.parametrize('stage,positions', [('eliminator', (2, 3)), ('final', (2, 1))])
+@pytest.mark.parametrize('at', [0, 22])
+def test_abandoned_league_knockout_uses_position(monkeypatch, stage, positions, at):
+    monkeypatch.setattr(module, 'calculate_outcome', dot)
+    m = make(is_knockout=True,
+             hundred_knockout=dict(stage=stage, home_position=positions[0], away_position=positions[1]),
+             weather_script={'forecast': 'rain_around', 'events': [{'at_global_over': at, 'overs_lost': 19}]})
+    for _ in range(220):
+        r = m.next_ball()
+        if r.get('match_over'):
+            break
+    assert r['match_over'] and m.match_status == 'no_result'
+    assert m.winner_is_home is (positions[0] < positions[1])
+    assert m.margin_type == 'league_pos' and m.margin_value is None
+    assert 'after abandonment' in r['result']
+    assert r['scorecard_data']['target_info'] == r['result']
+    assert m.hundred_archive_metadata()['knockout'] == m.data['hundred_knockout']
+
+
+@pytest.mark.parametrize('knockout,repeat', [(False, False), (True, True)])
+def test_abandonment_league_and_pure_knockout_keep_no_winner(monkeypatch, knockout, repeat):
+    monkeypatch.setattr(module, 'calculate_outcome', dot)
+    m = make(is_knockout=knockout, hundred_repeat_super_fives=repeat,
+             weather_script={'forecast': 'rain_around', 'events': [{'at_global_over': 0, 'overs_lost': 19}]})
+    r = m.next_ball()
+    assert r['match_over'] and m.match_status == 'no_result'
+    assert m.winner_is_home is None and m.margin_type is None
+
+
+@pytest.mark.parametrize('score,expected_margin', [(0, 'runs'), (1, 'league_pos'), (2, 'runs')])
+def test_terminal_chase_only_uses_position_when_par_is_tied(monkeypatch, score, expected_margin):
+    monkeypatch.setattr(module, 'calculate_outcome', dot)
+    m = make(is_knockout=True, hundred_knockout=dict(stage='final', home_position=2, away_position=1))
+    for _ in range(110):
+        m.next_ball()
+        if m.innings == 2:
+            break
+    m.score, m.target = score, 2
+    r = m._finalize_chase_terminated([])
+    assert r['match_over'] and m.margin_type == expected_margin
+    if score == 1:
+        assert m.winner_is_home is False
+        assert m.match_status == 'tied'
+    else:
+        expected_team = m.batting_team if score > 1 else m.bowling_team
+        assert m.winner_is_home is (expected_team is m.home_xi)
+        assert m.match_status == 'completed'

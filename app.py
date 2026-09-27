@@ -48,7 +48,6 @@ import re
 import logging
 import yaml
 import uuid
-import sqlite3
 import hashlib
 import secrets
 import ipaddress
@@ -115,6 +114,7 @@ from routes.auth_routes import register_auth_routes
 from routes.team_routes import register_team_routes
 from routes.core_routes import register_core_routes
 from routes.match_routes import register_match_routes
+from services.admin_workspace import BACKUP_INTERVAL_SECONDS, MATCH_CLEANUP_INTERVAL_SECONDS, BACKUP_RETENTION_DAYS
 from routes.admin_routes import register_admin_routes
 from routes.admin_issue_routes import register_admin_issue_routes
 from routes.webhook_routes import register_webhook_routes
@@ -146,7 +146,7 @@ except ImportError:
 from database import db
 from database.models import User as DBUser, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, TournamentTeam, TournamentFixture
 from database.models import MasterPlayer as DBMasterPlayer, UserPlayer as DBUserPlayer
-from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache, MatchPartnership, AdminAuditLog  # Distinct from engine.match.Match
+from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache, MatchPartnership  # Distinct from engine.match.Match
 from database.models import (
     FailedLoginAttempt,
     BlockedIP,
@@ -174,8 +174,6 @@ def _dbuser_init_compat(self, *args, **kwargs):
     _dbuser_init(self, **kwargs)
 DBUser.__init__ = _dbuser_init_compat
 User = DBUser
-
-
 
 
 MATCH_INSTANCES = {}
@@ -465,7 +463,7 @@ def periodic_cleanup(app):
         except Exception as e:
             log_exception(e)
             app.logger.error(f"[PeriodicCleanup] Error in cleanup thread: {e}")
-        time.sleep(6 * 3600)  # 6 hours
+        time.sleep(MATCH_CLEANUP_INTERVAL_SECONDS)  # 6 hours
 
 
 def cleanup_temp_scorecard_images(logger=None, min_age_seconds=300):
@@ -532,7 +530,6 @@ def cleanup_temp_scorecard_images(logger=None, min_age_seconds=300):
     except Exception as e:
         log_exception(e)
         log.error(f"[Cleanup] Error cleaning temp scorecard images: {e}", exc_info=True)
-
 
 
 def _safe_get_attr(obj, attr, default=None):
@@ -625,16 +622,6 @@ def create_app():
             log_exception(source="backend")
             return None
 
-    def is_path_within_base(base_dir: str, candidate_path: str) -> bool:
-        """True only when candidate resolves under base_dir (safe on Windows/symlinks)."""
-        try:
-            base_path = Path(base_dir).resolve(strict=False)
-            target_path = Path(candidate_path).resolve(strict=False)
-            target_path.relative_to(base_path)
-            return True
-        except Exception:
-            log_exception(source="backend")
-            return False
 
     def is_ip_blocked(client_ip: str) -> bool:
         """Check whether a client IP is blocked by exact match or CIDR entry."""
@@ -1444,24 +1431,6 @@ def create_app():
     # Moved to auth/decorators.py so blueprints can import it directly.
     from auth.decorators import admin_required
 
-    # --- Backup token brute-force protection ---
-    _backup_token_attempts = {}  # {user_id: deque of timestamps}
-    _backup_token_lock = threading.Lock()
-
-    def _check_backup_rate_limit(user_id, max_attempts=3, window_seconds=60):
-        """Returns True if the user is rate-limited on backup attempts."""
-        now = datetime.now().timestamp()
-        with _backup_token_lock:
-            if user_id not in _backup_token_attempts:
-                _backup_token_attempts[user_id] = deque()
-            attempts = _backup_token_attempts[user_id]
-            cutoff = now - window_seconds
-            while attempts and attempts[0] < cutoff:
-                attempts.popleft()
-            if len(attempts) >= max_attempts:
-                return True
-            attempts.append(now)
-            return False
 
     # --- Scheduled backup management ---
     BACKUP_DIR = os.path.join(PROJECT_ROOT, "data", "backups")
@@ -1483,7 +1452,7 @@ def create_app():
             log_exception(e)
             app.logger.error(f"[Backup] Scheduled backup failed: {e}")
 
-    def _cleanup_old_backups(max_age_days=7):
+    def _cleanup_old_backups(max_age_days=BACKUP_RETENTION_DAYS):
         """Delete backup files older than max_age_days."""
         cutoff = time.time() - (max_age_days * 86400)
         try:
@@ -1535,25 +1504,12 @@ def create_app():
                 log_exception(e)
                 app.logger.error(f"[Admin] Failed to persist maintenance mode to config: {e}")
 
-    def _verify_sqlite_integrity(db_file: str):
-        conn = None
-        try:
-            conn = sqlite3.connect(db_file)
-            row = conn.execute("PRAGMA integrity_check;").fetchone()
-            status = (row[0] if row and row[0] else "").strip().lower()
-            return status == "ok", (row[0] if row and row[0] else "integrity check failed")
-        except Exception as e:
-            log_exception(e)
-            return False, str(e)
-        finally:
-            if conn:
-                conn.close()
 
     def _backup_scheduler():
         """Background thread: run backup every 24 hours."""
         while True:
             try:
-                time.sleep(86400)  # 24 hours
+                time.sleep(BACKUP_INTERVAL_SECONDS)  # 24 hours
                 with app.app_context():
                     _run_scheduled_backup()
             except Exception as e:
@@ -1645,19 +1601,15 @@ def create_app():
         admin_required=admin_required,
         db=db,
         basedir=basedir,
-        config=config,
         load_config=load_config,
         get_client_ip=get_client_ip,
         parse_ip=parse_ip,
-        is_path_within_base=is_path_within_base,
         coerce_config_value=coerce_config_value,
         ADMIN_CONFIG_ALLOWLIST=ADMIN_CONFIG_ALLOWLIST,
         bot_defense_settings=bot_defense_settings,
-        _check_backup_rate_limit=_check_backup_rate_limit,
         _run_scheduled_backup=_run_scheduled_backup,
         _list_backup_files=_list_backup_files,
-        _verify_sqlite_integrity=_verify_sqlite_integrity,
-        _backup_scheduler_started=_backup_scheduler_started,
+        get_backup_status=lambda: _backup_scheduler_started,
         _persist_maintenance_mode=_persist_maintenance_mode,
         get_maintenance_mode=lambda: MAINTENANCE_MODE,
         psutil=psutil,
@@ -1669,7 +1621,6 @@ def create_app():
         BLOCKED_IP_MODEL=BlockedIP,
         FAILED_LOGIN_MODEL=FailedLoginAttempt,
         ACTIVE_SESSION_MODEL=ActiveSession,
-        AUDIT_MODEL=AdminAuditLog,
         LOGIN_HISTORY_MODEL=LoginHistory,
         IP_WHITELIST_MODEL=IPWhitelistEntry,
         ANNOUNCEMENT_BANNER_MODEL=AnnouncementBanner,
@@ -1747,7 +1698,6 @@ def create_app():
             "file": os.path.abspath(__file__),
             "admin_route_count": len(admin_routes),
             "has_admin_activity": "/admin/activity" in admin_routes,
-            "has_admin_catchall": "/admin/<path:subpath>" in admin_routes,
             "admin_routes": admin_routes,
         }), 200
 

@@ -1035,22 +1035,6 @@ class TournamentFixture(db.Model):
         db.Index('ix_fixture_tournament_stage', 'tournament_id', 'stage'),
     )
 
-class AdminAuditLog(db.Model):
-    """Persistent audit trail for all admin actions"""
-    __tablename__ = 'admin_audit_log'
-
-    id = db.Column(db.Integer, primary_key=True)
-    admin_email = db.Column(db.String(120), nullable=False, index=True)
-    action = db.Column(db.String(50), nullable=False)  # e.g. 'reset_password', 'delete_user', 'change_email'
-    target = db.Column(db.String(200), nullable=True)   # target user/entity
-    details = db.Column(db.Text, nullable=True)          # extra context (JSON or text)
-    ip_address = db.Column(db.String(50), nullable=True)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-
-    __table_args__ = (
-        db.Index('ix_audit_admin_action', 'admin_email', 'action'),
-    )
-
 
 class FailedLoginAttempt(db.Model):
     """Track failed login attempts for security monitoring"""

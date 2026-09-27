@@ -1,0 +1,34 @@
+{% extends 'admin/layout.html' %}
+{% block extra_css %}{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_workspace.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_user.css') }}">
+{% endblock %}
+{% block admin_content %}
+<div class="user-workspace">
+    <nav class="a-breadcrumb" aria-label="Breadcrumb"><a href="{{ url_for('admin_dashboard') }}"><i class="fas fa-shield-alt" aria-hidden="true"></i> Admin</a><span class="sep">/</span><a href="{{ url_for('admin_users') }}">Users</a><span class="sep">/</span><span class="current">User details</span></nav>
+    <header class="admin-page-header">
+        <div><h1 class="admin-page-title">User details</h1><p class="admin-page-subtitle">Account information, security and access management</p></div>
+        <a href="{{ url_for('admin_users') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to Users</a>
+    </header>
+    <section class="a-card-flat user-profile" aria-label="User profile">
+        <div class="user-avatar" aria-hidden="true">{{ (user.display_name or user.id)[0]|upper }}</div>
+        <div class="user-identity"><h2>{{ user.display_name or user.id }}</h2><p>{{ user.id }}</p>
+            <div class="user-badges">
+                <span class="a-badge {{ 'a-badge-admin' if user.is_admin else 'a-badge-user' }}">{{ 'Admin' if user.is_admin else 'User' }}</span>
+                <span class="a-badge {{ 'a-badge-success' if user.email_verified else 'a-badge-warning' }}">{{ 'Email verified' if user.email_verified else 'Email unverified' }}</span>
+                <span class="a-badge {{ 'a-badge-danger' if user.is_banned and (not user.banned_until or user.banned_until > now) else 'a-badge-neutral' }}">{% if user.is_banned and (not user.banned_until or user.banned_until > now) %}Banned{% elif user.is_banned %}Ban expired{% else %}Not banned{% endif %}</span>
+                {% if locked %}<span class="a-badge a-badge-warning">Locked</span>{% endif %}
+            </div>
+        </div>
+        <div class="user-profile-meta"><span>Last login</span><strong>{{ user.last_login|localtime if user.last_login else 'Never recorded' }}</strong><span>Joined {{ user.created_at|localtime if user.created_at else 'Unknown' }}</span></div>
+    </section>
+    <nav class="workspace-tabs user-tabs" aria-label="User sections">
+        {% for key,label,icon in [('overview','Overview','user'),('security','Security','shield-alt'),('actions','Account Actions','sliders-h')] %}
+        <a href="{{ url_for('admin_user_detail',user_email=user.id,tab=key) }}" {% if tab == key %}class="selected" aria-current="page"{% endif %}><i class="fas fa-{{ icon }}" aria-hidden="true"></i> {{ label }}</a>
+        {% endfor %}
+    </nav>
+    <div id="workspace-feedback" role="status" aria-live="polite"></div>
+    <div class="workspace-panel">{% include 'admin/partials/user_' ~ tab ~ '.html' %}</div>
+</div>
+<script src="{{ url_for('static',filename='js/admin_workspace.js') }}" defer></script>
+{% endblock %}

@@ -13,7 +13,6 @@ from werkzeug.security import generate_password_hash
 from database import db
 from database.models import (
     ActiveSession,
-    AdminAuditLog,
     CommunityComment,
     CommunityImage,
     CommunityMention,
@@ -447,7 +446,6 @@ def test_admin_status_change_notifies_author_and_voters(app, alice, bob, boss):
     assert resp.status_code == 200
     for uid in ("alice@example.com", "bob@example.com"):
         assert CommunityNotification.query.filter_by(user_id=uid, kind="status_change").count() == 1
-    assert AdminAuditLog.query.filter_by(action="community_status", target=pid).count() == 1
     # Fixed is terminal: comments close for users.
     bob_resp = as_user(app, bob).post(f"/api/community/posts/{pid}/comments", json={"body": "Still broken for me today."})
     assert bob_resp.status_code == 403

@@ -1,7 +1,9 @@
 {% extends "layout.html" %}
 
+{% block site_navigation %}{% endblock %}
+
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css', v='fullscreen-1') }}">
 {% endblock %}
 
 {% block content %}
@@ -62,12 +64,8 @@
                 <div class="admin-nav-label">Management</div>
                 <ul class="admin-nav-items">
                     <li><a href="/admin/users" data-label="Users"
-                            class="admin-nav-link {% if request.endpoint in ['admin_users','admin_user_detail','admin_user_360'] %}active{% endif %}">
+                            class="admin-nav-link {% if request.endpoint in ['admin_users','admin_user_detail','admin_user_360','admin_create_user','admin_user_analytics','admin_user_login_history'] %}active{% endif %}">
                             <i class="fas fa-users"></i> <span>Users</span>
-                        </a></li>
-                    <li><a href="/admin/users/create" data-label="Create User"
-                            class="admin-nav-link {% if request.endpoint == 'admin_create_user' %}active{% endif %}">
-                            <i class="fas fa-user-plus"></i> <span>Create User</span>
                         </a></li>
                     <li><a href="/admin/player-pool" data-label="Player Pool"
                             class="admin-nav-link {% if request.endpoint in ['admin_player_pool','admin_player_pool_add','admin_player_pool_edit','admin_player_pool_import'] %}active{% endif %}">
@@ -115,17 +113,9 @@
             <div class="admin-nav-section">
                 <div class="admin-nav-label">System</div>
                 <ul class="admin-nav-items">
-                    <li><a href="/admin/database/stats" data-label="Database"
-                            class="admin-nav-link {% if request.endpoint == 'admin_database_stats' %}active{% endif %}">
-                            <i class="fas fa-database"></i> <span>Database</span>
-                        </a></li>
                     <li><a href="/admin/backups" data-label="Backups"
                             class="admin-nav-link {% if request.endpoint == 'admin_backups' %}active{% endif %}">
                             <i class="fas fa-archive"></i> <span>Backups</span>
-                        </a></li>
-                    <li><a href="/admin/restore-center" data-label="Restore Center"
-                            class="admin-nav-link {% if request.endpoint == 'admin_restore_center' %}active{% endif %}">
-                            <i class="fas fa-history"></i> <span>Restore Center</span>
                         </a></li>
                     <li><a href="/admin/config" data-label="Config"
                             class="admin-nav-link {% if request.endpoint == 'admin_config' %}active{% endif %}">
@@ -135,26 +125,6 @@
                             class="admin-nav-link {% if request.endpoint == 'admin_banner' %}active{% endif %}">
                             <i class="fas fa-bullhorn"></i> <span>Banner</span>
                         </a></li>
-                    <li><a href="/admin/logs" data-label="Logs"
-                            class="admin-nav-link {% if request.endpoint == 'admin_logs' %}active{% endif %}">
-                            <i class="fas fa-file-alt"></i> <span>Logs</span>
-                        </a></li>
-                    <li><a href="/admin/files" data-label="Files"
-                            class="admin-nav-link {% if request.endpoint == 'admin_files' %}active{% endif %}">
-                            <i class="fas fa-folder-open"></i> <span>Files</span>
-                        </a></li>
-                    <li><a href="/admin/export" data-label="Export"
-                            class="admin-nav-link {% if request.endpoint == 'admin_export_page' %}active{% endif %}">
-                            <i class="fas fa-file-export"></i> <span>Export</span>
-                        </a></li>
-                    <li><a href="/admin/scheduled-tasks" data-label="Tasks"
-                            class="admin-nav-link {% if request.endpoint == 'admin_scheduled_tasks' %}active{% endif %}">
-                            <i class="fas fa-clock"></i> <span>Tasks</span>
-                        </a></li>
-                    <li><a href="/admin/audit-log" data-label="Audit Log"
-                            class="admin-nav-link {% if request.endpoint == 'admin_audit_log' %}active{% endif %}">
-                            <i class="fas fa-scroll"></i> <span>Audit Log</span>
-                        </a></li>
                     <li><a href="/admin/community" data-label="Community"
                             class="admin-nav-link {% if request.endpoint and request.endpoint.startswith('admin_community') %}active{% endif %}">
                             <i class="fas fa-comments"></i> <span>Community</span>
@@ -162,10 +132,6 @@
                     <li><a href="/admin/issues" data-label="Exceptions"
                             class="admin-nav-link {% if request.endpoint and request.endpoint.startswith('admin_issue') %}active{% endif %}">
                             <i class="fas fa-bug"></i> <span>Exceptions</span>
-                        </a></li>
-                    <li><a href="/admin/sql" data-label="SQL Runner"
-                            class="admin-nav-link {% if request.endpoint == 'admin_sql_runner' %}active{% endif %}">
-                            <i class="fas fa-code"></i> <span>SQL Runner</span>
                         </a></li>
                     <li><a href="/admin/retention" data-label="Retention"
                             class="admin-nav-link {% if request.endpoint == 'admin_retention' %}active{% endif %}">
@@ -190,12 +156,6 @@
                             </span>
                         </a>
                     </li>
-                    <li>
-                        <a href="#" onclick="downloadDatabase(); return false;"
-                            data-label="Download DB" class="admin-nav-link">
-                            <i class="fas fa-download"></i> <span>Download DB</span>
-                        </a>
-                    </li>
                 </ul>
             </div>
 
@@ -203,7 +163,13 @@
 
         {# Sidebar footer #}
         <div class="admin-sidebar-footer">
-            <a href="{{ url_for('home') }}" data-label="Return to App">
+            <button id="theme-btn" type="button" class="admin-utility" title="Toggle theme" aria-label="Toggle theme"><i class="fas fa-moon" aria-hidden="true"></i><span>Toggle theme</span></button>
+            <a href="{{ url_for('account_settings') }}" title="Account settings" aria-label="Account settings"><i class="fas fa-user-circle" aria-hidden="true"></i><span>Account settings</span></a>
+            <form method="post" action="{{ url_for('logout') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="admin-utility" title="Sign out" aria-label="Sign out"><i class="fas fa-sign-out-alt" aria-hidden="true"></i><span>Sign out</span></button>
+            </form>
+            <a href="{{ url_for('home') }}" data-label="Return to App" title="Return to App" aria-label="Return to App">
                 <i class="fas fa-arrow-left"></i> <span>Return to App</span>
             </a>
         </div>
@@ -363,10 +329,15 @@ window.matchMedia('(max-width: 900px)').addEventListener('change', () => toggleA
     const btn    = document.getElementById('adminRailToggle');
     if (!layout) return;
 
-    /* Restore persisted state */
-    try {
-        if (localStorage.getItem(KEY) === '1') layout.classList.add('rail-collapsed');
-    } catch (e) {}
+    /* A saved desktop rail must not collapse the mobile drawer. */
+    const desktop = window.matchMedia('(min-width: 901px)');
+    function restoreRail() {
+        let collapsed = false;
+        try { collapsed = localStorage.getItem(KEY) === '1'; } catch (e) {}
+        layout.classList.toggle('rail-collapsed', desktop.matches && collapsed);
+    }
+    restoreRail();
+    desktop.addEventListener('change', restoreRail);
 
     if (btn) {
         btn.addEventListener('click', (ev) => {
@@ -564,20 +535,5 @@ async function toggleMaintenance() {
     } catch { alert('Error toggling maintenance mode'); }
 }
 
-/* ── Download database ────────────────────────────────────────────── */
-function downloadDatabase() {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/admin/backup-database';
-    const csrf = document.createElement('input');
-    csrf.type  = 'hidden';
-    csrf.name  = 'csrf_token';
-    csrf.value = csrfToken || '';
-    form.appendChild(csrf);
-    document.body.appendChild(form);
-    form.submit();
-    document.body.removeChild(form);
-}
 </script>
 {% endblock %}

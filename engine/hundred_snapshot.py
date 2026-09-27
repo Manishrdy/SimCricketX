@@ -90,4 +90,5 @@ def restore(match, snapshot):
     if state.get("is_hundred") is not True:
         raise ValueError("Checkpoint is not a Hundred match")
     vars(match).update(state)
+    match.super_five_free_hit_active = state.get("super_five_free_hit_active", False)
     match.short_manager_class = HundredBowlerManager
