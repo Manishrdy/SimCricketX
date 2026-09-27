@@ -295,6 +295,9 @@
     function updateAvailableModes(numTeams) {
         const modeGrid = document.getElementById('modeGrid');
         const submitBtn = document.getElementById('submitBtn');
+        // A user with no teams gets the empty state instead of the mode
+        // section, so there is no grid, submit button or series options.
+        if (!modeGrid) return;
 
         if (numTeams < 2) {
             modeGrid.innerHTML = `
