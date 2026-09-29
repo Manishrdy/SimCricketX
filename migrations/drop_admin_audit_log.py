@@ -1,7 +1,9 @@
 """Remove the retired SQLite admin audit table and all its rows.
 
-Deploy the code that removes audit-table readers/writers first, and stop old
-application workers before applying. Take your normal production backup first.
+Deploy the code that removes audit-table readers/writers first, and restart or
+stop old application workers before applying — --apply refuses while any process
+holding the database is not running the checked-out code (see
+utils/runtime_registry.py). Take your normal production backup first.
 No application imports or startup hooks are executed by this migration.
 
   python migrations/drop_admin_audit_log.py --db /absolute/path/cricket_sim.db
@@ -11,13 +13,21 @@ Default is a read-only dry run. --apply is transactional and safe to repeat.
 Earlier admin UI removals require no table drops; auction_audit_logs is unrelated.
 """
 import argparse
+import os
 import sqlite3
+import sys
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.runtime_registry import StaleServerError, assert_no_stale_holders  # noqa: E402 - needs the path above
 
 
 def migrate(db_path, apply=False):
     path = Path(db_path).resolve(strict=True)
     mode = 'rw' if apply else 'ro'
+    if apply:
+        assert_no_stale_holders(str(path), 'drop admin_audit_log')
     with sqlite3.connect(f'{path.as_uri()}?mode={mode}', uri=True, timeout=30) as conn:
         if apply:
             conn.execute('BEGIN IMMEDIATE')
@@ -50,6 +60,8 @@ def main():
     args = parser.parse_args()
     try:
         migrate(args.db, args.apply)
+    except StaleServerError as exc:
+        parser.exit(2, f'{exc}\n')
     except (OSError, sqlite3.Error, RuntimeError) as exc:
         parser.exit(1, f'Migration failed: {exc}\n')
 
