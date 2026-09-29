@@ -4930,7 +4930,7 @@ class Match(HundredPresentation):
                 }))
 
                 self._set_outcome(
-                    result_text=f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} {"balls" if self.is_hundred else "overs"} remaining.{self._dls_suffix()}",
+                    result_text=f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} {'balls' if self.is_hundred else 'overs'} remaining.{self._dls_suffix()}",
                     winner_is_home=(self.batting_team is self.home_xi),
                     match_status='completed', margin_type='wickets', margin_value=wkts_left,
                 )
@@ -8159,7 +8159,7 @@ class Match(HundredPresentation):
                     }))
                 
                 self._set_outcome(
-                    result_text=f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} {"balls" if self.is_hundred else "overs"} remaining.{self._dls_suffix()}",
+                    result_text=f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} {'balls' if self.is_hundred else 'overs'} remaining.{self._dls_suffix()}",
                     winner_is_home=(self.batting_team is self.home_xi),
                     match_status='completed', margin_type='wickets', margin_value=wkts_left,
                 )
@@ -8324,7 +8324,7 @@ class Match(HundredPresentation):
                 balls_remaining = (self.overs - self.current_over - 1) * self.balls_per_over
                 if balls_remaining > 0:
                     required_rr = ((self.target - self.score) * (1 if self.is_hundred else self.balls_per_over)) / balls_remaining
-                    all_commentary.append(f"Required: {self.target - self.score} runs from {balls_remaining} balls (RRR: {required_rr:.2f}{" runs/ball" if self.is_hundred else ""})")
+                    all_commentary.append(f"Required: {self.target - self.score} runs from {balls_remaining} balls (RRR: {required_rr:.2f}{' runs/ball' if self.is_hundred else ''})")
             all_commentary.append("<br>")
 
             self.current_ball = 0
