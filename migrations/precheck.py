@@ -20,6 +20,9 @@ Usage:
     # CLI (manual pre-deploy check, e.g. before a standalone data migration)
     python -m migrations.precheck
     python -m migrations.precheck --db /path/to/cricket_sim.db
+
+    # Read-only verification (rehearses on a disposable backup)
+    python -m migrations.precheck --check --db /path/to/cricket_sim.db
 """
 
 import argparse
@@ -218,11 +221,18 @@ def run_all(db, app):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run all schema migrations in order.")
+    parser.add_argument("--check", action="store_true",
+                        help="Verify on a disposable backup without modifying the source database.")
     parser.add_argument("--fail-fast", action="store_true",
                         help="Exit immediately on first migration failure (default: continue).")
     parser.add_argument("--db", default=None,
                         help="SQLite database path (default: repository cricket_sim.db).")
     args = parser.parse_args()
+
+    if args.check:
+        from migrations.verify import main as verify_main
+        target = args.db or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cricket_sim.db")
+        sys.exit(verify_main(["--db", target]))
 
     # Prevent module-level app bootstrap while importing app.py in CLI mode.
     os.environ["SIMCRICKETX_SKIP_GLOBAL_APP"] = "1"
