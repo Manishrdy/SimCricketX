@@ -1300,6 +1300,12 @@ def create_app():
             log_exception(e, source="sqlite")
             print(f"[WARN] Pool FK audit skipped: {e}")
 
+        # Record which code revision this process is serving, so destructive
+        # migrations can refuse to run while an older process still holds the
+        # database (GitHub #195). See utils/runtime_registry.py.
+        from utils.runtime_registry import record_boot
+        record_boot(db_path)
+
     # --- Logging setup (logs to file + terminal) ---
     base_dir = os.path.abspath(os.path.dirname(__file__))
     log_dir = os.path.join(base_dir, "logs")

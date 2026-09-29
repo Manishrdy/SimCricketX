@@ -20,6 +20,11 @@ What --apply does (idempotent, safe to re-run):
 On app boot, migrations/precheck.py calls ``run_on_boot``, which applies
 steps 1-4 only (purely additive) and merely reports whether step 5 is still
 pending, so the destructive drop only ever happens on an explicit --apply.
+
+The drop also refuses to run while any other process holding the database is
+not running the checked-out code (utils/runtime_registry.py). Order it as
+deploy -> restart -> drop: dropping first leaves the still-running old worker
+serving the support API against missing tables (GitHub #195).
 """
 
 from __future__ import annotations
@@ -33,6 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sqlalchemy import text
 
 from utils.exception_tracker import log_exception
+from utils.runtime_registry import StaleServerError, assert_no_stale_holders, stale_holders, describe_stale
 
 COMMUNITY_MODELS = (
     "CommunityPost",
@@ -177,18 +183,30 @@ def _apply_drop(conn, plan: dict) -> None:
             conn.execute(text(f"DROP TABLE {table}"))
 
 
+DROP_ACTION = "drop the support_* tables"
+
+
 def run_migration(db, app, apply: bool = False) -> dict:
     """CLI entry: report by default; with apply, run every step incl. the drop."""
     with app.app_context():
         conn = db.engine.connect()
+        db_path = conn.engine.url.database
         try:
             plan = inspect_plan(conn)
             print_plan(plan)
             if not _pending(plan, include_drop=True):
                 return plan
             if not apply:
+                if plan["support_tables"] and db_path:
+                    stale = stale_holders(db_path)
+                    if stale:
+                        print("\nWARNING: --apply will be refused until this is resolved:\n"
+                              + describe_stale(stale, db_path, DROP_ACTION))
                 print("\nDRY RUN — no changes made. Re-run with --apply to execute.")
                 return plan
+            # Checked before any change, so a refusal leaves the schema untouched.
+            if plan["support_tables"]:
+                assert_no_stale_holders(db_path, DROP_ACTION)
             # inspect_plan already autobegan the connection's transaction.
             try:
                 _apply_additive(conn, plan)
@@ -202,6 +220,8 @@ def run_migration(db, app, apply: bool = False) -> dict:
                 raise RuntimeError(f"migration incomplete, still pending: {after}")
             print("\nAPPLIED — community schema is current; support tables dropped.")
             return plan
+        except StaleServerError:
+            raise  # an operator-ordering refusal, not a fault worth an auto-filed issue
         except Exception as exc:
             log_exception(exc, source="sqlite", context={"migration": "community_board"})
             raise
@@ -257,4 +277,8 @@ if __name__ == "__main__":
     from database import db as _db
     from app import create_app
 
-    run_migration(_db, create_app(), apply=args.apply)
+    try:
+        run_migration(_db, create_app(), apply=args.apply)
+    except StaleServerError as exc:
+        print(f"\n{exc}", file=sys.stderr)
+        sys.exit(2)
