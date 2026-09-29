@@ -1,0 +1,20 @@
+<section class="platform-stats" aria-label="Platform statistics">
+    <dl class="platform-stats-grid">
+        {% for label, short_label, value, icon in [
+            ('Total matches simulated', 'Matches', matches_simulated, 'trophy'),
+            ('Matches simulated today', 'Today', matches_today, 'bolt'),
+            ('Total signups', 'Signups', total_signups, 'users'),
+            ('Signups today', 'Today', signups_today, 'user-plus')
+        ] %}
+        <div class="platform-stat" title="{{ label }}{% if short_label == 'Today' %} (UTC){% endif %}">
+            <dt><i class="fa-solid fa-{{ icon }}" aria-hidden="true"></i><span class="platform-stat-short" aria-hidden="true">{{ short_label }}</span><span class="platform-stat-sr">{{ label }}</span></dt>
+            <dd>{{ "{:,}".format(value) }}</dd>
+        </div>
+        {% endfor %}
+        <div class="platform-stat platform-stat--presence" title="Users active in the last {{ online_activity_minutes }} minutes">
+            <dt><span class="platform-island-dot" aria-hidden="true"></span><span class="platform-stat-short" aria-hidden="true">Active</span><span class="platform-stat-sr" id="active-users-label">Active ({{ online_activity_minutes }}m)</span></dt>
+            <dd id="active-users-count">{{ active_users }}</dd>
+        </div>
+    </dl>
+    <span class="platform-stat-sr">Today is UTC. Active users visited in the last {{ online_activity_minutes }} minutes.</span>
+</section>

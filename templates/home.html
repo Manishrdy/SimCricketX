@@ -3,6 +3,7 @@
 {% block title %}SimCricketX Dashboard{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/platform_stats.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
 <style>
     .global-announcement-banner {
@@ -290,7 +291,7 @@
 <div class="home-dashboard">
     <header class="home-heading">
         <div><p class="home-eyebrow">Your cricket. Your way.</p><h1>Welcome back, {{ user.display_name or user.id.split('@')[0] }}.</h1><p>Build your side. Set the stage. Write the next chapter.</p></div>
-        <div class="home-presence"><span class="presence-dot" aria-hidden="true"></span><span id="active-users-count">{{ active_users }}</span> <span id="active-users-label" title="Users active in the last {{ online_activity_minutes }} minutes">Active ({{ online_activity_minutes }}m)</span></div>
+        {% include "partials/platform_stats.html" %}
     </header>
     <section class="home-options" aria-label="Dashboard options">
         {% for href, icon, label, description, category in [

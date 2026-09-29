@@ -131,6 +131,7 @@ def seed(app) -> list[str]:
         user.force_password_reset = False
         user.force_email_verify = False
         user.community_muted_until = None
+        user.community_engaged_at = None
         user.lockout_until = None
         user.lockout_count = 0
         user.created_at = now - timedelta(days=spec["age_days"])
