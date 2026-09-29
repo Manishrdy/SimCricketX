@@ -9,6 +9,10 @@
   const status = document.getElementById('cmAlertStatus');
   const historyStatus = document.getElementById('cmHistoryStatus');
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  const moderationItems = document.querySelectorAll('[data-moderation-notification]');
+  let moderationCount = 0;
+  let unreadCount = 0;
+  let moderationPending = null;
   let pending = null;
   let writing = false;
   function message(text) {
@@ -16,10 +20,36 @@
     if (historyStatus) historyStatus.textContent = text;
   }
   function badge(count) {
-    dot.hidden = count === 0;
-    dot.textContent = count > 99 ? '99+' : String(count);
-    bell.setAttribute('aria-label', `Notifications, ${count} unread`);
+    unreadCount = count;
+    const total = count + moderationCount;
+    dot.hidden = total === 0;
+    dot.textContent = total > 99 ? '99+' : String(total);
+    const label = `Notifications, ${count} unread` +
+      (moderationCount ? `, ${moderationCount} discussion item${moderationCount === 1 ? '' : 's'} awaiting moderation` : '');
+    bell.setAttribute('aria-label', label);
+    bell.title = label;
+    document.querySelectorAll('[data-moderation-summary]').forEach(el => { el.hidden = moderationCount === 0; });
+    document.querySelectorAll('[data-moderation-count]').forEach(el => { el.textContent = moderationCount; });
     document.querySelectorAll('[data-unread-count]').forEach(el => { el.textContent = count; });
+  }
+  function refreshModeration() {
+    if (!moderationItems.length || moderationPending) return;
+    moderationPending = (async () => {
+      try {
+        const res = await fetch(moderationItems[0].dataset.countUrl, { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const data = await res.json();
+        moderationCount = Math.max(0, Number(data.count) || 0);
+        moderationItems.forEach(el => {
+          el.hidden = moderationCount === 0;
+          el.querySelector('[data-moderation-text]').textContent =
+            `${moderationCount} discussion item${moderationCount === 1 ? '' : 's'} awaiting moderation. Open moderation queue.`;
+        });
+        badge(unreadCount);
+      } catch (_) {
+        // Preserve the last known moderation count when temporarily offline.
+      } finally { moderationPending = null; }
+    })();
   }
   const kinds = { mention: ['fa-at', 'Mention'], reply: ['fa-reply', 'Reply'], comment: ['fa-comment', 'Thread reply'], admin_response: ['fa-shield-alt', 'Admin response'], status_change: ['fa-circle-check', 'Status update'] };
   function relativeTime(value) {
@@ -74,7 +104,7 @@
       const empty = document.createElement('div');
       empty.className = 'cm-alerts__empty';
       const title = document.createElement('strong');
-      title.textContent = "You're all caught up";
+      title.textContent = "No conversation updates";
       const hint = document.createElement('p');
       hint.textContent = 'New replies and mentions will appear here.';
       empty.append(title, hint);
@@ -84,6 +114,7 @@
   }
   function refresh() {
     if (document.hidden || writing) return Promise.resolve();
+    refreshModeration();
     if (pending) return pending;
     pending = (async () => {
       try {

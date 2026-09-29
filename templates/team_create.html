@@ -529,14 +529,17 @@
 /* ── Roster tabs ── */
 .tc-tabs {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0.3rem;
-    margin-top: 0.7rem;
+    overflow-x: auto;
+    margin-top: 1rem;
 }
 .tc-tab {
-    flex: 1 1 5.5rem;
+    flex: 0 0 auto;
     min-width: 0;
-    padding: 0.5rem 0.75rem;
+    min-height: 40px;
+    white-space: nowrap;
+    padding: 0.5rem 0.4rem;
     font-size: 0.82rem;
     font-weight: 600;
     color: var(--fg-secondary);
@@ -547,10 +550,27 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.4rem;
+    gap: 0.25rem;
     transition: all .15s ease;
 }
 .tc-tab:hover { color: var(--fg); border-color: var(--tc-accent); }
+.tc-tab:focus-visible { outline: 2px solid var(--tc-accent); outline-offset: 3px; }
+.tc-roster-head { padding: 1rem; }
+.tc-roster-head .tc-panel-title { margin-bottom: 0.4rem; }
+.tc-roster-requirements {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1rem;
+    margin-top: 0.75rem;
+    font-size: 0.72rem;
+    color: var(--fg-secondary);
+}
+.tc-roster-note {
+    margin: 0.75rem 0 0;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    color: var(--fg-secondary);
+}
 .tc-tab.active {
     color: var(--bg);
     background: var(--tc-accent);
@@ -1010,17 +1030,24 @@
 
       <!-- Right: Roster Builder -->
       <section class="tc-panel">
-        <div class="tc-panel-head">
+        <div class="tc-panel-head tc-roster-head">
           <div class="tc-panel-title">Team Roster</div>
-          <div class="tc-panel-sub">Use arrows to reorder or Remove to remove a player. Each profile: {{ SQUAD_MIN_PLAYERS }}–{{ SQUAD_MAX_PLAYERS }} players, ≥{{ SQUAD_MIN_WICKETKEEPERS }} WK, ≥{{ SQUAD_MIN_BOWLING_OPTIONS }} Bowl/AR.</div>
+          <div class="tc-panel-sub">Build your squad, then use the arrows to set the order.</div>
+          <div class="tc-roster-requirements" aria-label="Squad requirements">
+            <span>{{ SQUAD_MIN_PLAYERS }}–{{ SQUAD_MAX_PLAYERS }} players</span>
+            <span>At least {{ SQUAD_MIN_WICKETKEEPERS }} wicketkeeper</span>
+            <span>{{ SQUAD_MIN_BOWLING_OPTIONS }}+ bowlers / all-rounders</span>
+          </div>
           <div class="tc-tabs" role="tablist">
-            {% for fmt, label in format_labels.items() %}
+            {% for fmt in ['FC', 'ListA', 'T20', 'T10'] if fmt in squad_formats %}
             <button type="button" class="tc-tab {{ 'active' if fmt == 'T20' }}" data-fmt="{{ fmt }}" role="tab">
               <span class="tc-tab-status" id="tc-tab-status-{{ fmt }}" aria-hidden="true"></span>
-              {{ label }} <span class="tc-tab-count" id="tc-count-{{ fmt }}">0</span>
+              <span>{{ 'First Class' if fmt == 'FC' else 'T20/Hundred' if fmt == 'T20' else format_labels[fmt] }}</span>
+              <span class="tc-tab-count" id="tc-count-{{ fmt }}">0</span>
             </button>
             {% endfor %}
           </div>
+          <p class="tc-roster-note">T20 and The Hundred share a squad.</p>
         </div>
         <div id="tc-copy-bar" class="tc-copy-bar" hidden>
           <button type="button" id="tc-copy-btn" class="tc-copy-btn">

@@ -70,14 +70,17 @@ def test_read_only_recovery_does_not_consume_ready_token():
     assert guard.recover(guard.token) == guard.recover()
 
 
-def test_http_recovery_replays_lost_card_and_rejects_stale_instance(app, authenticated_client, regular_user):
+def test_http_recovery_replays_lost_card_and_rejects_stale_instance(app):
+    from scripts.dev_test_accounts import seed, logged_in_client, ACCOUNTS
+    seed(app)
+    authenticated_client = logged_in_client(app, 'user1')
     import app as app_module
     mid = 'delivery-recovery-test'
     calls = []
     def advance():
         calls.append(1)
         return {"score": 8, "scorecard_data": {"innings": 1}, "innings_end": True}
-    match = SimpleNamespace(data={"created_by": regular_user.id}, is_fc=False, next_ball=advance)
+    match = SimpleNamespace(data={"created_by": ACCOUNTS["user1"]["email"]}, is_fc=False, is_hundred=False, next_ball=advance)
     app_module.MATCH_INSTANCES[mid] = match
     try:
         url = f'/match/{mid}'

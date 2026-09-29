@@ -774,7 +774,7 @@ function showDecisionModal(data) {
             `(follow-on margin ${ctx.follow_on_margin || 0}). ${ctx.days_remaining || 0} day(s) left.`;
     } else {
         title.textContent = 'Select Next Bowler';
-        context.textContent = `Choose bowler for ${IS_HUNDRED_MATCH ? "set" : "over"} ${ctx.upcoming_over || ((data.over || 0) + 1)}.`;
+        context.textContent = `Choose bowler for ${IS_HUNDRED_MATCH ? "set" : "over"} ${ctx.upcoming_over || ((data.over || 0) + 1)}.${ctx.changes_end ? " Change of ends." : ""}`;
     }
 
     optionsWrap.innerHTML = '';
@@ -789,11 +789,11 @@ function showDecisionModal(data) {
             // entirely for FC options — showing "0 ov left" there would
             // wrongly read as "this bowler is out of overs."
             const meta = type === 'next_bowler'
-                ? `${opt.bowling_type || ''} | ${(opt.overs_bowled || 0) * (IS_HUNDRED_MATCH ? 5 : 1)} ${IS_HUNDRED_MATCH ? 'balls' : 'ov'} done` +
+                ? `${opt.bowling_type || ''} | ${IS_HUNDRED_MATCH ? (opt.balls_bowled ?? opt.overs_bowled * 5) : (opt.overs_bowled || 0)} ${IS_HUNDRED_MATCH ? 'balls' : 'ov'} done` +
                   (opt.overs_remaining !== undefined ? ` | ${opt.overs_remaining * (IS_HUNDRED_MATCH ? 5 : 1)} ${IS_HUNDRED_MATCH ? 'balls' : 'ov'} left` : '')
                 : `${opt.role || ''} | Bat ${opt.batting_rating || 0}`;
             card.innerHTML = `
-                <span><strong>${opt.continue_bowler ? "Continue: " : ""}${escapeHtml(opt.name)}</strong></span>
+                <span><strong>${opt.continue_bowler ? "Continue for five more balls: " : ""}${escapeHtml(opt.name)}</strong></span>
                 <span class="decision-meta">${escapeHtml(meta)}</span>
             `;
         }
@@ -1116,8 +1116,8 @@ function updateScoreBanner(data) {
     if (oversEl) oversEl.textContent = IS_HUNDRED_MATCH ? `${data.legal_balls ?? (data.over * 5 + data.ball)}/${data.innings_ball_limit ?? ((data.total_overs || 20) * 5)} balls` : `${data.over}.${data.ball} ov`;
 
     // Current Run Rate
-    const totalBalls = data.over * BALLS_PER_SET + data.ball;
-    const crr = totalBalls > 0 ? ((data.score / totalBalls) * LIVE_RATE_UNIT).toFixed(2) : '0.00';
+    const totalBalls = IS_HUNDRED_MATCH ? (data.legal_balls ?? data.over * 5 + data.ball) : data.over * BALLS_PER_SET + data.ball;
+    const crr = totalBalls > 0 ? ((data.score / totalBalls) * LIVE_RATE_UNIT).toFixed(2) : (IS_HUNDRED_MATCH ? '—' : '0.00');
     const crrEl = document.getElementById('sb-crr');
     if (crrEl) crrEl.textContent = crr;
 
@@ -1142,7 +1142,7 @@ function updateScoreBanner(data) {
             'Powerplay': 'POWERPLAY',
             'PP1':       'POWERPLAY (PP1)',
             'Middle':    '',
-            'Death':     'DEATH OVERS',
+            'Death':     IS_HUNDRED_MATCH ? 'DEATH' : 'DEATH OVERS',
         };
         if (data.phase_name !== undefined) {
             phaseEl.textContent = phaseLabelMap[data.phase_name] ?? '';
@@ -1169,7 +1169,7 @@ function updateScoreBanner(data) {
     }
 
     // --- Top Row: Batsmen ---
-    const strikeRate = (runs, balls) => (balls > 0 ? ((runs / balls) * 100).toFixed(1) : '0.0');
+    const strikeRate = (runs, balls) => (balls > 0 ? ((runs / balls) * 100).toFixed(1) : (IS_HUNDRED_MATCH ? '—' : '0.0'));
     const batStatsHtml = (runs, balls, fours, sixes) => `
         <div class="sb-bat-stats">
             <span class="sb-bat-fig">${runs} (${balls})</span>
@@ -1207,12 +1207,12 @@ function updateScoreBanner(data) {
         const remOv  = data.bowler_overs_remaining;
         const usedOv = (remOv !== undefined) ? (maxOv - remOv) : null;
         const quotaHtml = (usedOv !== null)
-            ? `<span class="sb-quota-badge" title="Overs bowled / quota">${usedOv}/${maxOv}</span>`
+            ? `<span class="sb-quota-badge" title="${IS_HUNDRED_MATCH ? 'Balls bowled / quota' : 'Overs bowled / quota'}">${IS_HUNDRED_MATCH ? (data.bowler_balls ?? usedOv * 5) : usedOv}/${maxOv * (IS_HUNDRED_MATCH ? 5 : 1)}</span>`
             : '';
         bowlerEl.innerHTML = `
             <span class="sb-strip-label">BOWL</span>
             <span class="sb-player-name">${escapeHtml(data.bowler)}</span>
-            <span class="sb-player-stat">${data.bowler_wickets ?? 0}/${data.bowler_runs ?? 0} (${data.bowler_overs ?? '0.0'})</span>
+            <span class="sb-player-stat">${data.bowler_wickets ?? 0}/${data.bowler_runs ?? 0} ${IS_HUNDRED_MATCH ? `· ${data.bowler_balls ?? '—'} balls` : `(${data.bowler_overs ?? '0.0'})`}</span>
             ${quotaHtml}
         `;
     }
@@ -1226,7 +1226,7 @@ function updateScoreBanner(data) {
     }
 
     // --- Strip: Over flow + This Over ball dots ---
-    if (data.ball_data) {
+    if (data.ball_data && (!data.ball_data.delivery_id || !thisOverBallResults.some(b => b.delivery_id === data.ball_data.delivery_id))) {
         const bd = data.ball_data;
 
         // Detect new over: finalize previous over total, reset current
@@ -1251,7 +1251,7 @@ function renderOverFlow() {
 
     // Show last 5 completed overs + current in-progress
     const show = completedOverTotals.slice(-5);
-    let html = '<span class="sb-strip-label">OVERS</span>';
+    let html = `<span class="sb-strip-label">${IS_HUNDRED_MATCH ? 'SETS' : 'OVERS'}</span>`;
 
     show.forEach(ov => {
         let cls = 'sb-over-box';
@@ -1278,7 +1278,7 @@ function renderThisOverBalls() {
         let cls = 'sb-ball-dot ball-' + bd.runs;
         if (bd.batter_out) { label = 'W'; cls = 'sb-ball-dot ball-w'; }
         else if (bd.extra_type === 'Wide') { label = 'Wd'; cls = 'sb-ball-dot ball-wd'; }
-        else if (bd.extra_type === 'NoBall') { label = 'Nb'; cls = 'sb-ball-dot ball-nb'; }
+        else if (['No Ball', 'NoBall'].includes(bd.extra_type)) { label = 'Nb'; cls = 'sb-ball-dot ball-nb'; }
         else if (bd.runs === 4) { cls = 'sb-ball-dot ball-4'; }
         else if (bd.runs === 6) { cls = 'sb-ball-dot ball-6'; }
         span.className = cls;
@@ -1571,7 +1571,7 @@ async function _processBallResult(data) {
     }
 
     // Dashboard: process ball_data for every ball (runs in background regardless of view)
-    if (data.ball_data) {
+    if (data.ball_data && (!data.ball_data.delivery_id || !ballHistory.some(b => b.delivery_id === data.ball_data.delivery_id))) {
         ballHistory.push(data.ball_data);
         updateCurrentOverBalls(data.ball_data);
         if (typeof updateDashboard === 'function') {
@@ -1712,13 +1712,13 @@ async function _processBallResult(data) {
         const sbScoreEl = document.getElementById('sb-score');
         if (sbScoreEl) sbScoreEl.textContent = '0/0';
         const sbOversEl = document.getElementById('sb-overs');
-        if (sbOversEl) sbOversEl.textContent = '0.0 ov';
+        if (sbOversEl) sbOversEl.textContent = IS_HUNDRED_MATCH ? `0/${data.innings_ball_limit || 100} balls` : '0.0 ov';
         const rrrWrap = document.getElementById('sb-rrr-wrap');
         if (rrrWrap) rrrWrap.style.display = '';
         const phaseEl = document.getElementById('sb-phase');
         if (phaseEl) phaseEl.textContent = '';
         const overFlowEl = document.getElementById('sb-over-flow');
-        if (overFlowEl) overFlowEl.innerHTML = '<span class="sb-strip-label">OVERS</span>';
+        if (overFlowEl) overFlowEl.innerHTML = `<span class="sb-strip-label">${IS_HUNDRED_MATCH ? 'SETS' : 'OVERS'}</span>`;
         const thisOverEl = document.getElementById('sb-this-over');
         if (thisOverEl) thisOverEl.innerHTML = '';
 
@@ -1890,13 +1890,13 @@ function showScorecard(data, completeData) {
             <td>${bowler.maidens}</td>
             <td>${bowler.runs}</td>
             <td><strong>${bowler.wickets}</strong></td>
-            <td>${bowler.economy}</td>
+            <td>${IS_HUNDRED_MATCH ? (bowler.rpb ?? (bowler.balls > 0 ? (bowler.runs / bowler.balls).toFixed(2) : '—')) : bowler.economy}</td>
         `;
     });
 
     // Summary
     document.getElementById('scorecard-summary').textContent =
-        `Total: ${data.total_score}/${data.wickets} | Overs: ${data.overs} | Run Rate: ${data.run_rate} | Extras: ${data.extras}`;
+        `Total: ${data.total_score}/${data.wickets} | ${IS_HUNDRED_MATCH ? 'Balls' : 'Overs'}: ${data.overs} | ${IS_HUNDRED_MATCH ? 'CRR (runs/ball)' : 'Run Rate'}: ${data.run_rate} | Extras: ${data.extras}`;
 
     // Target Info
     const targetInfo = document.getElementById('target-info');
@@ -2678,7 +2678,7 @@ function soLogMiniScorecard(sc) {
         }
     });
     const bowl = sc.bowling || {};
-    appendLog(`  ${bowl.name}: ${bowl.overs || '0.0'} ov — ${bowl.runs}/${bowl.wickets}`);
+    appendLog(`  ${bowl.name}: ${IS_HUNDRED_MATCH ? `${bowl.wickets}/${bowl.runs} · ${bowl.balls ?? '—'} balls` : `${bowl.overs || '0.0'} ov — ${bowl.runs}/${bowl.wickets}`}`);
     appendLog(`  Total: ${sc.total}/${sc.wickets}`);
 }
 
@@ -2837,8 +2837,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 bowler_runs: state.current_bowler.runs,
                 bowler_wickets: state.current_bowler.wickets,
                 bowler_overs: state.current_bowler.overs,
+                bowler_balls: state.bowler_balls,
+                bowler_max_overs: state.bowler_max_overs,
+                bowler_overs_remaining: state.bowler_overs_remaining,
             };
             updateScoreBanner(bannerData);
+            if (IS_HUNDRED_MATCH && Array.isArray(state.hundred_deliveries)) {
+                ballHistory = state.hundred_deliveries.filter(b => b.innings === state.innings);
+                const totals = new Map();
+                for (const b of ballHistory) totals.set(b.over, (totals.get(b.over) || 0) + b.runs);
+                overRuns = [];
+                completedOverTotals = [];
+                for (const [over, runs] of totals) {
+                    if (over < state.current_over) {
+                        overRuns[over] = runs;
+                        completedOverTotals.push({over, runs});
+                    }
+                }
+                thisOverBallResults = ballHistory.filter(b => b.over === state.current_over);
+                currentOverRunsAccum = thisOverBallResults.reduce((total, b) => total + b.runs, 0);
+                if (typeof renderOverFlow === 'function') renderOverFlow();
+                if (typeof renderThisOverBalls === 'function') renderThisOverBalls();
+                const firstHistory = state.hundred_deliveries.filter(b => b.innings === 1);
+                if (state.innings > 1) innings1Data = {ballHistory: firstHistory, overRuns: []};
+                if (typeof refreshDashboard === 'function' && currentMainView === 'matchcenter') {
+                    refreshDashboard(ballHistory, [], innings1Data);
+                }
+            }
 
             // Set batting team name in banner
             const batNameEl = document.getElementById('sb-bat-name');
