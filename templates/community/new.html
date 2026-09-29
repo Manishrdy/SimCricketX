@@ -73,7 +73,7 @@
     <div class="cm-field" data-field="body">
       <label for="cm-body"><span id="cm-body-label">Details</span> <span class="cm-counter" data-counter-for="cm-body"></span></label>
       <textarea id="cm-body" class="cm-textarea" name="body" maxlength="{{ limits.body[1] }}" style="min-height:160px">{{ post.body if post else '' }}</textarea>
-      <small id="cm-body-hint">{{ limits.body[0] }}+ characters. Plain text; links are clickable. Type @ to tag someone.</small>
+      <small id="cm-body-hint">{{ limits.body[0] }}+ characters. Plain text; links are clickable. Type @ to tag someone.{% if current_user.is_admin %} Use @everyone for all registered users or @community for users who have engaged with the community.{% endif %}</small>
       <p class="cm-inline-error" hidden></p>
     </div>
 
@@ -101,6 +101,7 @@
 
 <script type="application/json" id="cm-config">{{ {
   'mode': 'edit' if post else 'new',
+  'is_admin': current_user.is_admin,
   'post': post,
   'limits': limits,
   'prefill': prefill,

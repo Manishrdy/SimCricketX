@@ -52,6 +52,8 @@ def linkify(text, mentions=None) -> Markup:
                 cls += " cm-mention--me"
             if m.get("is_admin"):
                 cls += " cm-mention--admin"
+            if m.get("is_audience"):
+                cls += " cm-mention--audience"
             classes[key] = cls
     pattern = _URL_RE
     if classes:
@@ -299,7 +301,8 @@ def register_community_routes(app, *, db=db, limiter=None):
             except cs.CommunityError:
                 post = None
         people = cs.mention_candidates(current_user, (request.args.get("q") or "")[:cs.MENTION_QUERY_MAX],
-                                       post=post, private=request.args.get("private") == "1")
+                                       post=post, private=request.args.get("private") == "1",
+                                       include_audiences=request.args.get("audiences") == "1")
         for person in people:  # same avatar colour as the server-rendered pages
             person["hue"] = zlib.crc32(person["name"].encode()) % 360
         return jsonify({"people": people})

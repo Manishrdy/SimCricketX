@@ -132,12 +132,17 @@
         av.className = 'cm-avatar' + (p.is_admin ? ' cm-avatar--admin' : '');
         av.style.setProperty('--h', p.hue || 210);
         av.setAttribute('aria-hidden', 'true');
-        av.textContent = p.name.slice(0, 1).toUpperCase();
+        av.textContent = p.is_audience ? '@' : p.name.slice(0, 1).toUpperCase();
         const name = document.createElement('span');
         name.className = 'cm-mention-opt__name';
         name.textContent = p.name;
         opt.append(av, name);
-        if (p.is_admin) {
+        if (p.is_audience) {
+          const b = document.createElement('span');
+          b.className = 'cm-mention-opt__hint';
+          b.textContent = p.hint || 'Audience';
+          opt.appendChild(b);
+        } else if (p.is_admin) {
           const b = document.createElement('span');
           b.className = 'cm-admin-badge';
           b.innerHTML = '<i class="fas fa-shield-halved" aria-hidden="true"></i>Admin';
@@ -164,6 +169,7 @@
       const postId = opts.postId ? opts.postId() : null;
       if (postId) params.set('post', postId);
       if (opts.isPrivate && opts.isPrivate()) params.set('private', '1');
+      if (opts.audiences) params.set('audiences', '1');
       try {
         const res = await fetch(`${url}?${params}`, { credentials: 'same-origin', signal: ctrl.signal,
                                                       headers: { 'Accept': 'application/json' } });
@@ -497,7 +503,8 @@
     let submitting = false;
     const tags = newMentionState();
     const privateBox = document.getElementById('cm-private');
-    const tagOpts = { postId: () => (post ? post.id : null), isPrivate: () => !!(privateBox && privateBox.checked) };
+    const tagOpts = { postId: () => (post ? post.id : null), isPrivate: () => !!(privateBox && privateBox.checked),
+                      audiences: true };
     ['cm-body', 'cm-expected', 'cm-actual'].forEach(id => initMentions(document.getElementById(id), tags, tagOpts));
 
     const flair = () => (form.querySelector('input[name="flair"]:checked') || {}).value || '';
@@ -507,7 +514,8 @@
       const isBug = f === 'bug';
       bugFields.hidden = !isBug;
       bodyLabel.textContent = isBug ? 'Anything else? (optional)' : 'Details';
-      bodyHint.textContent = isBug ? 'Error messages, match ID, anything that helps.' : `${limits.body[0]}+ characters. Plain text; links are clickable.`;
+      const audienceHint = cfg.is_admin ? ' Use @everyone for all registered users or @community for community participants.' : '';
+      bodyHint.textContent = (isBug ? 'Error messages, match ID, anything that helps.' : `${limits.body[0]}+ characters. Plain text; links are clickable.`) + audienceHint;
       privateField.hidden = f === 'announcement';
     }
     form.querySelectorAll('input[name="flair"]').forEach(r => r.addEventListener('change', syncFlair));

@@ -70,6 +70,9 @@ class User(UserMixin, db.Model):
 
     # Community board mute (read-only on the board, rest of the site unaffected)
     community_muted_until = db.Column(db.DateTime, nullable=True)
+    # First successful community post, reply, upvote or downvote. Persistent so
+    # removing a vote or later deleting content does not erase participation.
+    community_engaged_at = db.Column(db.DateTime, nullable=True)
 
     # Onboarding guide progress as JSON: which page tours the user has finished
     # or skipped, and where they are in the new-user "first match" journey.

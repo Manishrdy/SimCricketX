@@ -1,0 +1,30 @@
+/* A single compact row, shared by the public and signed-in homepages. */
+.platform-stats {
+    --stats-accent: var(--brand-primary, var(--brand));
+    --stats-border: var(--border-light, var(--card-border));
+    --stats-muted: var(--text-muted, var(--fg-muted));
+    box-sizing: border-box;
+    width: min(320px, 100%);
+    margin: 0 auto 28px;
+    padding: 12px 8px;
+    border: 1px solid var(--stats-border);
+    border-radius: 999px;
+    background: linear-gradient(115deg, color-mix(in srgb, var(--stats-accent) 7%, transparent), transparent), var(--bg-surface, var(--card-bg));
+    color: var(--text-main, var(--fg));
+    box-shadow: 0 5px 18px color-mix(in srgb, var(--stats-accent) 10%, transparent);
+}
+.platform-stats-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; }
+.platform-stat { min-width: 0; padding: 0 5px; text-align: center; }
+.platform-stat + .platform-stat { border-left: 1px solid var(--stats-border); }
+.platform-stat dt { display: flex; justify-content: center; align-items: center; gap: 3px; color: var(--stats-muted); font-size: .54rem; line-height: 1.4; white-space: nowrap; }
+.platform-stat dt i { font-size: .6rem; color: var(--stats-accent); }
+.platform-stat:nth-child(even) dt i { color: var(--brand-secondary, var(--amber)); }
+.platform-stat dd { margin: 4px 0 0; font-size: .95rem; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.platform-stat--presence dd { color: var(--stats-accent); }
+.platform-island-dot { width: 5px; height: 5px; flex-shrink: 0; border-radius: 50%; background: var(--stats-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--stats-accent) 12%, transparent); }
+.platform-stat-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+body > .platform-stats { max-width: calc(100% - 24px); }
+@media (max-width: 360px) {
+    .platform-stat dt { gap: 3px; font-size: .52rem; }
+    .platform-stat dd { font-size: .85rem; }
+}

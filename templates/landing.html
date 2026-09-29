@@ -108,6 +108,7 @@
 
     <!-- ── Styles ─────────────────────────────────────────────── -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/platform_stats.css') }}">
 </head>
 <body>
 
@@ -285,26 +286,7 @@
 <!-- ════════════════════════════════════════════════════════════
      LIVE STATS BAR
      ════════════════════════════════════════════════════════════ -->
-<section class="lp-stats" aria-label="Platform statistics">
-    <div class="lp-stats-inner">
-        <div class="lp-stat">
-            <span class="lp-stat-num" id="statMatches">{{ matches_simulated | default(0) }}</span>
-            <span class="lp-stat-label">Matches Simulated</span>
-        </div>
-        <div class="lp-stat">
-            <span class="lp-stat-num" id="statVisits">{{ total_visits | default(0) }}</span>
-            <span class="lp-stat-label">Platform Visits</span>
-        </div>
-        <div class="lp-stat">
-            <span class="lp-stat-num">2</span>
-            <span class="lp-stat-label">Match Formats</span>
-        </div>
-        <div class="lp-stat">
-            <span class="lp-stat-num">100%</span>
-            <span class="lp-stat-label">Free to Use</span>
-        </div>
-    </div>
-</section>
+{% include "partials/platform_stats.html" %}
 
 
 <!-- ════════════════════════════════════════════════════════════
@@ -666,14 +648,6 @@
 
     btn.addEventListener('click', function () {
         applyTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
-    });
-
-    /* ── Format stat numbers with locale commas ────────────────── */
-    ['statMatches', 'statVisits'].forEach(function (id) {
-        var el = document.getElementById(id);
-        if (!el) return;
-        var n = parseInt(el.textContent, 10);
-        if (!isNaN(n)) el.textContent = n.toLocaleString();
     });
 
     /* ── Footer year ───────────────────────────────────────────── */
