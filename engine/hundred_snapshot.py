@@ -42,7 +42,7 @@ def serialize(match):
         return {"ref": index}
 
     state = {k: v for k, v in vars(match).items()
-             if k not in ("short_manager_class", "_delivery", "_delivery_guard", "last_accessed") and not callable(v)}
+             if k not in ("short_manager_class", "_delivery", "_delivery_guard", "last_accessed", "_hundred_delivery_context", "_hundred_delivery_event") and not callable(v)}
     state["data"] = {k: v for k, v in match.data.items() if k not in ("hundred_snapshot", "super_over_snapshot")}
     state["match_data"] = state["data"]
     root = encode(state)
@@ -90,5 +90,14 @@ def restore(match, snapshot):
     if state.get("is_hundred") is not True:
         raise ValueError("Checkpoint is not a Hundred match")
     vars(match).update(state)
+    match.hundred_policy_version = state.get('hundred_policy_version', 1)
+    match.hundred_presentation_version = 2
+    match.hundred_delivery_sequence = state.get('hundred_delivery_sequence', 0)
+    match.hundred_deliveries = state.get('hundred_deliveries', [])
+    match._hundred_delivery_context = None
+    match._hundred_delivery_event = None
+    # A legacy checkpoint mid-set has already announced its bowler.
+    match._hundred_announced_set = state.get('_hundred_announced_set',
+        (match.innings, match.current_over) if match.current_ball or match.current_over_outcomes else None)
     match.super_five_free_hit_active = state.get("super_five_free_hit_active", False)
     match.short_manager_class = HundredBowlerManager

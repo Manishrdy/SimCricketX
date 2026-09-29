@@ -32,8 +32,9 @@
 {% endif %}
 <section id="cmAlerts" class="cm-alerts" aria-label="Notifications" hidden
   data-list-url="{{ url_for('community_api_notifications') }}" data-read-url="{{ url_for('community_api_notifications_read') }}">
-  <div class="cm-alerts__head"><div><span class="cm-alerts__eyebrow">COMMUNITY</span><div class="cm-alerts__heading">Notifications <span class="cm-alerts__count" data-unread-count>0</span></div></div><button type="button" class="cm-alerts__read" data-notifications-read-all title="Mark all notifications read"><i class="fas fa-check-double" aria-hidden="true"></i><span>Mark all read</span></button></div>
+  <div class="cm-alerts__head"><div><span class="cm-alerts__eyebrow">COMMUNITY</span><div class="cm-alerts__heading">Notifications</div><div class="cm-alerts__summary"><span data-unread-count>0</span> unread<span data-moderation-summary hidden> · <span data-moderation-count>0</span> awaiting moderation</span></div></div><button type="button" class="cm-alerts__read" data-notifications-read-all title="Mark all notifications read"><i class="fas fa-check-double" aria-hidden="true"></i><span>Mark all read</span></button></div>
   <p id="cmAlertStatus" role="status">Loading notifications…</p>
+  {% include 'community/_moderation_notification.html' %}
   <div id="cmAlertItems"></div>
   <a class="cm-alerts__footer" href="{{ url_for('community_notifications_page') }}">View all notifications <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
 </section>

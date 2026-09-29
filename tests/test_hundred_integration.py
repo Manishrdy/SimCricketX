@@ -41,10 +41,26 @@ def test_setup_live_restore_and_no_squad_creation(app,hundred_qa):
         response=client.post(f'/match/{mid}/next-ball')
         assert response.status_code==200,response.json
     assert response.json['balls_per_over']==5
+    # Both transports return the same authoritative event for a retry token.
+    ready = client.get(f'/match/{mid}/live-state?delivery=1').get_json()
+    token = ready['delivery_token']
+    response = client.post(f'/match/{mid}/next-ball', json={'delivery_token': token})
+    assert response.status_code == 200
+    import app as app_module
+    socket = app_module.socketio.test_client(app, flask_test_client=client)
+    try:
+        socket.emit('next_ball', {'match_id': mid, 'delivery_token': token})
+        replay = next(e['args'][0] for e in socket.get_received() if e['name'] == 'ball_result')
+        assert replay['ball_data'] == response.json['ball_data']
+    finally:
+        socket.disconnect()
     old=MATCH_INSTANCES.pop(mid)
     live=client.get(f'/match/{mid}/live-state')
     assert live.status_code==200,live.json
     assert live.json['legal_balls']==old.current_over*5+old.current_ball
+    assert live.json['hundred_deliveries'] == old.hundred_deliveries
+    assert live.json['bowling_policy_version'] == 2
+    assert live.json['hundred_deliveries'][-1]['delivery_id'] == response.json['ball_data']['delivery_id']
     assert TeamProfile.query.filter_by(format_type='Hundred').count()==0
     assert client.get('/statistics?match_format=Hundred').status_code==200
     assert client.get('/match/setup').status_code==200
@@ -67,6 +83,7 @@ def test_stats_isolation_exports_and_tour(hundred_qa):
     assert service.get_overall_stats(owner,'T20')['bowling'][0]['runs']==99
     csv=service.export_to_csv([h],'bowling','Hundred')
     assert 'economy_unit' in csv and 'runs/100 balls' in csv
+    assert 'rpb' in csv.splitlines()[0]
     tour=create_tour('[QA] Hundred tour',owner,teams[0].id,teams[1].id,{'Hundred':1},['Hundred'])
     assert tour.series[0].format_type=='Hundred'
 
@@ -94,8 +111,14 @@ def test_complete_match_archive_and_readonly_scorecard(app,hundred_qa,monkeypatc
     saved=db.session.get(Match,mid)
     assert saved and saved.match_format=='Hundred'
     assert saved.format_metadata['legal_balls']==[100,100]
+    events = saved.format_metadata['deliveries']
+    assert len(events) == 200
+    assert events[-1]['innings'] == 2 and events[-1]['legal_balls_after'] == 100
+    assert sum(e['runs'] for e in events if e['innings'] == 2) == 100
     assert MatchScorecard.query.filter_by(match_id=mid,record_type='bowling').count()==10
-    assert client.get(f'/match/{mid}/scoreboard').status_code==200
+    scoreboard = client.get(f'/match/{mid}/scoreboard')
+    assert scoreboard.status_code == 200
+    assert b'RPB' in scoreboard.data and b'Five-ball maidens' in scoreboard.data
     assert client.get('/my-matches?match_format=Hundred').status_code==200
 
 

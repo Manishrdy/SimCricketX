@@ -12,6 +12,7 @@
   <section class="cm-inbox" aria-label="Notification history">
     <div class="cm-inbox__toolbar"><div class="cm-inbox__summary"><strong>All activity <span class="cm-inbox__total">{{ total }}</span></strong><span class="cm-inbox__unread"><span data-unread-count>{{ unread }}</span> unread</span></div><button type="button" class="cm-alerts__read" data-notifications-read-all><i class="fas fa-check-double" aria-hidden="true"></i><span>Mark all read</span></button></div>
     <p role="status" id="cmHistoryStatus" class="cm-alerts__status"></p>
+    {% include 'community/_moderation_notification.html' %}
     {% for n in notes %}
     {% set icon, label = kinds.get(n.kind, ('fa-bell', 'Update')) %}
     <a class="cm-alerts__item cm-alerts__item--history{% if not n.read %} cm-unread{% endif %}" data-notification-id="{{ n.id }}" href="{{ n.url }}">
@@ -20,7 +21,7 @@
       <span class="cm-alerts__unread-dot" aria-label="Unread" {% if n.read %}hidden{% endif %}></span><i class="fas fa-chevron-right cm-alerts__chevron" aria-hidden="true"></i>
     </a>
     {% else %}
-    <div class="cm-alerts__empty"><span class="cm-alerts__empty-icon"><i class="far fa-bell" aria-hidden="true"></i></span><h2>You're all caught up</h2><p>Replies, mentions and updates will appear here.<br>Start a conversation to get things going.</p><a class="cm-btn" href="{{ url_for('community_index') }}">Explore the community <i class="fas fa-arrow-right" aria-hidden="true"></i></a></div>
+    <div class="cm-alerts__empty"><span class="cm-alerts__empty-icon"><i class="far fa-bell" aria-hidden="true"></i></span><h2>No conversation updates</h2><p>Replies, mentions and updates will appear here.<br>Start a conversation to get things going.</p><a class="cm-btn" href="{{ url_for('community_index') }}">Explore the community <i class="fas fa-arrow-right" aria-hidden="true"></i></a></div>
     {% endfor %}
     {% if page > 1 or has_next %}<nav aria-label="Notification pages" class="cm-alert-pages">
       {% if page > 1 %}<a class="cm-btn cm-btn--sm" href="{{ url_for('community_notifications_page', page=page-1) }}"><i class="fas fa-arrow-left" aria-hidden="true"></i>Newer</a>{% else %}<span></span>{% endif %}<span>Page {{ page }}</span>

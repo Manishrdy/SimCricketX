@@ -56,8 +56,48 @@ Day/night dew affects only the chase, rising from ball 50 to ball 90 on the orig
 
 Match scorecards, not the source squad profile, define the statistical format. Hundred skips writes to shared T20 career counters. Super Fives remain marked separately and are excluded from regular statistics. Hundred tournament views aggregate authoritative scorecard rows; the cache also stores the correct Hundred economy, but is bypassed because its schema lacks some dedicated totals.
 
-Bowling economy is `runs conceded × 100 / legal balls` (Econ/100); live scoring rates are runs per ball; NRR is runs per five balls. Comparisons normalize economy to runs per six balls. Undefined rates are displayed as an em dash. CSV/TXT exports identify format and units. See [ACS guidance](https://acscricket.com/wp-content/uploads/The-Hundred-ACS-Guidance.pdf).
+Match-facing bowling rates use `runs conceded / legal balls` (RPB). Historical `economy` fields remain `runs conceded × 100 / legal balls` (Econ/100); exports add an RPB column without reinterpreting those fields. Live scoring rates are runs per ball; NRR is runs per five balls. Comparisons normalize economy to runs per six balls. Undefined rates are displayed as an em dash. CSV/TXT exports identify format and units. See [ACS guidance](https://acscricket.com/wp-content/uploads/The-Hundred-ACS-Guidance.pdf).
 
 ## Validation
 
 `tests/test_hundred.py` covers all reduced lengths, completion-safe allocations, set/end transitions, manual continuation, illegal-ball counts, timeout, deterministic checkpoints, late rain, day/night dew and seven tied Super Fives. Fifty seeded matches cover five pitches in both lighting modes. `tests/test_hundred_integration.py` uses shared QA identities to cover T20-only setup, restoration, archive/scoreboard, separate statistics/exports, tours, points, NRR and reversal. Existing format, statistics, weather and tournament regression suites are also run before delivery.
+
+## Presentation and bowling policy v2
+
+New Hundred matches use presentation version 2 and bowling policy version 2,
+independent of the ECB playing-conditions identifier. The existing layout remains.
+Commentary uses integer ball numbers, `WD`/`NB` on illegal attempts, ball-range set
+summaries, and distinct opening/continuation/return announcements. Multiple illegal
+attempts repeat the next legal-ball number; each has a unique delivery ID. End
+changes are announced with the next settled bowler decision, never after the
+innings has ended. Five-ball maidens remain in the scorecard; RPB replaces the
+match-facing economy display. Rates without a denominator display an em dash.
+
+`hundred_deliveries` is an authoritative, persisted regular-innings ledger. Each
+event includes its original innings and players, legal-ball positions before and
+after, completed/next bowling ends, batting and extras components, bowler charges
+and wicket credit, and cumulative player totals. The event is committed before
+terminal scorecards, innings resets, or archives. HTTP/WebSocket responses expose
+it as `ball_data`; live-state restoration and archived format metadata carry the
+same ledger. Super Fives remain separate from this regular-innings ledger.
+
+The v2 captain still decides every five balls using completion-safe eligibility.
+A productive legal incumbent gets a two-rating-point continuation preference;
+the existing preferred-type bonus is three points. Productive means a
+bowler-credited wicket or concession rate no greater than the innings rate over
+the preceding set. Ties prefer fewer balls bowled, then stable player identity.
+Before the death phase the policy aims to retain up to two sets each for the two
+strongest available death-phase options (including pitch/type preference), subject
+to quota, remaining allocation, and feasible completion. The reserve is abandoned
+when infeasible; legality is never relaxed. These are simulation policy choices,
+not ECB rules. Delivery outcome probability settings are unchanged.
+
+Snapshots lacking a bowling policy version restore with policy 1. They still
+receive scoring and display corrections. New snapshots preserve delivery IDs,
+set announcements, and the selected policy. Missing historical delivery components
+are not invented; historical commentary and economy fields are retained.
+
+Additional regression coverage lives in `tests/test_hundred_presentation.py` and
+`tests/js/hundred_presentation.test.cjs`, covering illegal attempts, terminal
+balls, scoring attribution, continuations across ends, restoration, tactical
+selection, and graph positions.

@@ -869,7 +869,8 @@ def register_match_routes(
             "phase_name": None if match.is_fc else match.fmt.phase_key(match.current_over),
             "bowler_max_overs": getattr(match.fmt, "max_bowler_overs", None),
             "bowling_eligibility": match.get_bowling_eligibility(),
-            **(match.hundred_state() if match.is_hundred else {}),
+            **({**match.hundred_state(), "hundred_deliveries": match.hundred_deliveries,
+                 "bowler_overs_remaining": match.bowler_manager.overs_remaining(current_bowler.get("name", ""))} if match.is_hundred else {}),
             "rain_affected": getattr(match, "rain_affected", False),
             "dls_par": match._current_dls_par() if hasattr(match, "_current_dls_par") else None,
             "rain_events": getattr(match, "rain_events_log", []),
@@ -956,6 +957,7 @@ def register_match_routes(
                     {
                         "name": player_name,
                         "overs": format_overs(card),
+                        "balls": card.balls_bowled,
                         "runs_conceded": card.runs_conceded,
                         "wickets": card.wickets,
                         "maidens": card.maidens,
@@ -964,6 +966,7 @@ def register_match_routes(
                         "byes": card.byes or 0,
                         "leg_byes": card.leg_byes or 0,
                         "economy": (card.runs_conceded * (100 if db_match.match_format == "Hundred" else 6.0) / card.balls_bowled) if card.balls_bowled else 0,
+                        "rpb": card.runs_conceded / card.balls_bowled if card.balls_bowled else None,
                         "position": card.position or 9999,
                     }
                 )
@@ -1002,6 +1005,11 @@ def register_match_routes(
             entry["wickets"] = sum(1 for item in entry["batting"] if item["is_out"])
             entry["batting_team_name"] = teams.get(entry["batting_team_id"]).name if entry["batting_team_id"] in teams else "Unknown"
             entry["bowling_team_name"] = teams.get(entry["bowling_team_id"]).name if entry["bowling_team_id"] in teams else "Unknown"
+            if db_match.match_format == 'Hundred':
+                entry['legal_balls'] = sum(item.get('balls') or 0 for item in entry['bowling'])
+                limits = (db_match.format_metadata or {}).get('innings_limits', {})
+                entry['ball_limit'] = limits.get(str(innings_number), limits.get(innings_number, 100))
+                entry['rpb'] = entry['score'] / entry['legal_balls'] if entry['legal_balls'] else None
             innings_list.append(entry)
 
         motm_player_name = motm_team_name = motm_stat_line = None
@@ -1031,6 +1039,7 @@ def register_match_routes(
 
         _result_text = db_match.result_description or ""
         match_summary = {
+            "match_format": db_match.match_format,
             "format_label": cricket_format_label(db_match.match_format, db_match.scheduled_overs),
             "result_description": db_match.result_description or "Match Completed",
             "team_home": teams.get(db_match.home_team_id).name if db_match.home_team_id in teams else "Home",
@@ -1040,6 +1049,7 @@ def register_match_routes(
             "rain_affected": (
                 getattr(db_match, "match_status", None) == "no_result"
                 or "DLS method" in _result_text
+                or "D/L approximation" in _result_text
                 or "abandoned due to rain" in _result_text.lower()
             ),
             "weather_affected": bool(getattr(db_match, "weather_affected", False)),

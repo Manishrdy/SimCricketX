@@ -1,0 +1,6 @@
+{% if current_user.is_admin %}
+<a class="cm-alerts__item" data-moderation-notification data-count-url="{{ url_for('admin_community_pending_count') }}" href="{{ url_for('admin_community') }}" hidden>
+  <span class="cm-alerts__icon" aria-hidden="true"><i class="fas fa-shield-halved"></i></span>
+  <span class="cm-alerts__body"><span class="cm-alerts__meta">Discussion moderation</span><span class="cm-alerts__text" data-moderation-text></span><span class="cm-alerts__moderation-hint">Mark all read clears unread notifications. Moderation items remain until handled.</span></span>
+</a>
+{% endif %}
