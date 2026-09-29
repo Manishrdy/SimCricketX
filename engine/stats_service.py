@@ -993,8 +993,8 @@ class StatsService:
             if stat_type == 'batting':
                 fieldnames += ['highest_score', 'dots']
             if stat_type == 'bowling':
-                fieldnames += ['balls', 'economy_unit', 'strike_rate', 'dot_percentage', 'four_wicket_hauls', 'five_wicket_hauls']
-            data = [dict(row, match_format='Hundred') for row in data]
+                fieldnames += ['balls', 'economy_unit', 'rpb', 'strike_rate', 'dot_percentage', 'four_wicket_hauls', 'five_wicket_hauls']
+            data = [dict(row, match_format='Hundred', **({'rpb': round(row['runs'] / row['balls'], 2) if row.get('balls') else None} if stat_type == 'bowling' else {})) for row in data]
         writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
         writer.writeheader()
         writer.writerows(data)
@@ -1061,6 +1061,11 @@ class StatsService:
         
         if match_format == 'Hundred':
             headers = ['Balls' if h == 'Overs' else 'Econ/100' if h == 'Econ' else h for h in headers]
+            if stat_type == 'bowling':
+                headers.append('RPB')
+                for row, entry in zip(rows, data):
+                    row[4] = entry.get('balls', '—')
+                    row.append(round(entry['runs'] / entry['balls'], 2) if entry.get('balls') else None)
         result = tabulate(rows, headers=headers, tablefmt='grid', missingval='—')
         return ('The Hundred — legal balls; economy: runs/100 balls\n' + result) if match_format == 'Hundred' else result
     

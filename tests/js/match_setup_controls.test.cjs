@@ -45,3 +45,26 @@ test('Enter/Space on nested buttons and bowling checkbox keep their native behav
  const div={};for(const target of [{type:'checkbox'},{type:'button'}])vm.runInNewContext(handler,{e:{key:' ',target,preventDefault(){throw Error('must not intercept')}},div,side:'home',cyclePlayerZone:()=>moves++});
  vm.runInNewContext(handler,{e:{key:'Enter',target:div,preventDefault(){}},div,side:'home',cyclePlayerZone:()=>moves++});assert.equal(moves,1);
 });
+
+function proceedWithSquads(format, homeSquads, awaySquads) {
+ const messages=[];
+ const c={currentStep:2,selectedTeamIndices:[0,1],
+  TEAMS:[{team_name:'Australia',profile_squads:homeSquads},{team_name:'India',profile_squads:awaySquads}],
+  getCurrentFormat:()=>format,Toast:{show:message=>messages.push(message)},
+  initializeStep3(){c.initialized=true},updateWizard(){}};
+ vm.createContext(c);vm.runInContext(extract('nextStep'),c);c.nextStep();
+ return {c,messages};
+}
+test('Hundred proceeds to lineups using both teams existing T20 squads',()=>{
+ const {c,messages}=proceedWithSquads('Hundred',{T20:[{}]},{T20:[{}]});
+ assert.equal(c.currentStep,3);assert.equal(c.initialized,true);assert.deepEqual(messages,[]);
+});
+test('Hundred missing-squad error requests the missing T20 profile',()=>{
+ const {c,messages}=proceedWithSquads('Hundred',{T20:[{}]},{T20:[]});
+ assert.equal(c.currentStep,2);assert.equal(c.initialized,undefined);
+ assert.match(messages[0],/India has no T20 squad/);assert.match(messages[0],/add a T20 profile/);
+});
+test('other formats still require their own squads',()=>{
+ const {c,messages}=proceedWithSquads('ListA',{T20:[{}]},{T20:[{}]});
+ assert.equal(c.currentStep,2);assert.match(messages[0],/Australia and India has no ListA squad/);
+});

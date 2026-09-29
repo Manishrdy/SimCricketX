@@ -1625,13 +1625,14 @@
         if (currentStep === 1) initializeStep2();
 
         if (currentStep === 2) {
-            // Hard guard: both teams must have a squad for the selected format.
-            // No fallback — a team without the right format squad cannot play.
+            // The Hundred shares T20 squads, just as in format selection
+            // and the server-side match validation.
             const fmt = getCurrentFormat();
+            const squadFmt = fmt === 'Hundred' ? 'T20' : fmt;
             const h = TEAMS[selectedTeamIndices[0]];
             const a = TEAMS[selectedTeamIndices[1]];
-            const hOk = h && (h.profile_squads || {})[fmt]?.length > 0;
-            const aOk = a && (a.profile_squads || {})[fmt]?.length > 0;
+            const hOk = h && (h.profile_squads || {})[squadFmt]?.length > 0;
+            const aOk = a && (a.profile_squads || {})[squadFmt]?.length > 0;
 
             if (!hOk || !aOk) {
                 const missing = [
@@ -1639,8 +1640,8 @@
                     !aOk ? a?.team_name : null,
                 ].filter(Boolean).join(' and ');
                 Toast.show(
-                    `Cannot proceed: ${missing} has no ${fmt} squad. ` +
-                    `Go to Manage Teams and add a ${fmt} profile first.`,
+                    `Cannot proceed: ${missing} has no ${squadFmt} squad. ` +
+                    `Go to Manage Teams and add a ${squadFmt} profile first.`,
                     "error"
                 );
                 return;

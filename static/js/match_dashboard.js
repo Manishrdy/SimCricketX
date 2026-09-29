@@ -220,8 +220,8 @@ function addWagonWheelShot(bd) {
 function updatePlayerCards(history) {
     if (history.length === 0) return;
     const latest = history[history.length - 1];
-    const strikerName = latest.striker;
-    const nonStrikerName = latest.non_striker;
+    const strikerName = latest.next_striker || latest.striker;
+    const nonStrikerName = latest.next_non_striker || latest.non_striker;
     const bowlerName = latest.bowler;
 
     const strikerStats = derivePlayerStats(history, strikerName);
@@ -246,8 +246,19 @@ function updatePlayerCards(history) {
 
 function derivePlayerStats(history, name) {
     let runs = 0, balls = 0, fours = 0, sixes = 0;
+    const authoritative = history.at(-1)?.batter_totals?.[name];
+    if (IS_HUNDRED_MATCH && authoritative) {
+        ({runs, balls, fours, sixes} = authoritative);
+        return {runs, balls, fours, sixes, sr: balls ? (runs * 100 / balls).toFixed(1) : '—'};
+    }
+    if (IS_HUNDRED_MATCH && history.some(b => b.striker === name && b.batting_runs === undefined)) {
+        return {runs: '—', balls: '—', fours: '—', sixes: '—', sr: '—'};
+    }
     for (const b of history) {
-        if (b.striker === name && !b.is_extra) {
+        if (IS_HUNDRED_MATCH && b.striker === name) {
+            runs += b.batting_runs; balls += b.batter_balls;
+            fours += b.batter_fours; sixes += b.batter_sixes;
+        } else if (!IS_HUNDRED_MATCH && b.striker === name && !b.is_extra) {
             runs += b.runs; balls++; if (b.runs === 4) fours++; if (b.runs === 6) sixes++;
         }
     }
@@ -256,14 +267,31 @@ function derivePlayerStats(history, name) {
 
 function deriveBowlerStats(history, name) {
     let runs = 0, wickets = 0, legalBalls = 0;
-    for (const b of history) {
-        if (b.bowler === name) {
-            runs += b.runs; if (b.batter_out) wickets++;
-            if (!b.is_extra || (b.extra_type !== 'Wide' && b.extra_type !== 'No Ball')) legalBalls++;
+    const authoritative = history.at(-1)?.bowler_totals?.[name];
+    if (IS_HUNDRED_MATCH && authoritative) {
+        ({runs, wickets, balls_bowled: legalBalls} = authoritative);
+    } else {
+        for (const b of history) {
+            if (b.bowler !== name) continue;
+            if (IS_HUNDRED_MATCH) {
+                if (b.bowler_runs === undefined || b.bowler_wicket === undefined) {
+                    return {runs: '—', wickets: '—', overs: '—', econ: '—'};
+                }
+                runs += b.bowler_runs;
+                wickets += Number(b.bowler_wicket);
+                legalBalls += Number(b.is_legal);
+            } else {
+                runs += b.runs; if (b.batter_out) wickets++;
+                if (!b.is_extra || !['Wide', 'No Ball'].includes(b.extra_type)) legalBalls++;
+            }
         }
     }
-    const overs = IS_HUNDRED_MATCH ? String(legalBalls) : Math.floor(legalBalls / (IS_HUNDRED_MATCH ? 5 : 6)) + '.' + (legalBalls % (IS_HUNDRED_MATCH ? 5 : 6));
-    return { runs, wickets, overs, econ: legalBalls > 0 ? ((runs / legalBalls) * (IS_HUNDRED_MATCH ? 100 : 6)).toFixed(1) : '0.0' };
+    const overs = IS_HUNDRED_MATCH ? String(legalBalls) : Math.floor(legalBalls / 6) + '.' + (legalBalls % 6);
+    return {runs, wickets, overs, econ: legalBalls > 0 ? ((runs / legalBalls) * (IS_HUNDRED_MATCH ? 1 : 6)).toFixed(IS_HUNDRED_MATCH ? 2 : 1) : (IS_HUNDRED_MATCH ? '—' : '0.0')};
+}
+
+function hundredBallPosition(b) {
+    return b.legal_balls_after ?? (b.over * 5 + b.ball + Number(!b.is_extra || !['Wide', 'No Ball'].includes(b.extra_type)));
 }
 
 function renderBatterCard(name, s, isStriker) {
@@ -279,8 +307,8 @@ function renderBatterCard(name, s, isStriker) {
 function renderBowlerCard(name, s) {
     return `<span class="player-name"><i class="fa fa-baseball" style="color:#ce9178;font-size:0.55rem;margin-right:3px"></i>${escapeHtml(name)}</span>
             <span class="player-stats">
-                <span class="stat-primary">${s.overs}-${s.wickets}/${s.runs}</span>
-                <span>Econ ${s.econ}</span>
+                <span class="stat-primary">${IS_HUNDRED_MATCH ? `${s.wickets}/${s.runs} · ${s.overs} balls` : `${s.overs}-${s.wickets}/${s.runs}`}</span>
+                <span>${IS_HUNDRED_MATCH ? 'RPB' : 'Econ'} ${s.econ}</span>
             </span>`;
 }
 
@@ -301,7 +329,7 @@ function appendBallToTimeline(bd) {
 
         const label = document.createElement('span');
         label.className = 'over-label';
-        label.textContent = bd.over + 1;
+        label.textContent = IS_HUNDRED_MATCH ? `${bd.over * 5 + 1}–${bd.over * 5 + 5}` : bd.over + 1;
         group.appendChild(label);
 
         container.appendChild(group);
@@ -384,7 +412,7 @@ function _buildWormSeries(history) {
     let cumulative = 0;
     for (const b of history) {
         cumulative += (b.runs || 0);
-        const point = { x: b.over + (b.ball + 1) / (IS_HUNDRED_MATCH ? 5 : 6), y: cumulative };
+        const point = { x: IS_HUNDRED_MATCH ? hundredBallPosition(b) : b.over + (b.ball + 1) / 6, y: cumulative };
         path.push(point);
         if (b.batter_out) wickets.push(point);
     }
@@ -408,7 +436,7 @@ function _updateManhattan(currentStats, inn1Stats) {
     const inn1Data = [];
     const inn1Wkts = [];
     for (let i = 0; i <= maxOver; i++) {
-        labels.push(i + 1);
+        labels.push(IS_HUNDRED_MATCH ? `${i * 5 + 1}–${i * 5 + 5}` : i + 1);
         const rCurrent = currentStats.runsByOver[i] || 0;
         const rInn1 = hasTwoInnings ? ((inn1Stats.runsByOver[i] || 0)) : 0;
         currentData.push(rCurrent);
@@ -487,6 +515,7 @@ function _rebuildWorm(history, inn1Data) {
 
     const hasTwoInnings = !!(inn1Data && Array.isArray(inn1Data.ballHistory) && inn1Data.ballHistory.length > 0);
     const currentSeries = _buildWormSeries(history);
+    const axisLimit = IS_HUNDRED_MATCH ? Math.max(history.at(-1)?.innings_ball_limit || 100, inn1Data?.ballHistory?.at(-1)?.innings_ball_limit || 0) : 20;
 
     const datasets = [{
         label: hasTwoInnings ? '2nd Innings' : 'Current',
@@ -522,11 +551,12 @@ function _rebuildWorm(history, inn1Data) {
         });
 
         const target = history.length > 0 ? history[history.length - 1].target : null;
-        if (target) datasets.push({ label: 'Target', data: [{ x: 0, y: target }, { x: 20, y: target }], borderColor: '#ef4444', borderDash: [8, 4], fill: false, pointRadius: 0, borderWidth: 1 });
+        if (target) datasets.push({ label: 'Target', data: [{ x: 0, y: target }, { x: axisLimit, y: target }], borderColor: '#ef4444', borderDash: [8, 4], fill: false, pointRadius: 0, borderWidth: 1 });
     }
 
     if (wormChart) {
         wormChart.data.datasets = datasets;
+        wormChart.options.scales.x.max = axisLimit;
         if (wormChart.options && wormChart.options.plugins && wormChart.options.plugins.legend) {
             wormChart.options.plugins.legend.display = hasTwoInnings;
         }
@@ -546,7 +576,7 @@ function _rebuildWorm(history, inn1Data) {
                 }
             },
             scales: {
-                x: { type: 'linear', min: 0, max: 20, grid: { color: '#2d2d2d' }, ticks: { color: '#888', font: { size: 9, family: 'IBM Plex Mono' }, stepSize: 5 } },
+                x: { type: 'linear', min: 0, max: axisLimit, title: {display: IS_HUNDRED_MATCH, text: 'Legal balls'}, grid: { color: '#2d2d2d' }, ticks: { color: '#888', font: { size: 9, family: 'IBM Plex Mono' }, stepSize: 5 } },
                 y: { beginAtZero: true, grid: { color: '#2d2d2d' }, ticks: { color: '#888', font: { size: 9, family: 'IBM Plex Mono' } } }
             }
         }
@@ -579,7 +609,7 @@ function updateWinProbability(history) {
 
     const latest = history[history.length - 1];
     const innings = latest.innings, score = latest.score, wickets = latest.wickets;
-    const oversCompleted = latest.over + (latest.ball + 1) / (IS_HUNDRED_MATCH ? 5 : 6);
+    const oversCompleted = IS_HUNDRED_MATCH ? hundredBallPosition(latest) / 5 : latest.over + (latest.ball + 1) / 6;
     let battingProb;
 
     if (innings === 1) {
@@ -591,7 +621,7 @@ function updateWinProbability(history) {
         else {
             const remaining = target - score;
             const allocation = IS_HUNDRED_MATCH ? (latest.innings_ball_limit || 100) : 120;
-            const ballsLeft = allocation - (latest.over * (IS_HUNDRED_MATCH ? 5 : 6) + latest.ball + 1);
+            const ballsLeft = allocation - (IS_HUNDRED_MATCH ? hundredBallPosition(latest) : latest.over * 6 + latest.ball + 1);
             const wicketsInHand = 10 - wickets;
             if (remaining <= 0) battingProb = 100;
             else if (wicketsInHand <= 0 || ballsLeft <= 0) battingProb = 0;
@@ -624,7 +654,7 @@ function updateLatestBallTicker(bd) {
     const container = document.getElementById('latest-ball-ticker');
     if (!container) return;
 
-    const overBall = `${bd.over}.${bd.ball + 1}`;
+    const overBall = IS_HUNDRED_MATCH ? (bd.display_label || String(bd.over * 5 + bd.ball + 1)) : `${bd.over}.${bd.ball + 1}`;
     let cls = 'ticker-dot';
     if (bd.batter_out) cls = 'ticker-wicket';
     else if (bd.runs === 6) cls = 'ticker-six';

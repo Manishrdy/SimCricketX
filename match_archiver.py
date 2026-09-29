@@ -1559,10 +1559,12 @@ class MatchArchiver:
             return "No bowling statistics available"
         
         headers = ['Bowler', 'Balls' if self.match_data.get('match_format') == 'Hundred' else 'Overs', 'Maidens', 'Runs', 'Wickets', 'Econ/100' if self.match_data.get('match_format') == 'Hundred' else 'Economy', 'Wides', 'No Balls']
+        if self.match_data.get('match_format') == 'Hundred':
+            headers.append('RPB')
         rows = []
         
         for bowler_name, stats in bowling_stats.items():
-            if stats.get('balls_bowled', 0) > 0:
+            if stats.get('balls_bowled', 0) > 0 or (self.match_data.get('match_format') == 'Hundred' and stats.get('runs', 0)):
                 total_balls = stats['balls_bowled']
                 overs_display = str(total_balls) if self.match_data.get("match_format") == "Hundred" else balls_to_overs_str(total_balls)
                 economy = f"{(stats['runs'] * (100 if self.match_data.get('match_format') == 'Hundred' else 6) / total_balls):.2f}" if total_balls > 0 else "0.00"
@@ -1576,7 +1578,7 @@ class MatchArchiver:
                     economy,
                     stats.get('wides', 0),
                     stats.get('noballs', 0)
-                ])
+                ] + ([f"{stats['runs'] / total_balls:.2f}" if total_balls else '—'] if self.match_data.get('match_format') == 'Hundred' else []))
         
         if not rows:
             return "No bowling data available"
@@ -1653,22 +1655,28 @@ class MatchArchiver:
                     and hasattr(self.match, 'rain_affected') and self.match.rain_affected):
                 lines.extend([
                     "",
-                    "MATCH AFFECTED BY RAIN - DLS method applied",
+                    "MATCH AFFECTED BY RAIN - " + ("D/L approximation applied" if self.match_data.get("match_format") == "Hundred" else "DLS method applied"),
                 ])
                 for ev in getattr(self.match, 'rain_events_log', []):
                     innings_label = "1st innings" if ev.get('innings') == 1 else "2nd innings"
                     outcome = ev.get('outcome', '')
+                    hundred = self.match_data.get('match_format') == 'Hundred'
+                    unit = 'balls' if hundred else 'overs'
+                    multiplier = 5 if hundred else 1
+                    at = ev.get('at_over', 0) * multiplier
+                    revised = ev.get('revised_overs', 0) * multiplier
+                    lost = ev.get('overs_lost', 0) * multiplier
                     if outcome == 'no_result':
                         detail = "match abandoned"
                     elif outcome == 'chase_terminated':
-                        detail = "no further play possible - decided on DLS par"
+                        detail = "no further play possible - decided on " + ("D/L approximation par" if hundred else "DLS par")
                     elif outcome == 'innings_terminated':
-                        detail = f"innings closed at {ev.get('at_over')} overs"
+                        detail = f"innings closed at {at} {unit}"
                     else:
-                        detail = f"revised to {ev.get('revised_overs')} overs"
+                        detail = f"revised to {revised} {unit}"
                     lines.append(
-                        f"  Rain after {ev.get('at_over')} overs ({innings_label}), "
-                        f"{ev.get('overs_lost')} over(s) lost - {detail}"
+                        f"  Rain after {at} {unit} ({innings_label}), "
+                        f"{lost} {unit} lost - {detail}"
                     )
                 lines.append("")
             
@@ -1800,11 +1808,13 @@ class MatchArchiver:
                     'Bowler Name', 'Team Name', 'Balls' if self.match_data.get('match_format') == 'Hundred' else 'Overs', 'Maidens', 'Runs', 'Wickets',
                     'Econ/100' if self.match_data.get('match_format') == 'Hundred' else 'Economy', 'Wides', 'No Balls', 'Byes', 'Leg Byes'
                 ]
+                if self.match_data.get('match_format') == 'Hundred':
+                    headers.append('RPB')
                 writer.writerow(headers + ['Match Format', 'Scheduled Balls' if self.match_data.get('match_format') == 'Hundred' else 'Scheduled Overs'])
                 
                 # Write bowler data
                 for bowler_name, bowler_stats in stats.items():
-                    if bowler_stats.get('balls_bowled', 0) > 0:
+                    if bowler_stats.get('balls_bowled', 0) > 0 or (self.match_data.get('match_format') == 'Hundred' and bowler_stats.get('runs', 0)):
                         total_balls = bowler_stats['balls_bowled']
                         overs_display = str(total_balls) if self.match_data.get("match_format") == "Hundred" else balls_to_overs_str(total_balls)
                         economy = f"{(bowler_stats['runs'] * (100 if self.match_data.get('match_format') == 'Hundred' else 6) / total_balls):.2f}" if total_balls > 0 else "0.00"
@@ -1821,7 +1831,7 @@ class MatchArchiver:
                             bowler_stats.get('noballs', 0),
                             bowler_stats.get('byes', 0),
                             bowler_stats.get('legbyes', 0)
-                        ] + [self.format_label, 100 if self.match_data.get("match_format") == "Hundred" else self.match_data.get("scheduled_overs")])
+                        ] + ([f"{bowler_stats['runs'] / total_balls:.2f}" if total_balls else '—'] if self.match_data.get('match_format') == 'Hundred' else []) + [self.format_label, 100 if self.match_data.get("match_format") == "Hundred" else self.match_data.get("scheduled_overs")])
             
             self.created_files.append(csv_path)
             self.logger.debug(f"Bowling CSV created: {filename}")

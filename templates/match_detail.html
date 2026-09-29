@@ -81,10 +81,10 @@
                     <span class="sb-score" id="sb-score">0/0</span>
                 </div>
                 <div class="sb-center-col">
-                    <div class="sb-overs" id="sb-overs">0.0 ov</div>
+                    <div class="sb-overs" id="sb-overs">{{ '0/100 balls' if match.match_format == 'Hundred' else '0.0 ov' }}</div>
                     <div class="sb-rates">
-                        <span class="sb-rate-item">CRR <strong id="sb-crr">0.00</strong></span>
-                        <span class="sb-rate-item sb-rrr-item" id="sb-rrr-wrap" style="display:none;">RRR <strong id="sb-rrr">0.00</strong></span>
+                        <span class="sb-rate-item" title="{{ 'Runs per ball' if match.match_format == 'Hundred' else 'Runs per over' }}">CRR <strong id="sb-crr">0.00</strong></span>
+                        <span class="sb-rate-item sb-rrr-item" id="sb-rrr-wrap" style="display:none;" title="{{ 'Runs per ball' if match.match_format == 'Hundred' else 'Runs per over' }}">RRR <strong id="sb-rrr">0.00</strong></span>
                     </div>
                     <div class="sb-phase" id="sb-phase"></div>
                     <div class="sb-rain" id="sb-rain" style="display:none;margin-top:4px;font-size:0.72rem;font-weight:700;color:#60a5fa;"></div>
@@ -122,11 +122,11 @@
                 </div>
                 <div class="sb-divider"></div>
                 <div class="sb-over-flow" id="sb-over-flow">
-                    <span class="sb-strip-label">OVERS</span>
+                    <span class="sb-strip-label">{{ 'SETS' if match.match_format == 'Hundred' else 'OVERS' }}</span>
                 </div>
                 <div class="sb-divider"></div>
                 <div class="sb-this-over" id="sb-last-ball">
-                    <span class="sb-strip-label">THIS OVER</span>
+                    <span class="sb-strip-label">{{ 'THIS SET' if match.match_format == 'Hundred' else 'THIS OVER' }}</span>
                     <span class="sb-this-over-balls" id="sb-this-over"></span>
                 </div>
                 <div class="sb-target" id="sb-target" style="display:none;"></div>
@@ -498,10 +498,10 @@
                         <tr>
                             <th>Bowler</th>
                             <th>{{ "Balls" if match.get("match_format") == "Hundred" else "O" }}</th>
-                            <th>M</th>
+                            <th title="{{ 'Five-ball maidens' if match.match_format == 'Hundred' else 'Maiden overs' }}">M</th>
                             <th>R</th>
                             <th>W</th>
-                            <th>{{ 'Econ/100' if match.match_format == 'Hundred' else 'ECO' }}</th>
+                            <th>{{ 'RPB' if match.match_format == 'Hundred' else 'ECO' }}</th>
                         </tr>
                     </thead>
                     <tbody id="bowling-tbody"></tbody>

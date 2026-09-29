@@ -1004,7 +1004,6 @@
             {% if current_user.is_admin %}
             <a href="{{ url_for('admin_dashboard') }}" class="nav-control admin-nav-shield" id="adminNavShield" title="Admin panel" aria-label="Admin panel">
                 <i class="fas fa-shield-halved" aria-hidden="true"></i><span class="nav-control-label">Admin</span>
-                <span class="admin-nav-shield__dot" id="adminNavShieldDot" hidden aria-hidden="true"></span>
             </a>
             {% endif %}
             <a href="{{ url_for('community_notifications_page') }}" class="nav-control cm-bell" id="cmNavBell" title="Notifications" aria-label="Notifications" aria-expanded="false" aria-controls="cmAlerts">
@@ -1307,55 +1306,7 @@
 
     {% include 'partials/guide.html' %}
 
-    {% if current_user.is_authenticated and current_user.is_admin %}
-    <style>
-        .admin-nav-shield__dot {
-            position: absolute;
-            top: 4px;
-            right: 4px;
-            width: 11px;
-            height: 11px;
-            border-radius: 50%;
-            background: #ef4444;
-            border: 2px solid var(--card-bg, #fff);
-            box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35);
-            animation: adminNavShieldPulse 2.4s ease-in-out infinite;
-            pointer-events: none;
-        }
-        @keyframes adminNavShieldPulse {
-            0%, 100% { box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35); }
-            50%      { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.0); }
-        }
-    </style>
-    <script>
-        (function () {
-            'use strict';
-            var dotEl = document.getElementById('adminNavShieldDot');
-            var shieldEl = document.getElementById('adminNavShield');
-            if (!dotEl || !shieldEl) return;
 
-            function setDot(count) {
-                count = Number(count || 0);
-                dotEl.hidden = count <= 0;
-                shieldEl.title = count > 0
-                    ? 'Admin Panel · ' + count + ' community item' + (count === 1 ? '' : 's') + ' waiting'
-                    : 'Admin Panel';
-            }
-
-            function fetchCount() {
-                if (document.hidden) return;
-                fetch('/api/admin/community/pending-count', { credentials: 'same-origin' })
-                    .then(function (r) { return r.ok ? r.json() : { count: 0 }; })
-                    .then(function (body) { setDot(body && body.count); })
-                    .catch(function () {});
-            }
-
-            document.addEventListener('visibilitychange', fetchCount);
-            fetchCount();
-            window.setInterval(fetchCount, 60000);
-        })();
-    </script>
-    {% endif %}
 </body>
 
 </html>
