@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from flask import jsonify, render_template, request, send_from_directory, session
 from flask_login import current_user, login_required
 from utils.exception_tracker import log_exception
+from database.models import User, Match
 
 
 def register_core_routes(
@@ -62,19 +63,31 @@ def register_core_routes(
 
     @app.route("/")
     def home():
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow_start = today_start + timedelta(days=1)
+        active_users_count, online_activity_minutes = _active_user_count()
+        platform_stats = {
+            "matches_simulated": get_matches_simulated(),
+            "matches_today": Match.query.filter(
+                Match.date >= today_start, Match.date < tomorrow_start
+            ).count(),
+            "total_signups": User.query.count(),
+            "signups_today": User.query.filter(
+                User.created_at >= today_start, User.created_at < tomorrow_start
+            ).count(),
+            "active_users": active_users_count,
+            "online_activity_minutes": online_activity_minutes,
+        }
         if not current_user.is_authenticated:
             return render_template(
                 "landing.html",
                 total_visits=get_visit_counter(),
-                matches_simulated=get_matches_simulated(),
+                **platform_stats,
             )
 
         if not session.get("visit_counted"):
             increment_visit_counter()
             session["visit_counted"] = True
-
-        # This is recent activity, not the number of unexpired login sessions.
-        active_users_count, online_activity_minutes = _active_user_count()
 
         app_version = _get_app_version()
         changelog_entries = _get_changelog_for_version(app_version)
@@ -105,9 +118,7 @@ def register_core_routes(
             "home.html",
             user=current_user,
             total_visits=get_visit_counter(),
-            matches_simulated=get_matches_simulated(),
-            active_users=active_users_count,
-            online_activity_minutes=online_activity_minutes,
+            **platform_stats,
             app_version=app_version,
             changelog_entries=changelog_entries,
             announcement_banner=announcement_banner,

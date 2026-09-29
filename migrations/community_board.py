@@ -6,7 +6,7 @@ Read-only by default; ``--apply`` makes the changes:
     python -m migrations.community_board --db ./cricket_sim.db --apply    # apply
 
 What --apply does (idempotent, safe to re-run):
-  1. adds users.community_muted_until
+  1. adds users.community_muted_until / community_engaged_at
   2. creates community_posts / _comments / _votes / _images / _notifications /
      _reports, or adds any columns and indexes they are missing (DDL comes
      from the ORM models, so it cannot drift from database/models.py)
@@ -49,7 +49,7 @@ COMMUNITY_MODELS = (
     "CommunityReport",
     "CommunityMention",
 )
-USER_COLUMNS = {"community_muted_until": "DATETIME"}
+USER_COLUMNS = {"community_muted_until": "DATETIME", "community_engaged_at": "DATETIME"}
 # Child tables first: read_state -> message -> conversation.
 SUPPORT_TABLES = ("support_conversation_read_state", "support_message", "support_conversation")
 
@@ -100,6 +100,7 @@ def inspect_plan(conn) -> dict:
         "add_indexes": [],
         "fts_missing": not _has_table(conn, FTS_TABLE),
         "backfill_scores": False,
+        "backfill_engagement": "community_engaged_at" not in _columns(conn, "users"),
         "support_tables": {},
     }
     for table in _tables():
@@ -121,7 +122,8 @@ def inspect_plan(conn) -> dict:
 
 def _pending(plan: dict, *, include_drop: bool) -> bool:
     additive = (plan["user_columns"] or plan["create_tables"] or plan["add_columns"]
-                or plan["add_indexes"] or plan["fts_missing"] or plan["backfill_scores"])
+                or plan["add_indexes"] or plan["fts_missing"] or plan["backfill_scores"]
+                or plan["backfill_engagement"])
     return bool(additive or (include_drop and plan["support_tables"]))
 
 
@@ -142,6 +144,8 @@ def print_plan(plan: dict) -> None:
         lines.append("create       community_posts_fts (FTS5 search index + triggers)")
     if plan["backfill_scores"]:
         lines.append("backfill     community_posts vote_count / downvote_count / score")
+    if plan["backfill_engagement"]:
+        lines.append("backfill     users.community_engaged_at from existing community activity")
     for table, rows in plan["support_tables"].items():
         lines.append(f"DROP table   {table}  ({rows} row{'s' if rows != 1 else ''} will be deleted)")
     print("\n".join(lines) if lines else "Nothing to do: schema is current and support tables are gone.")
@@ -175,6 +179,17 @@ def _apply_additive(conn, plan: dict) -> None:
                 downvote_count = (SELECT COUNT(*) FROM community_votes v WHERE v.post_id = community_posts.id AND v.value < 0)
         """))
         conn.execute(text("UPDATE community_posts SET score = vote_count - downvote_count"))
+    if plan["backfill_engagement"]:
+        conn.execute(text("""
+            UPDATE users SET community_engaged_at = COALESCE(
+                (SELECT MIN(created_at) FROM community_posts p WHERE p.author_id = users.id),
+                (SELECT MIN(created_at) FROM community_comments c WHERE c.author_id = users.id),
+                (SELECT MIN(created_at) FROM community_votes v WHERE v.user_id = users.id)
+            )
+            WHERE EXISTS (SELECT 1 FROM community_posts p WHERE p.author_id = users.id)
+               OR EXISTS (SELECT 1 FROM community_comments c WHERE c.author_id = users.id)
+               OR EXISTS (SELECT 1 FROM community_votes v WHERE v.user_id = users.id)
+        """))
 
 
 def _apply_drop(conn, plan: dict) -> None:

@@ -113,6 +113,11 @@ def utcnow() -> datetime:
     return datetime.utcnow()
 
 
+def _mark_community_engaged(user, now=None) -> None:
+    if user is not None and user.community_engaged_at is None:
+        user.community_engaged_at = now or utcnow()
+
+
 def _naive(dt):
     """DB datetimes come back naive-UTC; some callers hold aware ones."""
     if dt is not None and dt.tzinfo is not None:
@@ -365,6 +370,10 @@ def validate_comment_body(body, user, *, check_content: bool = True, extra_words
 
 MAX_MENTIONS = 10
 MENTION_QUERY_MAX = 50
+AUDIENCE_MENTIONS = {
+    "everyone": "All registered users",
+    "community": "Everyone who has posted, replied, upvoted or downvoted",
+}
 
 
 def can_tag(tagger, target) -> bool:
@@ -412,6 +421,55 @@ def _named_in(name, texts) -> bool:
         return False
     rx = re.compile(r"(?<![\w@])@" + re.escape(name) + r"(?!\w)", re.IGNORECASE)
     return any(rx.search(t or "") for t in texts)
+
+
+def _audience_names_in(texts) -> set[str]:
+    return {name for name in AUDIENCE_MENTIONS if _named_in(name, texts)}
+
+
+def audience_mentions(author, texts, *, visibility, post_author_id) -> set[str]:
+    """Return admin-only broadcast aliases present in a public post.
+
+    Audience aliases are limited to an admin's own post. This prevents a
+    moderation edit on somebody else's post from turning their words into a
+    broadcast. The aliases are unambiguous, so typing them is sufficient;
+    autocomplete is a convenience rather than a security boundary.
+    """
+    if not is_admin(author) or author.id != post_author_id:
+        return set()
+    found = _audience_names_in(texts)
+    if found and visibility != "public":
+        raise CommunityError("@everyone and @community can only be used in public posts.",
+                             fields={"body": "Audience notifications require a public post."})
+    return found
+
+
+def _audience_recipient_ids(audiences, actor) -> list[str]:
+    """Resolve audience aliases to unique registered user ids."""
+    audiences = set(audiences or ())
+    if not audiences:
+        return []
+    query = db.session.query(User.id).filter(User.id != actor.id)
+    if "everyone" not in audiences:
+        query = query.filter(User.community_engaged_at.isnot(None))
+    return [uid for (uid,) in query.distinct().all()]
+
+
+def notify_audiences(post, actor, audiences, *, exclude=()) -> set[str]:
+    """Queue one mention notification per recipient across all audiences."""
+    excluded = set(exclude or ())
+    recipients = set(_audience_recipient_ids(audiences, actor)) - excluded
+    detail = ", ".join(f"@{name}" for name in sorted(audiences))
+    now = utcnow()
+    rows = [{
+        "user_id": uid, "kind": "mention", "post_id": post.id,
+        "comment_id": None, "actor_name": author_name(actor),
+        "detail": detail[:120] or None, "created_at": now, "read_at": None,
+    } for uid in recipients]
+    insert = CommunityNotification.__table__.insert()
+    for start in range(0, len(rows), 1_000):
+        db.session.execute(insert, rows[start:start + 1_000])
+    return recipients
 
 
 def _mention_rows(post, comment) -> list[CommunityMention]:
@@ -484,7 +542,8 @@ def sync_mentions(post, comment, author, resolved) -> list[str]:
     return added
 
 
-def mention_candidates(viewer, q, *, post=None, private=False, limit=8) -> list[dict]:
+def mention_candidates(viewer, q, *, post=None, private=False, limit=8,
+                       include_audiences=False) -> list[dict]:
     """Autocomplete for '@'. Users see community members (thread participants
     first) and never admins; admins see everyone with a display name. On a
     private post only people who can read it are offered."""
@@ -494,6 +553,16 @@ def mention_candidates(viewer, q, *, post=None, private=False, limit=8) -> list[
         private = post.visibility == "private"
     post_author_id = post.author_id if post is not None else viewer.id
     participants = thread_participant_ids(post)
+
+    low = q.lower()
+    audience_rows = []
+    if include_audiences and admin and not private:
+        audience_rows = [
+            {"id": f"audience:{name}", "name": name, "is_admin": False,
+             "in_thread": False, "is_audience": True, "hint": hint}
+            for name, hint in AUDIENCE_MENTIONS.items()
+            if not low or low in name
+        ]
 
     query = User.query.filter(User.display_name.isnot(None), User.display_name != "",
                               User.stable_id.isnot(None), User.id != viewer.id)
@@ -506,7 +575,6 @@ def mention_candidates(viewer, q, *, post=None, private=False, limit=8) -> list[
         member = _member_filter()
         query = query.filter(or_(User.id.in_(participants), member) if participants else member)
 
-    low = q.lower()
     if low:
         like = low.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         name = func.lower(User.display_name)
@@ -515,7 +583,7 @@ def mention_candidates(viewer, q, *, post=None, private=False, limit=8) -> list[
     elif participants:
         query = query.filter(User.id.in_(participants))
     else:
-        return []
+        return audience_rows[:limit]
     rows = query.limit(200).all()
 
     def tier(display):
@@ -526,8 +594,9 @@ def mention_candidates(viewer, q, *, post=None, private=False, limit=8) -> list[
 
     rows.sort(key=lambda u: (u.id not in participants, tier(u.display_name), len(u.display_name),
                              u.display_name.lower()))
-    return [{"id": u.stable_id, "name": u.display_name, "is_admin": bool(u.is_admin),
-             "in_thread": u.id in participants} for u in rows[:limit]]
+    people = [{"id": u.stable_id, "name": u.display_name, "is_admin": bool(u.is_admin),
+               "in_thread": u.id in participants} for u in rows]
+    return (audience_rows + people)[:limit]
 
 
 def mentions_for_post(post, viewer) -> dict:
@@ -539,6 +608,14 @@ def mentions_for_post(post, viewer) -> dict:
     for r in rows:
         out.setdefault(r.comment_id, []).append({
             "name": r.name, "me": r.user_id == viewer.id, "is_admin": bool(r.user and r.user.is_admin)})
+    if post.author is not None and is_admin(post.author):
+        texts = [post.body, post.expected, post.actual]
+        if post.steps_json:
+            texts.extend(json.loads(post.steps_json))
+        for name in AUDIENCE_MENTIONS:
+            if _named_in(name, texts):
+                out.setdefault(None, []).append({
+                    "name": name, "me": False, "is_admin": False, "is_audience": True})
     return out
 
 
@@ -567,6 +644,8 @@ def _attach_images(post: CommunityPost, user, image_ids) -> None:
 def create_post(user, data: dict, *, request_meta: dict | None = None) -> CommunityPost:
     require_can_write(user)
     clean = validate_post_payload(data, user, check_content=False)
+    audiences = audience_mentions(user, taggable_texts(clean), visibility=clean["visibility"],
+                                  post_author_id=user.id)
     resolved = resolve_mentions(user, taggable_texts(clean), data.get("mentions"),
                                 visibility=clean["visibility"], post_author_id=user.id)
     check_post_content(clean, user, mention_words(resolved))
@@ -583,9 +662,12 @@ def create_post(user, data: dict, *, request_meta: dict | None = None) -> Commun
     )
     db.session.add(post)
     db.session.flush()
+    _mark_community_engaged(user, now)
     _attach_images(post, user, data.get("image_ids"))
-    for uid in sync_mentions(post, None, user, resolved):
+    tagged = sync_mentions(post, None, user, resolved)
+    for uid in tagged:
         _notify(uid, "mention", post, actor=user)
+    notify_audiences(post, user, audiences, exclude=tagged)
     db.session.commit()
     return post
 
@@ -595,7 +677,14 @@ def update_post(post: CommunityPost, user, data: dict) -> CommunityPost:
         raise CommunityError("You can't edit this post.", code="forbidden", status=403)
     if post.author_id == user.id:
         require_can_write(user)
+    old_texts = [post.body, post.expected, post.actual]
+    if post.steps_json:
+        old_texts.extend(json.loads(post.steps_json))
+    old_audiences = (_audience_names_in(old_texts)
+                     if is_admin(user) and user.id == post.author_id else set())
     clean = validate_post_payload(data, user, existing=post, check_content=False)
+    audiences = audience_mentions(user, taggable_texts(clean), visibility=clean["visibility"],
+                                  post_author_id=post.author_id)
     resolved = resolve_mentions(user, taggable_texts(clean), data.get("mentions"),
                                 visibility=clean["visibility"], post_author_id=post.author_id,
                                 participants=thread_participant_ids(post), existing=_mention_rows(post, None))
@@ -606,8 +695,10 @@ def update_post(post: CommunityPost, user, data: dict) -> CommunityPost:
         setattr(post, key, value)
     if "image_ids" in data:  # absent = leave attachments alone
         _attach_images(post, user, data.get("image_ids"))
-    for uid in sync_mentions(post, None, user, resolved):
+    tagged = sync_mentions(post, None, user, resolved)
+    for uid in tagged:
         _notify(uid, "mention", post, actor=user)
+    notify_audiences(post, user, audiences - old_audiences, exclude=tagged)
     post.edited_at = utcnow()
     post.edited_by = user.id
     db.session.commit()
@@ -667,6 +758,7 @@ def cast_vote(post: CommunityPost, user, value: int = 1) -> int:
     except IntegrityError:  # double-click race: the other request won
         db.session.rollback()
         mine = my_vote(post, user)
+    _mark_community_engaged(user)
     _recount_votes(post)
     db.session.commit()
     return mine
@@ -740,6 +832,7 @@ def add_comment(post: CommunityPost, user, body, parent_id=None, mentions=None) 
                                parent_id=parent.id if parent else None, created_at=now)
     db.session.add(comment)
     db.session.flush()
+    _mark_community_engaged(user, now)
 
     post.last_activity_at = now
     if is_admin(user):

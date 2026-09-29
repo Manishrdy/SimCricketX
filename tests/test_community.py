@@ -775,6 +775,71 @@ def test_suggest_puts_thread_people_first_and_empty_query_lists_them(app, alice,
     assert [p["name"] for p in suggest(app, alice, "", post=post.public_id)] == ["Bob"]
 
 
+def test_admin_audience_suggestions_are_composer_only(app, alice, boss):
+    people = suggest(app, boss, "", audiences="1")
+    assert [p["name"] for p in people] == ["everyone", "community"]
+    assert all(p["is_audience"] for p in people)
+    assert all(p["id"].startswith("audience:") for p in people)
+    assert suggest(app, alice, "", audiences="1") == []
+    assert suggest(app, boss, "", audiences="1", private="1") == []
+
+
+def test_admin_everyone_notifies_each_registered_user_once(app, alice, bob, carol, boss):
+    deputy = make_user("deputy@example.com", name="Deputy", admin=True)
+    post = cs.create_post(boss, {
+        **QUESTION,
+        "body": "@everyone Please read this community announcement about match settings.",
+    })
+    recipients = {n.user_id for n in CommunityNotification.query.filter_by(
+        post_id=post.id, kind="mention").all()}
+    assert recipients == {alice.id, bob.id, carol.id, deputy.id}
+    assert CommunityNotification.query.filter_by(post_id=post.id, user_id=boss.id).count() == 0
+
+    html = as_user(app, alice).get(f"/community/p/{post.public_id}").get_data(as_text=True)
+    assert 'class="cm-mention cm-mention--audience">@everyone</span>' in html
+
+
+def test_admin_community_targets_every_kind_of_engagement(app, alice, bob, carol, boss):
+    voter_down = make_user("down@example.com", name="Down Voter")
+    idle = make_user("idle@example.com", name="Idle User")
+    source = make_member(alice)
+    cs.add_comment(source, bob, "The weather panel contains the rain controls.")
+    cs.cast_vote(source, carol, 1)
+    cs.cast_vote(source, carol, 1)  # removing the vote must not erase past engagement
+    cs.cast_vote(source, voter_down, -1)
+
+    broadcast = cs.create_post(boss, {
+        **QUESTION,
+        "body": "@community Thanks to everyone taking part in the community board.",
+    })
+    recipients = {n.user_id for n in CommunityNotification.query.filter_by(
+        post_id=broadcast.id, kind="mention").all()}
+    assert recipients == {alice.id, bob.id, carol.id, voter_down.id}
+    assert idle.id not in recipients
+
+
+def test_audience_mentions_are_admin_public_only_and_do_not_repeat_on_edit(app, alice, bob, boss):
+    payload = {
+        **QUESTION,
+        "body": "@everyone Please read this community announcement about match settings.",
+    }
+    plain = cs.create_post(alice, payload)
+    assert CommunityNotification.query.filter_by(post_id=plain.id, kind="mention").count() == 0
+
+    with pytest.raises(cs.CommunityError, match="public posts"):
+        cs.create_post(boss, {**payload, "visibility": "private"})
+    db.session.rollback()
+
+    broadcast = cs.create_post(boss, payload)
+    first_count = CommunityNotification.query.filter_by(post_id=broadcast.id, kind="mention").count()
+    cs.update_post(broadcast, boss, {**payload, "body": payload["body"] + " Updated details."})
+    assert CommunityNotification.query.filter_by(post_id=broadcast.id, kind="mention").count() == first_count
+
+    cs.update_post(broadcast, boss, {**payload, "body": "No audience alias in this edit, only match settings."})
+    cs.update_post(broadcast, boss, payload)
+    assert CommunityNotification.query.filter_by(post_id=broadcast.id, kind="mention").count() == first_count * 2
+
+
 def test_private_post_tags_only_people_who_can_see_it(app, alice, bob, boss):
     boss2 = make_user("boss2@example.com", name="Deputy", admin=True)
     make_member(bob)
