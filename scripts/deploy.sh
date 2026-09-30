@@ -17,13 +17,13 @@
 set -euo pipefail
 
 # ── Configuration ────────────────────────────────────────────
-APP_DIR="${APP_DIR:-/opt/simcricketx}"
+APP_DIR="${APP_DIR:-/home/ubuntu/SimCricketX}"
 SERVICE_NAME="${SERVICE_NAME:-simcricketx}"
 VENV="$APP_DIR/venv"
 HEALTH_URL="http://127.0.0.1:5000"
 HEALTH_RETRIES=5
 HEALTH_WAIT=4        # seconds between health-check retries
-LOG_DIR="/var/log/simcricketx"
+LOG_DIR="${LOG_DIR:-$APP_DIR/logs}"   # app's own gitignored logs/ dir; /var/log needs root
 LOG_FILE="$LOG_DIR/deploy.log"
 DB_PATH="$APP_DIR/cricket_sim.db"
 DB_SNAPSHOT="$APP_DIR/cricket_sim.db.deploy_snapshot"

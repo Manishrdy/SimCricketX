@@ -1,0 +1,25 @@
+name: Deploy to production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Never run two deploys at once, and don't cancel one mid-restart.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to OCI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run deploy script on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          script_stop: true
+          script: bash /home/ubuntu/SimCricketX/scripts/deploy.sh
