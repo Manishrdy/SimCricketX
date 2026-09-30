@@ -1,689 +1,107 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="light">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <!-- ── SEO ─────────────────────────────────────────────────── -->
-    <title>SimCricketX — Text-Based Cricket Simulator | T20 &amp; List A</title>
-    <meta name="description" content="SimCricketX is a free text-based cricket simulator — no graphics, just a real ball-by-ball probabilistic engine. Build custom squads, tune pitch conditions, and simulate full T20 and List A matches with career stats and tournament brackets.">
-    <meta name="keywords" content="text based cricket simulator, text cricket game, text cricket sim, cricket simulator, cricket match simulation, T20 simulator, List A cricket, browser cricket game, ball by ball cricket, cricket statistics simulator">
-    <meta name="robots" content="index, follow">
-    <link rel="canonical" href="https://simcricketx.app/">
-
-    <!-- ── Open Graph ──────────────────────────────────────────── -->
-    <meta property="og:type"        content="website">
-    <meta property="og:url"         content="https://simcricketx.app/">
-    <meta property="og:title"       content="SimCricketX — Text-Based Cricket Simulator">
-    <meta property="og:description" content="A free text-based cricket simulator — build squads, tune the pitch, and simulate every ball with a real probabilistic engine. T20 and List A, no graphics required.">
-    <meta property="og:site_name"   content="SimCricketX">
-
-    <!-- ── Twitter Card ───────────────────────────────────────── -->
-    <meta name="twitter:card"        content="summary">
-    <meta name="twitter:title"       content="SimCricketX — Text-Based Cricket Simulator">
-    <meta name="twitter:description" content="Free text-based cricket simulation — T20 &amp; List A. Ball-by-ball engine, player stats, tournaments.">
-
-    <!-- ── Structured Data ────────────────────────────────────── -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebApplication",
-      "name": "SimCricketX",
-      "alternateName": "SimCricketX Text-Based Cricket Simulator",
-      "url": "https://simcricketx.app/",
-      "description": "SimCricketX is a free text-based cricket simulator. A probabilistic ball-by-ball engine simulates full T20 and List A matches from custom squads and ground conditions, with career stats and tournament brackets — no graphics, just the numbers.",
-      "applicationCategory": "GameApplication",
-      "operatingSystem": "Any (runs in browser)",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      }
-    }
-    </script>
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "FAQPage",
-      "mainEntity": [
-        {
-          "@type": "Question",
-          "name": "Is SimCricketX really free?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Yes — completely free, with no credit card required. Create an account with your email and start building squads and simulating matches right away."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "Which match formats are supported?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Both T20 and List A (50-over). Each team keeps separate, format-specific squads, so your 50-over specialists are never forced into a T20 line-up."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "How does the simulation actually work?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "A probabilistic engine resolves every delivery using batting and bowling matchups, the pitch profile you choose, and over-phase dynamics — producing authentic, varied outcomes rather than fixed or purely random results."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "Do I need to install anything?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "No installation and no config files. SimCricketX runs entirely in your browser as a text-based simulator — sign up and you're simulating within a couple of minutes."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "Can I run full tournaments?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Yes. Set up round-robin or knockout tournaments with automatic standings, point tables, and bracket progression across both formats."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "Is my data exportable?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Absolutely — your full match history, scorecards, and player statistics can be downloaded as structured data whenever you need them."
-          }
-        }
-      ]
-    }
-    </script>
-
-    <!-- ── Fonts ──────────────────────────────────────────────── -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- ── Icons ──────────────────────────────────────────────── -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-
-    <!-- ── Styles ─────────────────────────────────────────────── -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/platform_stats.css') }}">
-</head>
-<body>
-
-<!-- ════════════════════════════════════════════════════════════
-     NAVBAR
-     ════════════════════════════════════════════════════════════ -->
-<nav class="lp-nav" role="navigation" aria-label="Main navigation">
-    <div class="lp-nav-inner">
-
-        <a href="/" class="lp-logo" aria-label="SimCricketX — home">
-            <svg class="lp-logo-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
-                <circle cx="12" cy="12" r="9.5" fill="#c0392b"/>
-                <circle cx="12" cy="12" r="9.5" fill="none" stroke="#7d1a0e" stroke-width="1"/>
-                <path d="M8.4 3.7 C 12 8, 12 16, 8.4 20.3" fill="none" stroke="#ffd9cf"
-                      stroke-width="1.1" stroke-linecap="round" stroke-dasharray="0.1 2.05"/>
-                <ellipse cx="9" cy="8" rx="2.6" ry="1.7" fill="rgba(255,255,255,0.28)" transform="rotate(-25 9 8)"/>
-            </svg>
-            <span class="lp-logo-text">SimCricketX</span>
-        </a>
-
-        <div class="lp-nav-actions">
-            <a href="{{ url_for('register') }}" class="lp-btn-fill">
-                <i class="fas fa-user-plus" aria-hidden="true"></i> Get Started
-            </a>
-
-            <a href="{{ url_for('login') }}" class="lp-btn-ghost">
-                <i class="fas fa-sign-in-alt" aria-hidden="true"></i> Sign In
-            </a>
-
-            <a href="{{ url_for('about') }}" class="lp-btn-ghost lp-nav-btn-about">
-                <i class="fas fa-info-circle" aria-hidden="true"></i> About
-            </a>
-
-            <button class="lp-theme-btn" id="themeBtn" aria-label="Toggle dark mode" type="button">
-                <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
-            </button>
-        </div>
-
-    </div>
-</nav>
-
-
-<!-- ════════════════════════════════════════════════════════════
-     HERO
-     ════════════════════════════════════════════════════════════ -->
-<section class="lp-hero" aria-labelledby="hero-title">
-
-    <!-- Background blobs -->
-    <div class="lp-blob lp-blob-1" aria-hidden="true"></div>
-    <div class="lp-blob lp-blob-2" aria-hidden="true"></div>
-    <div class="lp-blob lp-blob-3" aria-hidden="true"></div>
-
-    <div class="lp-hero-inner">
-
-        <!-- ── Left: text content ── -->
-        <div class="lp-hero-content">
-
-            <div class="lp-hero-badge">
-                <span class="lp-badge-dot" aria-hidden="true"></span>
-                Text-Based Cricket Simulator
-            </div>
-
-            <h1 class="lp-hero-title" id="hero-title">
-                Simulate<br>
-                <span class="lp-hero-accent">Every Ball.</span>
-            </h1>
-
-            <p class="lp-hero-sub">
-                SimCricketX is a free, text-based cricket simulator — no graphics,
-                just a real probabilistic engine. Build custom squads, tune pitch
-                conditions, and let it resolve every delivery — T20 or List A. Full
-                scorecards, career stats, and tournament brackets, all in your browser.
-            </p>
-
-            <div class="lp-hero-cta">
-                <a href="{{ url_for('register') }}" class="lp-cta-primary">
-                    <i class="fas fa-play" aria-hidden="true"></i>
-                    Get Started Free
-                </a>
-                <a href="{{ url_for('login') }}" class="lp-cta-secondary">
-                    <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
-                    Sign In
-                </a>
-            </div>
-
-            <div class="lp-hero-trust">
-                <span class="lp-trust-item">
-                    <i class="fas fa-check-circle" aria-hidden="true"></i>
-                    Free to use
-                </span>
-                <span class="lp-trust-item">
-                    <i class="fas fa-lock" aria-hidden="true"></i>
-                    No credit card
-                </span>
-                <span class="lp-trust-item">
-                    <i class="fab fa-github" aria-hidden="true"></i>
-                    Open source
-                </span>
-            </div>
-        </div>
-
-        <!-- ── Right: mock live scorecard (product preview) ── -->
-        <div class="lp-hero-visual" aria-hidden="true">
-
-            <!-- Floating accent chip -->
-            <div class="lp-sc-chip lp-sc-chip-rate">
-                <span class="lp-sc-chip-label">Run rate</span>
-                <span class="lp-sc-chip-val">9.78</span>
-            </div>
-
-            <div class="lp-scorecard">
-
-                <!-- Card header -->
-                <div class="lp-sc-head">
-                    <span class="lp-sc-live">
-                        <span class="lp-sc-live-dot"></span>LIVE
-                    </span>
-                    <span class="lp-sc-meta">T20 · Innings 2</span>
-                </div>
-
-                <!-- Score line -->
-                <div class="lp-sc-score">
-                    <div class="lp-sc-team">Mumbai</div>
-                    <div class="lp-sc-runs">184<span class="lp-sc-wkts">/4</span></div>
-                    <div class="lp-sc-overs">18.2 ov</div>
-                </div>
-
-                <!-- Chase context -->
-                <div class="lp-sc-target">
-                    Need <strong>18</strong> off <strong>10</strong> · Target 202 · RRR 10.80
-                </div>
-
-                <!-- Batters -->
-                <div class="lp-sc-batters">
-                    <div class="lp-sc-batter">
-                        <span class="lp-sc-bat-name">R Sharma <span class="lp-sc-strike">●</span></span>
-                        <span class="lp-sc-bat-line">72<span class="lp-sc-not-out">*</span> <span class="lp-sc-balls">(41)</span></span>
-                    </div>
-                    <div class="lp-sc-batter">
-                        <span class="lp-sc-bat-name">H Pandya</span>
-                        <span class="lp-sc-bat-line">23 <span class="lp-sc-balls">(12)</span></span>
-                    </div>
-                </div>
-
-                <!-- This over -->
-                <div class="lp-sc-over">
-                    <span class="lp-sc-over-label">Last 6</span>
-                    <span class="lp-sc-balls-row">
-                        <span class="lp-sc-ball lp-sc-ball-dot">•</span>
-                        <span class="lp-sc-ball lp-sc-ball-dot">•</span>
-                        <span class="lp-sc-ball lp-sc-ball-four">4</span>
-                        <span class="lp-sc-ball lp-sc-ball-wkt">W</span>
-                        <span class="lp-sc-ball lp-sc-ball-run">1</span>
-                        <span class="lp-sc-ball lp-sc-ball-six">6</span>
-                    </span>
-                </div>
-
-                <!-- Footer -->
-                <div class="lp-sc-foot">
-                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
-                        <circle cx="12" cy="12" r="9.5" fill="#c0392b"/>
-                        <path d="M8.4 3.7 C 12 8, 12 16, 8.4 20.3" fill="none" stroke="#ffd9cf"
-                              stroke-width="1.1" stroke-linecap="round" stroke-dasharray="0.1 2.05"/>
-                    </svg>
-                    Simulated ball-by-ball
-                </div>
-
-            </div>
-        </div>
-
-    </div>
+{% extends "public_base.html" %}{% block content %}
+<section class="hero">
+<div>
+<p class="eyebrow">THE GAME IS IN THE DETAILS</p>
+<h1>Big cricket.<br>Every ball.<br>
+<em>All text.</em>
+</h1>
+<p class="lead">Text-based cricket simulators for the selector, the tactician and the scorecard obsessive. Build your squads. Shape the conditions. Let the contest unfold.</p>
+<div class="actions">
+<a class="button" href="/register">Build your cricket world ↗</a>
+<a href="/about">Explore every capability →</a>
+</div>
+<p class="fine">Free to play · Runs in your browser · Open source</p>
+</div>
+<aside class="scorebook" aria-label="Illustrative match commentary">
+<div class="score-top">THE MATCHDAY NOTEBOOK <span>DEMO</span>
+</div>
+<p class="eyebrow">T20 / SECOND INNINGS</p>
+<div class="score">168<span>/ 5</span>
+</div>
+<p>19.2 overs · 9 needed from 4 balls</p>
+<div class="delivery">
+<b>19.1</b>
+<span>FOUR. Finds the gap through cover.</span>
+<strong>4</strong>
+</div>
+<div class="delivery">
+<b>19.2</b>
+<span>A single. The chase stays alive.</span>
+<strong>1</strong>
+</div>
+<div class="ball-row">
+<span>4</span>
+<span>1</span>
+<span>·</span>
+<span>·</span>
+<span>·</span>
+<span>·</span>
+</div>
+<p class="fine">Illustrative commentary. Your next match writes its own story.</p>
+</aside>
 </section>
-
-
-<!-- ════════════════════════════════════════════════════════════
-     LIVE STATS BAR
-     ════════════════════════════════════════════════════════════ -->
-{% include "partials/platform_stats.html" %}
-
-
-<!-- ════════════════════════════════════════════════════════════
-     FEATURES
-     ════════════════════════════════════════════════════════════ -->
-<section class="lp-section" aria-labelledby="features-title">
-    <div class="lp-section-inner">
-
-        <div class="lp-section-label" aria-hidden="true">01 — What You Get</div>
-
-        <h2 class="lp-section-title" id="features-title">
-            Everything a cricket sim needs
-        </h2>
-        <p class="lp-section-sub">
-            From squad management to full tournament brackets — built for cricket fans
-            who want a text-based simulator with results that feel authentic, not random.
-        </p>
-
-        <div class="lp-features-grid">
-
-            <!-- Featured cell -->
-            <div class="lp-feature-card lp-reveal is-featured">
-                <div class="lp-feature-icon">
-                    <i class="fas fa-baseball-ball" aria-hidden="true"></i>
-                </div>
-                <div class="lp-feature-body">
-                    <div class="lp-feature-title">Ball-by-Ball Engine</div>
-                    <div class="lp-feature-desc">
-                        Every delivery resolved via weighted probability — batting/bowling matchups,
-                        pitch conditions, and over-phase dynamics working together. No two simulations
-                        play out the same way.
-                    </div>
-                </div>
-                <!-- Outcome-distribution visual -->
-                <div class="lp-feat-viz" aria-hidden="true">
-                    <div class="lp-feat-bar"><span class="lp-fb lp-fb-run" style="height:42%"></span><b>0</b></div>
-                    <div class="lp-feat-bar"><span class="lp-fb lp-fb-run" style="height:60%"></span><b>1</b></div>
-                    <div class="lp-feat-bar"><span class="lp-fb lp-fb-run" style="height:34%"></span><b>2</b></div>
-                    <div class="lp-feat-bar"><span class="lp-fb lp-fb-four" style="height:52%"></span><b>4</b></div>
-                    <div class="lp-feat-bar"><span class="lp-fb lp-fb-six" style="height:26%"></span><b>6</b></div>
-                    <div class="lp-feat-bar"><span class="lp-fb lp-fb-wkt" style="height:20%"></span><b>W</b></div>
-                </div>
-            </div>
-
-            <div class="lp-feature-card lp-reveal is-wide">
-                <div class="lp-feature-icon">
-                    <i class="fas fa-layer-group" aria-hidden="true"></i>
-                </div>
-                <div class="lp-feature-body">
-                    <div class="lp-feature-title">T20 &amp; List A Formats</div>
-                    <div class="lp-feature-desc">
-                        Separate format-specific squads per team — your 50-over specialists
-                        won't be forced into T20 line-ups.
-                    </div>
-                </div>
-            </div>
-
-            <div class="lp-feature-card lp-reveal">
-                <div class="lp-feature-icon">
-                    <i class="fas fa-sliders" aria-hidden="true"></i>
-                </div>
-                <div class="lp-feature-body">
-                    <div class="lp-feature-title">Ground Conditions</div>
-                    <div class="lp-feature-desc">
-                        Pitch profiles (Green, Dry, Hard, Flat, Dead), game modes,
-                        and over-phase boosts shape every outcome.
-                    </div>
-                </div>
-            </div>
-
-            <div class="lp-feature-card lp-reveal">
-                <div class="lp-feature-icon">
-                    <i class="fas fa-trophy" aria-hidden="true"></i>
-                </div>
-                <div class="lp-feature-body">
-                    <div class="lp-feature-title">Tournament System</div>
-                    <div class="lp-feature-desc">
-                        Round-robin or knockout with automatic standings,
-                        point tables, and bracket progression.
-                    </div>
-                </div>
-            </div>
-
-            <div class="lp-feature-card lp-reveal is-wide">
-                <div class="lp-feature-icon">
-                    <i class="fas fa-chart-line" aria-hidden="true"></i>
-                </div>
-                <div class="lp-feature-body">
-                    <div class="lp-feature-title">Player Analytics</div>
-                    <div class="lp-feature-desc">
-                        Career stats, match-by-match breakdowns, and head-to-head comparisons
-                        across all formats and tournaments.
-                    </div>
-                </div>
-            </div>
-
-            <div class="lp-feature-card lp-reveal is-wide">
-                <div class="lp-feature-icon">
-                    <i class="fas fa-download" aria-hidden="true"></i>
-                </div>
-                <div class="lp-feature-body">
-                    <div class="lp-feature-title">Export Your Data</div>
-                    <div class="lp-feature-desc">
-                        Download your full match history, scorecards, and player statistics
-                        as structured data whenever you need.
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    </div>
+<div class="ribbon">
+<span>05 <small>CRICKET FORMATS</small>
+</span>
+<span>07 <small>COMPETITION STRUCTURES</small>
+</span>
+<span>∞ <small>POSSIBLE MATCH STORIES</small>
+</span>
+</div>
+<section id="formats">
+<p class="eyebrow">01 / FIND YOUR FORMAT</p>
+<h2>From ten overs to the long game.</h2>
+<p class="section-intro">Five ways to experience cricket, each with its own rhythm.</p>{% include "partials/public_formats.html" %}
 </section>
-
-
-<!-- ════════════════════════════════════════════════════════════
-     HOW IT WORKS
-     ════════════════════════════════════════════════════════════ -->
-<section class="lp-how" aria-labelledby="how-title">
-    <div class="lp-section-inner">
-
-        <div class="lp-section-label" aria-hidden="true">02 — Getting Started</div>
-        <h2 class="lp-section-title" id="how-title">Up and running in four steps</h2>
-        <p class="lp-section-sub">
-            No installation, no configuration files — sign up and start simulating in minutes.
-        </p>
-
-        <div class="lp-steps">
-
-            <div class="lp-step lp-reveal">
-                <div class="lp-step-num">01</div>
-                <div class="lp-step-body">
-                    <div class="lp-step-title">Create a Free Account</div>
-                    <div class="lp-step-desc">
-                        Sign up with your email. No external logins, no subscriptions —
-                        your account and all data live securely on the platform.
-                    </div>
-                </div>
-            </div>
-
-            <div class="lp-step lp-reveal">
-                <div class="lp-step-num">02</div>
-                <div class="lp-step-body">
-                    <div class="lp-step-title">Build Your Squads</div>
-                    <div class="lp-step-desc">
-                        Create teams, add players with roles (Batsman, Bowler, All-rounder,
-                        Wicketkeeper), and maintain separate T20 and List A squads.
-                    </div>
-                </div>
-            </div>
-
-            <div class="lp-step lp-reveal">
-                <div class="lp-step-num">03</div>
-                <div class="lp-step-body">
-                    <div class="lp-step-title">Set Ground Conditions</div>
-                    <div class="lp-step-desc">
-                        Pick the pitch type, game mode, and over-phase boosts that will
-                        govern your simulation — or leave defaults and dive straight in.
-                    </div>
-                </div>
-            </div>
-
-            <div class="lp-step lp-reveal">
-                <div class="lp-step-num">04</div>
-                <div class="lp-step-body">
-                    <div class="lp-step-title">Simulate &amp; Analyse</div>
-                    <div class="lp-step-desc">
-                        Pick your playing XI, run the simulation, and get a full ball-by-ball
-                        scorecard, player stats, and tournament progression instantly.
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    </div>
+<section class="ink-panel">
+<p class="eyebrow">02 / CHOOSE HOW YOU PLAY</p>
+<h2>Take the controls.<br>Or watch the story unfold.</h2>
+<div class="three-grid">
+<article>
+<h3>Auto simulation</h3>
+<p>Set up a match and let the engine take it from there. Available across all five formats.</p>
+</article>
+<article>
+<h3>Manual simulation</h3>
+<p>Take a more hands-on role in T10, T20, List A and The Hundred. First-Class runs in Auto mode.</p>
+</article>
+<article>
+<h3>Story Mode</h3>
+<p>Bring your own teams to supported scenarios inspired by legendary match arcs.</p>
+</article>
+</div>
+<p class="mode-note">Tune supported game profiles: Auto, Natural Game, Aggressive, Defensive, Flat Track Bully and Bowler’s Day.</p>
 </section>
-
-
-<!-- ════════════════════════════════════════════════════════════
-     FAQ
-     ════════════════════════════════════════════════════════════ -->
-<section class="lp-section lp-faq" aria-labelledby="faq-title">
-    <div class="lp-section-inner">
-
-        <div class="lp-section-label" aria-hidden="true">03 — Questions</div>
-        <h2 class="lp-section-title" id="faq-title">Frequently asked questions</h2>
-        <p class="lp-section-sub">
-            Everything you need to know before you run your first simulation.
-        </p>
-
-        <div class="lp-faq-list">
-
-            <details class="lp-faq-item lp-reveal">
-                <summary class="lp-faq-q">
-                    Is SimCricketX really free?
-                    <i class="fas fa-chevron-down lp-faq-chevron" aria-hidden="true"></i>
-                </summary>
-                <div class="lp-faq-a">
-                    Yes — completely free, with no credit card required. Create an account with
-                    your email and start building squads and simulating matches right away.
-                </div>
-            </details>
-
-            <details class="lp-faq-item lp-reveal">
-                <summary class="lp-faq-q">
-                    Which match formats are supported?
-                    <i class="fas fa-chevron-down lp-faq-chevron" aria-hidden="true"></i>
-                </summary>
-                <div class="lp-faq-a">
-                    Both T20 and List A (50-over). Each team keeps separate, format-specific squads,
-                    so your 50-over specialists are never forced into a T20 line-up.
-                </div>
-            </details>
-
-            <details class="lp-faq-item lp-reveal">
-                <summary class="lp-faq-q">
-                    How does the simulation actually work?
-                    <i class="fas fa-chevron-down lp-faq-chevron" aria-hidden="true"></i>
-                </summary>
-                <div class="lp-faq-a">
-                    A probabilistic engine resolves every delivery using batting and bowling
-                    matchups, the pitch profile you choose, and over-phase dynamics — producing
-                    authentic, varied outcomes rather than fixed or purely random results.
-                </div>
-            </details>
-
-            <details class="lp-faq-item lp-reveal">
-                <summary class="lp-faq-q">
-                    Do I need to install anything?
-                    <i class="fas fa-chevron-down lp-faq-chevron" aria-hidden="true"></i>
-                </summary>
-                <div class="lp-faq-a">
-                    No installation and no config files. SimCricketX runs entirely in your browser —
-                    sign up and you're simulating within a couple of minutes.
-                </div>
-            </details>
-
-            <details class="lp-faq-item lp-reveal">
-                <summary class="lp-faq-q">
-                    Can I run full tournaments?
-                    <i class="fas fa-chevron-down lp-faq-chevron" aria-hidden="true"></i>
-                </summary>
-                <div class="lp-faq-a">
-                    Yes. Set up round-robin or knockout tournaments with automatic standings,
-                    point tables, and bracket progression across both formats.
-                </div>
-            </details>
-
-            <details class="lp-faq-item lp-reveal">
-                <summary class="lp-faq-q">
-                    Is my data exportable?
-                    <i class="fas fa-chevron-down lp-faq-chevron" aria-hidden="true"></i>
-                </summary>
-                <div class="lp-faq-a">
-                    Absolutely — your full match history, scorecards, and player statistics can be
-                    downloaded as structured data whenever you need them.
-                </div>
-            </details>
-
-        </div>
-    </div>
+<section>
+<p class="eyebrow">03 / BUILD THE BIGGER PICTURE</p>
+<h2>One fixture is only the beginning.</h2>
+<p class="section-intro">Seven competition structures, plus multi-format tours. Available structures depend on your team count.</p>{% include "partials/public_competitions.html" %}
+<div class="tour-callout">
+<h3>Take it on tour.</h3>
+<p>Arrange series across formats between two teams, choose their order and follow the tour from first fixture to final result.</p>
+<a href="/about#tours">Explore tours →</a>
+</div>
 </section>
-
-
-<!-- ════════════════════════════════════════════════════════════
-     CTA SECTION
-     ════════════════════════════════════════════════════════════ -->
-<section class="lp-cta-section" aria-labelledby="cta-title">
-    <div class="lp-section-inner">
-        <h2 class="lp-cta-heading" id="cta-title">
-            Ready to simulate<br>
-            <span>your first match?</span>
-        </h2>
-        <p class="lp-cta-sub">
-            Two minutes to sign up, build a team, and run your first simulation.
-            No installation required.
-        </p>
-        <div class="lp-cta-actions">
-            <a href="{{ url_for('register') }}" class="lp-cta-primary" style="font-size:1rem; padding:0.9rem 2.2rem;">
-                <i class="fas fa-rocket" aria-hidden="true"></i>
-                Create Free Account
-            </a>
-            <a href="{{ url_for('about') }}" class="lp-cta-secondary">
-                <i class="fas fa-info-circle" aria-hidden="true"></i>
-                Learn More
-            </a>
-        </div>
-    </div>
+<section class="three-grid capabilities">
+<article>
+<p class="eyebrow">BUILD</p>
+<h3>A squad with your signature.</h3>
+<p>Custom teams, player pools, imports, ratings and format-specific lineups.</p>
+</article>
+<article>
+<p class="eyebrow">TUNE</p>
+<h3>Make conditions count.</h3>
+<p>Pitch profiles, scoring balance and phase dynamics shape every contest.</p>
+</article>
+<article>
+<p class="eyebrow">ANALYZE</p>
+<h3>Read beyond the result.</h3>
+<p>Scorecards, career records, comparisons, partnerships and statistics exports.</p>
+</article>
 </section>
-
-
-<!-- ════════════════════════════════════════════════════════════
-     FOOTER
-     ════════════════════════════════════════════════════════════ -->
-<footer class="lp-footer" role="contentinfo">
-    <div class="lp-footer-inner">
-
-        <a href="/" class="lp-footer-logo" aria-label="SimCricketX home">
-            <svg class="lp-logo-mark" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-                <circle cx="12" cy="12" r="9.5" fill="#c0392b"/>
-                <circle cx="12" cy="12" r="9.5" fill="none" stroke="#7d1a0e" stroke-width="1"/>
-                <path d="M8.4 3.7 C 12 8, 12 16, 8.4 20.3" fill="none" stroke="#ffd9cf"
-                      stroke-width="1.1" stroke-linecap="round" stroke-dasharray="0.1 2.05"/>
-                <ellipse cx="9" cy="8" rx="2.6" ry="1.7" fill="rgba(255,255,255,0.28)" transform="rotate(-25 9 8)"/>
-            </svg>
-            <span class="lp-footer-logo-text">SimCricketX</span>
-        </a>
-
-        <nav class="lp-footer-links" aria-label="Footer links">
-            <a href="{{ url_for('register') }}">
-                <i class="fas fa-user-plus" aria-hidden="true"></i> Register
-            </a>
-            <a href="{{ url_for('login') }}">
-                <i class="fas fa-sign-in-alt" aria-hidden="true"></i> Sign In
-            </a>
-            <a href="{{ url_for('about') }}">
-                <i class="fas fa-info-circle" aria-hidden="true"></i> About
-            </a>
-            <a href="https://github.com/manishrdy/SimCricketX" target="_blank" rel="noopener noreferrer">
-                <i class="fab fa-github" aria-hidden="true"></i> GitHub
-            </a>
-            <a href="https://www.planetcricket.org/forums/members/manish.176972/" target="_blank" rel="noopener noreferrer">
-                <i class="fas fa-globe" aria-hidden="true"></i> Planet Cricket
-            </a>
-        </nav>
-
-        <span class="lp-footer-copy">
-            &copy; <span id="footerYear">2026</span> SimCricketX
-        </span>
-
-    </div>
-</footer>
-
-
-<!-- ════════════════════════════════════════════════════════════
-     SCRIPTS
-     ════════════════════════════════════════════════════════════ -->
-<script>
-(function () {
-    'use strict';
-
-    /* ── Theme toggle ──────────────────────────────────────────── */
-    var html  = document.documentElement;
-    var btn   = document.getElementById('themeBtn');
-    var icon  = document.getElementById('themeIcon');
-
-    function applyTheme(t) {
-        html.setAttribute('data-theme', t);
-        icon.className = (t === 'dark') ? 'fas fa-sun' : 'fas fa-moon';
-        try { localStorage.setItem('theme', t); } catch (e) {}
-    }
-
-    var saved = null;
-    try { saved = localStorage.getItem('theme'); } catch (e) {}
-    if (!saved) {
-        saved = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
-            ? 'dark' : 'light';
-    }
-    applyTheme(saved);
-
-    btn.addEventListener('click', function () {
-        applyTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
-    });
-
-    /* ── Footer year ───────────────────────────────────────────── */
-    var fy = document.getElementById('footerYear');
-    if (fy) fy.textContent = new Date().getFullYear();
-
-    /* ── Scroll reveal (staggered, reduced-motion aware) ───────── */
-    var reveals = [].slice.call(document.querySelectorAll('.lp-reveal'));
-    var prefersReduced = window.matchMedia
-        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    if (!reveals.length) return;
-
-    if (prefersReduced || !('IntersectionObserver' in window)) {
-        // No motion: just show everything immediately.
-        reveals.forEach(function (el) { el.classList.add('is-visible'); });
-        return;
-    }
-
-    var io = new IntersectionObserver(function (entries, obs) {
-        entries.forEach(function (entry) {
-            if (!entry.isIntersecting) return;
-            var el = entry.target;
-            // Stagger by position among its reveal siblings (cap so it never drags).
-            var siblings = [].slice.call(el.parentNode.children)
-                .filter(function (c) { return c.classList.contains('lp-reveal'); });
-            var i = Math.min(siblings.indexOf(el), 5);
-            el.style.transitionDelay = (i * 60) + 'ms';
-            el.classList.add('is-visible');
-            obs.unobserve(el);
-        });
-    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
-
-    reveals.forEach(function (el) { io.observe(el); });
-}());
-</script>
-
-</body>
-</html>
+<section class="closing">
+<p class="eyebrow">YOUR FIRST MATCH STARTS HERE</p>
+<h2>Pick your XI. Find your story.</h2>
+<a class="button" href="/register">Create your free account ↗</a>
+</section>
+{% endblock %}

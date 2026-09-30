@@ -516,3 +516,14 @@ body {
     .auth-theme-btn { top: 1rem; right: 1rem; }
     .auth-form-wrap { max-width: 100%; }
 }
+
+/* Layout shared by the account entry pages. Colors live in auth_theme.css. */
+.auth-left-tagline { font-size: clamp(48px,5vw,76px); line-height: 1.06; letter-spacing: -3px; }
+.auth-kicker { font: 11px/1.5 var(--font-mono); letter-spacing: 2px; margin-bottom: 28px; }
+.auth-formats { border-block: 1px solid #ffffff25; padding: 18px 0; margin: 22px 0; font: 16px/1.8 var(--font-mono); }
+.auth-explore { font-size: 14px; text-underline-offset: 5px; }
+.auth-back { display: inline-block; margin-bottom: 28px; font-size: 13px; text-decoration: none; }
+.auth-left-features { margin-bottom: 28px; }
+.auth-left-features li { font-size: 13px; }
+@media(max-width:768px) { .auth-back { margin-top: 20px; } .auth-left { display: none; } }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation: none!important; transition: none!important; } }

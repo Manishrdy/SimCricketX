@@ -14,3 +14,8 @@ permissions), use the five shared QA accounts instead of creating users:
 If the JSON file is missing (fresh clone), run
 `.venv/bin/python scripts/dev_test_accounts.py seed`. It generates new
 credentials locally. Local/dev databases only.
+
+
+## Branches
+
+Always use dev branch for any development purpose.

@@ -4,3 +4,5 @@ Disallow: /admin/
 Disallow: /auth/
 
 Sitemap: https://simcricketx.app/sitemap.xml
+
+# Public capability guide for language models: https://simcricketx.app/llms.txt

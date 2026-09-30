@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}SimCricketX — Text-based cricket simulators{% endblock %}
+</title>
+<meta name="description" content="Text-based cricket simulators for T10, T20, List A, The Hundred and First-Class. Build squads, play tournaments, create tours and explore ball-by-ball statistics.">
+<link rel="canonical" href="https://simcricketx.app{{ request.path }}">
+<meta property="og:title" content="SimCricketX — Text-based cricket simulators">
+<meta property="og:description" content="Five formats. Seven competition structures. Your cricket world, one ball at a time.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"SimCricketX","url":"https://simcricketx.app/","applicationCategory":"GameApplication","operatingSystem":"Web browser","description":"Text-based cricket simulators for T10, T20, List A (40 or 50 overs), The Hundred and First-Class, with custom squads, seven competition structures, tours and statistics.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
+<link rel="alternate" type="text/plain" href="/llms.txt" title="SimCricketX capability guide for language models">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/theme_manage.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/public.css') }}">
+<script>try { document.documentElement.dataset.theme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch(e) {}</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="public-nav">
+<a class="wordmark" href="/">SimCricketX
+</a>
+<nav aria-label="Main navigation">
+<a href="/about">About</a>{% if current_user.is_authenticated %}
+<a class="button" href="/">Dashboard ↗</a>{% else %}
+<a href="/login">Sign In</a>
+<a class="button" href="/register">Get started ↗</a>{% endif %}
+<button id="theme-toggle" type="button" aria-label="Toggle color theme">◐</button>
+</nav>
+</header>
+<main id="main">{% block content %}{% endblock %}
+</main>
+<footer class="public-footer">
+<a class="wordmark" href="/">SimCricketX</a>
+<p>Text-based cricket. A world of possibilities.</p>
+<nav aria-label="Footer">
+<a href="/about">About</a>
+<a href="/ground-conditions/guide">Conditions guide</a>
+<a href="/llms.txt">LLM guide</a>
+<a href="https://github.com/ManishYelam/SimCricketX">Source code ↗</a>
+</nav>
+</footer>
+<script>document.getElementById('theme-toggle').addEventListener('click', function(){var t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('theme',t)}catch(e){}});</script>
+</body>
+</html>
