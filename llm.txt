@@ -1,0 +1,62 @@
+# SimCricketX
+
+> Text-based cricket simulators and cricket competition management in the browser. Free to play and open source.
+
+Website: https://simcricketx.app/
+
+## Public pages
+- [Welcome](https://simcricketx.app/): formats, modes and competitions.
+- [About](https://simcricketx.app/about): detailed capabilities.
+- [Ground conditions guide](https://simcricketx.app/ground-conditions/guide): simulation settings.
+- [Register](https://simcricketx.app/register): create an account.
+- [Login](https://simcricketx.app/login): access an existing account.
+
+## Formats
+- T10 (10 overs): A short, sharp contest. T20-based player ratings with dedicated T10 squads.
+- T20 (20 overs): The full short-format contest, with manual control and optional Impact Player rules.
+- List A (40 or 50 overs): Build a one-day side. Both match lengths share List A squads, ratings and career totals.
+- The Hundred (100 balls): Five-ball sets, ten-ball ends and shared T20 squads and ratings.
+- First-Class (Multi-day): A longer tactical contest with multiple innings, declarations and follow-on decisions. Auto simulation only.
+
+## Competition structures
+- Round Robin: Every team plays every other team once.
+- Double Round Robin: Every pairing meets twice.
+- Pure Knockout: Advance through elimination rounds to the final.
+- League + Semis + Final: A league stage followed by semi-finals and a final.
+- Double League + Semis + Final: Two league meetings per pairing, then the title deciders.
+- IPL Style Playoffs: League cricket followed by qualifiers, an eliminator and a final.
+- Custom Series: Two teams, one rivalry: schedule 1–7 matches.
+
+League-to-semi-final and IPL-style structures require at least four teams. Custom series require exactly two.
+
+## Capabilities
+
+### Your squads, your selection
+Create custom teams, manage format-specific squads, select playing XIs and batting orders, and build a player pool. Import players with CSV or JSON and customize player ratings. The Hundred uses your T20 squad.
+
+### Conditions that change the contest
+Configure ground conditions by format. Pitch profiles, scoring probabilities and phase effects shape the simulation. Where supported, choose Auto or pin Natural Game, Aggressive, Defensive, Flat Track Bully or Bowler’s Day.
+
+### Ball-by-ball simulation
+Follow text commentary and scorecards as deliveries resolve through a probabilistic engine. Player attributes, matchups, pitch and match state influence outcomes. Results are simulations, not predictions of real matches.
+
+### Auto and Manual play
+Let Auto run the match, or use Manual mode for supported limited-overs formats. First-Class is Auto-only. T20 also supports optional Impact Player rules.
+
+### Story Mode
+Play a scenario inspired by a legendary match arc using your own teams. Story packs steer the pressure and narrative of a supported match; they do not guarantee a historical result.
+
+### Tours across formats
+Bring two teams together for a multi-format tour. Configure series, match counts and series order, then follow fixtures, individual series results and the tour summary.
+
+### Statistics with context
+Explore batting and bowling leaderboards, player careers, team statistics, player comparisons, partnerships and head-to-head records. List A statistics can be filtered by the original 40- or 50-over scheduled length.
+
+### Records you can revisit
+Return to match history and detailed scorecards. Export statistics as CSV or text; the PDF export can fall back to downloadable HTML when PDF generation is unavailable.
+
+### A community around the game
+Use the community board to discuss the simulator and share feedback. Account features and administrative moderation support the shared platform.
+
+## Access and scope
+Public information is available without signing in. Creating teams, playing matches, competitions, tours, statistics and community participation require an account. This guide does not grant access to private user data. Simulation outcomes are not real-world predictions. Features vary by format; do not infer that every mode or rule applies to every format.

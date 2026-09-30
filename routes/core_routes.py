@@ -250,6 +250,11 @@ def register_core_routes(
     def about():
         return render_template("about.html")
 
+    @app.route("/llm.txt")
+    @app.route("/llms.txt")
+    def llm_guide():
+        return send_from_directory(basedir, "llm.txt", mimetype="text/plain")
+
     @app.route("/robots.txt")
     def robots_txt():
         return send_from_directory(basedir, "robots.txt", mimetype="text/plain")

@@ -26,6 +26,8 @@
 
     <!-- Auth styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_manage.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth_theme.css') }}">
     {% if cf_turnstile_site_key %}
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     {% endif %}
@@ -37,68 +39,7 @@
     <!-- ════════════════════════════════════════════════════════
          LEFT PANEL — branding
          ════════════════════════════════════════════════════════ -->
-    <aside class="auth-left" aria-hidden="true">
-        <div class="auth-left-glow"></div>
-        <div class="auth-left-glow2"></div>
-
-        <a href="/" class="auth-left-logo">
-            <span class="auth-left-logo-icon">🏏</span>
-            SimCricketX
-        </a>
-
-        <div class="auth-left-body">
-
-            <!-- Animated cricket ball -->
-            <svg class="auth-left-ball" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                    <radialGradient id="login-ballGrad" cx="36%" cy="34%" r="56%">
-                        <stop offset="0%"   stop-color="#e85c50"/>
-                        <stop offset="55%"  stop-color="#c0392b"/>
-                        <stop offset="100%" stop-color="#7d1a0e"/>
-                    </radialGradient>
-                </defs>
-                <circle cx="100" cy="100" r="90" fill="url(#login-ballGrad)"/>
-                <path d="M100,12 C55,38 55,88 100,100 C55,112 55,162 100,188"
-                      fill="none" stroke="rgba(255,200,185,0.7)" stroke-width="4" stroke-linecap="round"/>
-                <path d="M100,12 C145,38 145,88 100,100 C145,112 145,162 100,188"
-                      fill="none" stroke="rgba(255,200,185,0.7)" stroke-width="4" stroke-linecap="round"/>
-                <g stroke="rgba(255,210,195,0.6)" stroke-width="2" stroke-linecap="round">
-                    <line x1="62" y1="34" x2="58" y2="42"/> <line x1="51" y1="55" x2="47" y2="63"/>
-                    <line x1="47" y1="78" x2="43" y2="86"/> <line x1="51" y1="115" x2="47" y2="123"/>
-                    <line x1="62" y1="140" x2="58" y2="148"/>
-                </g>
-                <g stroke="rgba(255,210,195,0.6)" stroke-width="2" stroke-linecap="round">
-                    <line x1="138" y1="34" x2="142" y2="42"/> <line x1="149" y1="55" x2="153" y2="63"/>
-                    <line x1="153" y1="78" x2="157" y2="86"/> <line x1="149" y1="115" x2="153" y2="123"/>
-                    <line x1="138" y1="140" x2="142" y2="148"/>
-                </g>
-                <ellipse cx="66" cy="64" rx="22" ry="15" fill="rgba(255,255,255,0.18)" transform="rotate(-25,66,64)"/>
-            </svg>
-
-            <div class="auth-left-tagline">
-                Simulate<br>
-                <span class="auth-left-tagline-accent">Every Ball.</span>
-            </div>
-
-            <p class="auth-left-sub">
-                Build squads, tune pitch conditions, and run T20 &amp; List A simulations
-                powered by a probabilistic ball-by-ball engine.
-            </p>
-
-            <ul class="auth-left-features">
-                <li><i class="fas fa-check-circle"></i> Ball-by-ball simulation engine</li>
-                <li><i class="fas fa-check-circle"></i> T20 &amp; List A format squads</li>
-                <li><i class="fas fa-check-circle"></i> Tournaments &amp; player analytics</li>
-                <li><i class="fas fa-check-circle"></i> Ground conditions &amp; pitch control</li>
-            </ul>
-
-        </div>
-
-        <div class="auth-left-footer">
-            Free &nbsp;·&nbsp; Open source &nbsp;·&nbsp; No credit card &nbsp;·&nbsp;
-            <a href="https://github.com/manishrdy/SimCricketX" target="_blank" rel="noopener noreferrer">GitHub</a>
-        </div>
-    </aside>
+    {% include "partials/auth_brand.html" %}
 
 
     <!-- ════════════════════════════════════════════════════════
@@ -111,10 +52,10 @@
             <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
         </button>
 
-        <div class="auth-form-wrap">
+        <div class="auth-form-wrap"><a class="auth-back" href="/">← Back to SimCricketX</a>
 
             <h1 class="auth-form-title">Welcome back</h1>
-            <p class="auth-form-sub">Sign in to continue your cricket journey</p>
+            <p class="auth-form-sub">Your cricket world is ready for the next innings.</p>
 
             <!-- Error -->
             {% if error %}
