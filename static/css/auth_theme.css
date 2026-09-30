@@ -1,0 +1,27 @@
+/* Adapt existing auth components to the internal homepage's shared theme. */
+:root, [data-theme="dark"] {
+    --bg-input: var(--bg-raised);
+    --fg-muted: var(--text-muted);
+    --brand: var(--brand-primary);
+    --brand-dark: var(--accent-hover);
+    --brand-light: var(--accent-light);
+    --amber: var(--brand-secondary);
+    --panel-grad: linear-gradient(130deg, color-mix(in srgb, var(--brand-primary) 58%, #071b19), #071b19);
+}
+.auth-left { background: var(--panel-grad); color: #fff9f2; }
+.auth-left-tagline-accent {
+    background: none;
+    color: var(--brand-secondary);
+    -webkit-text-fill-color: var(--brand-secondary);
+    font-family: var(--font-sans);
+    font-style: normal;
+    font-weight: 500;
+}
+.auth-kicker, .auth-explore { color: var(--brand-secondary); }
+.auth-left-sub, .auth-left-features li, .auth-left-footer { color: #d4e6df; }
+.auth-formats { color: #fff9f2; }
+.auth-back { color: var(--text-muted); }
+.auth-input, .auth-btn { border-radius: var(--radius-md); }
+.auth-btn, [data-theme="dark"] .auth-btn { box-shadow: var(--shadow-sm); }
+[data-theme="dark"] .auth-btn { color: var(--text-on-accent); }
+.auth-btn:hover, [data-theme="dark"] .auth-btn:hover { box-shadow: var(--shadow-md); }
