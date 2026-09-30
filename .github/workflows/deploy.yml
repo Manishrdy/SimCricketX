@@ -22,4 +22,11 @@ jobs:
           username: ${{ secrets.OCI_USER }}
           key: ${{ secrets.OCI_SSH_KEY }}
           script_stop: true
-          script: bash /home/ubuntu/SimCricketX/scripts/deploy.sh
+          # Run the script as it exists on origin/main, not the (possibly stale)
+          # copy already on disk, so deploy.sh changes take effect immediately.
+          script: |
+            set -e
+            APP=/home/ubuntu/SimCricketX
+            git -C "$APP" fetch -q origin main
+            git -C "$APP" show origin/main:scripts/deploy.sh > /tmp/simcricketx_deploy.sh
+            bash /tmp/simcricketx_deploy.sh
