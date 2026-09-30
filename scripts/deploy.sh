@@ -34,19 +34,24 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 rollback() {
     local prev_commit="$1"
     log "ROLLBACK: reverting code to $prev_commit"
-    git -C "$APP_DIR" reset --hard "$prev_commit"
+    git -C "$APP_DIR" reset --hard "$prev_commit" || log "ROLLBACK: WARNING — git reset failed."
 
     # Restore database snapshot taken before migration
     if [ -f "$DB_SNAPSHOT" ]; then
         log "ROLLBACK: restoring database snapshot"
-        cp "$DB_SNAPSHOT" "$DB_PATH"
+        cp "$DB_SNAPSHOT" "$DB_PATH" || log "ROLLBACK: WARNING — DB restore failed."
     fi
 
+    # A failed pip install must NOT abort the rollback (set -e would skip the
+    # restart below and leave the service on whatever it was running). The old
+    # dependencies are normally still installed, so warn and carry on.
     log "ROLLBACK: reinstalling dependencies"
-    "$VENV/bin/pip" install -q -r "$APP_DIR/requirements.txt"
+    if ! "$VENV/bin/pip" install -q -r "$APP_DIR/requirements.txt"; then
+        log "ROLLBACK: WARNING — pip install failed; continuing with installed packages."
+    fi
 
     log "ROLLBACK: restarting service"
-    sudo systemctl restart "$SERVICE_NAME"
+    sudo systemctl restart "$SERVICE_NAME" || log "ROLLBACK: WARNING — systemctl restart failed."
     sleep 3
 
     if curl -sf --max-time 10 "$HEALTH_URL" > /dev/null; then
