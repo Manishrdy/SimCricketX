@@ -549,6 +549,8 @@ def create_app():
     global _backup_scheduler_started, MAINTENANCE_MODE, IP_WHITELIST_MODE
     # --- Flask setup ---
     app = Flask(__name__)
+    from middleware.request_timing import install_request_timing
+    install_request_timing(app)
     test_mode = bool(
         os.getenv("SIMCRICKETX_TEST_MODE", "").strip() in {"1", "true", "True"}
         or _is_pytest_runtime()
@@ -907,7 +909,6 @@ def create_app():
     @app.before_request
     def attach_request_context():
         try:
-            g.request_id = uuid.uuid4().hex[:12]
             g.request_path = request.path
             sid = session.get('_scx_sid')
             if not sid:
@@ -1678,7 +1679,8 @@ def create_app():
     # --- Request logging ---
     @app.before_request
     def log_request():
-        app.logger.info(f"{get_client_ip()} {request.method} {request.path}")
+        app.logger.info("Request %s %s %s", g.request_id, request.method,
+                        request.url_rule.rule if request.url_rule else "<unmatched>")
         if request.path.startswith("/admin") or request.path.startswith("/__codex_probe"):
             from werkzeug.routing import MapAdapter
             adapter = app.url_map.bind("")
