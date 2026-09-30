@@ -20,6 +20,8 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_NAME = "cricket_sim.db"
 DB_PATH = os.path.join(BASE_DIR, DB_NAME)
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
+# Set by --non-interactive (used by scripts/deploy.sh): never block on input().
+NON_INTERACTIVE = False
 
 
 def backup_database():
@@ -177,6 +179,10 @@ def check_admin(app, db):
         for i, u in enumerate(all_users, 1):
             print(f"    {i}. {u.id}")
 
+        if NON_INTERACTIVE:
+            print("  [WARN] No admin set (non-interactive run). Use --set-admin <email>.")
+            return
+
         while True:
             choice = input("\n  Enter the number of the user to make admin (or 'skip' to skip): ").strip()
             if choice.lower() == "skip":
@@ -224,6 +230,11 @@ def set_admin_direct(email):
 
 
 def main():
+    global NON_INTERACTIVE
+    if "--non-interactive" in sys.argv:
+        NON_INTERACTIVE = True
+        sys.argv.remove("--non-interactive")
+
     # Handle --set-admin shortcut
     if len(sys.argv) >= 3 and sys.argv[1] == "--set-admin":
         email = sys.argv[2].strip()
