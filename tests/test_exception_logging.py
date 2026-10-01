@@ -1,11 +1,53 @@
 import json
 
+import pytest
+
 from flask_login import login_user, logout_user
 
 from database import db
 from database.models import ExceptionLog
 from engine.stats_service import StatsService
 from utils.exception_tracker import log_exception
+
+
+@pytest.mark.parametrize("path, method, status", [
+    ("/admin/config.php", "GET", 404),
+    ("/__codex_probe/missing", "GET", 404),
+    ("/__codex_probe", "POST", 405),
+    ("/admin/routing-test", "GET", 308),
+])
+def test_expected_routing_outcomes_are_not_backend_issues(app, client, monkeypatch, path, method, status):
+    from services import github_issue_queue
+
+    app.add_url_rule("/admin/routing-test/", "routing_test", lambda: "ok")
+    enqueued = []
+    monkeypatch.setattr(github_issue_queue, "enqueue_exception", lambda *a, **kw: enqueued.append(a))
+    before = ExceptionLog.query.count()
+
+    response = client.open(path, method=method)
+
+    assert response.status_code == status
+    assert ExceptionLog.query.count() == before
+    assert enqueued == []
+
+
+def test_unexpected_route_diagnostic_failure_is_still_logged(app, monkeypatch):
+    from werkzeug.routing import MapAdapter
+
+    def fail_match(*args, **kwargs):
+        raise RuntimeError("unexpected-route-diagnostic-failure")
+
+    with app.test_request_context("/admin/config.php"):
+        monkeypatch.setattr(MapAdapter, "match", fail_match)
+        hook = next(h for h in app.before_request_funcs[None] if h.__name__ == "log_request")
+        from flask import g
+        g.request_id = "route-diagnostic-test"
+        hook()
+
+    row = ExceptionLog.query.filter_by(
+        exception_message="unexpected-route-diagnostic-failure",
+    ).one()
+    assert row.exception_type == "RuntimeError"
 
 
 def test_log_exception_persists_extended_metadata(app):
