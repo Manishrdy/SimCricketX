@@ -1682,11 +1682,18 @@ def create_app():
         app.logger.info("Request %s %s %s", g.request_id, request.method,
                         request.url_rule.rule if request.url_rule else "<unmatched>")
         if request.path.startswith("/admin") or request.path.startswith("/__codex_probe"):
-            from werkzeug.routing import MapAdapter
+            from werkzeug.exceptions import HTTPException
             adapter = app.url_map.bind("")
             try:
                 endpoint, values = adapter.match(request.path, method=request.method)
                 app.logger.info(f"[RouteMatch] path={request.path} endpoint={endpoint} values={values}")
+            except HTTPException as e:
+                # Missing routes, unsupported methods and routing redirects are
+                # normal HTTP outcomes, not backend issues to persist or sync.
+                app.logger.debug(
+                    "[RouteMatch] path=%s method=%s status=%s",
+                    request.path, request.method, e.code,
+                )
             except Exception as e:
                 log_exception(e)
                 admin_routes = sorted([r.rule for r in app.url_map.iter_rules() if r.rule.startswith('/admin')])
