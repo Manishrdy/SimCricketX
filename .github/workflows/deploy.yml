@@ -1,8 +1,6 @@
 name: Deploy to production
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 # Never run two deploys at once, and don't cancel one mid-restart.

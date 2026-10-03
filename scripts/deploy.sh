@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
 # SimCricketX — server-side deploy script
-# Triggered by GitHub Actions on every push to main.
+# Triggered manually through the GitHub Actions deployment workflow.
 #
 # What it does:
 #   1. Pulls latest code from origin/main
