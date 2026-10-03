@@ -81,12 +81,8 @@ def test_weak_batter_gets_out_more_than_elite_batter():
 
 
 def test_elite_bowler_takes_more_wickets_than_weak_bowler():
-    # Boundary-rate is NOT asserted here — like test_scoring_calibration.py's
-    # isolated probes, an isolated single-delivery call only carries a thin
-    # rating signal on raw scoring rate (the 60/40 pitch/skill blend damps
-    # it); wicket_rate is the robust, non-noisy signal at this isolation
-    # level. Bowler-rating's fuller effect on scoring shows up once GSME/
-    # pressure amplify it across a real over (see the pressure test below).
+    # Scoring differentiation is checked without sampling noise in
+    # test_rating_scoring_shape. This sampled test protects wicket-taking.
     vs_elite_bowler = _tally(_batter(70), _bowler(95))
     vs_weak_bowler = _tally(_batter(70), _bowler(35))
     assert vs_elite_bowler["wicket_rate"] > vs_weak_bowler["wicket_rate"]
