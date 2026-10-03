@@ -230,6 +230,15 @@
     font-size: .95rem;
     font-weight: 800;
     text-align: center;
+    padding: 0 4px;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.pr-rating-grid input::-webkit-outer-spin-button,
+.pr-rating-grid input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 
 .pr-rating-grid input:focus {
