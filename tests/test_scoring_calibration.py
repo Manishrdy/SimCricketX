@@ -16,27 +16,31 @@ different job:
    outscores a green top, dot% runs the other way, etc. These survive
    recalibration and are the tests worth trusting long-term.
 
-3. SHAPE SPECS (xfail strict) — the executable specification for the bug
-   this harness was built to fix. They isolate `compute_weighted_prob` so
-   the measurement is not confounded by phase, GSME or batting position.
-   They fail today. When the shape layer lands they will pass, and
-   strict=True turns an unexpected pass into a failure, forcing the marker
-   to be removed rather than silently rotting.
+3. SHAPE SPECS — isolate `compute_weighted_prob` so rating differentiation
+   is not confounded by phase, GSME or batting position. These are normal
+   regression tests now that ratings tilt dots and boundaries separately.
 
 
 Why the shape specs are isolated rather than measured from full matches
 ----------------------------------------------------------------------
-Measuring strike rate by rating tier over full matches is confounded. In
-T20 the elite tier shows SR 179.5 vs the tail's 84.7 — a +94.8 gap that
-looks like ratings working. It isn't: it is GSME resource-conservatism,
-death-over boosts and the new-batter penalty tracking *match state* that
-correlates with rating. ListA, where 300 balls wash those confounds out,
-shows the truth — a +2.0 gap, with the 70-79 tier actually OUTSCORING the
-80-86 tier because it bats in the death phase. Rating is invisible; batting
-position is everything.
+Before the fix, full-match T20 samples showed SR 179.5 for the elite tier
+versus 84.7 for the tail. That apparent skill signal came from match-state
+effects correlated with batting position: resource conservation, death-over
+boosts and new-batter penalties. ListA showed only a +2.0 gap. Isolating the
+rating contest prevents those effects from masking a missing scoring signal.
 
 So tier SR is reported (test_report_calibration_table) but never asserted.
 The assertions live on the isolated probe.
+
+RATING SHAPE RECALIBRATION (2026-10-03)
+------------------------------------
+Ratings now tilt dots and attacking shots in opposite directions. The tilt
+saturates smoothly to bound the form/confidence feedback loop, with a neutral
+effective-rating gap of 10 for limited overs and 0 for FC. The limited-overs
+reference accounts for the existing set-batter bonuses in the pitch baselines.
+The same 16 seeds below were remeasured; the independent pitch target bands
+are unchanged. T20 Flat wicket mass and ListA Hard/Flat/Dead dot weights were
+adjusted to keep those targets after the skill layer became active.
 
 
 T20 PITCH RECALIBRATION (2026-08-16)
@@ -201,25 +205,25 @@ SQUAD = [
 # catch-drop/misfield change (see the first REPIN NOTE above), again after the
 # 2026-08-16 T20 pitch recalibration (see T20 PITCH RECALIBRATION above),
 # again on 2026-08-30 for the commentary-RNG split (second REPIN NOTE), and
-# again on 2026-09-21 for the collapse fix (third REPIN NOTE).
+# again on 2026-09-21 for the collapse fix, and 2026-10-03 for rating shape.
 # (mean_runs, mean_wickets, dot_pct, bdry_per_100)
 T20_BASELINE = {
-    "Green": (127.8, 8.4, 41.3, 12.6),
-    "Dry":   (141.9, 7.4, 41.4, 14.0),
-    "Hard":  (186.7, 5.2, 33.6, 20.0),
-    "Flat":  (214.9, 4.7, 29.7, 23.7),
-    "Dead":  (247.8, 1.8, 24.3, 29.8),
+    "Green": (133.0, 7.5, 40.9, 12.7),
+    "Dry":   (131.8, 7.5, 43.1, 12.3),
+    "Hard":  (192.9, 5.1, 33.4, 20.9),
+    "Flat":  (219.8, 4.5, 29.6, 24.4),
+    "Dead":  (267.8, 1.5, 21.8, 33.2),
 }
 
 # Re-pinned after the 2026-08-16 ListA recalibration (see LISTA PITCH
 # RECALIBRATION below), again on 2026-08-30 for the commentary-RNG split, and
-# again on 2026-09-21 for the collapse fix (third REPIN NOTE).
+# again on 2026-09-21 for the collapse fix, and 2026-10-03 for rating shape.
 LISTA_BASELINE = {
-    "Green": (237.8, 8.6, 44.5, 4.4),
-    "Dry":   (219.4, 10.0, 44.9, 4.0),
-    "Hard":  (307.9, 6.9, 38.5, 7.1),
-    "Flat":  (336.1, 4.9, 35.6, 8.8),
-    "Dead":  (363.1, 3.6, 31.7, 9.8),
+    "Green": (225.2, 8.8, 45.6, 3.7),
+    "Dry":   (225.5, 9.9, 44.9, 4.2),
+    "Hard":  (313.4, 7.1, 38.1, 7.6),
+    "Flat":  (352.5, 4.7, 34.9, 9.7),
+    "Dead":  (376.9, 2.7, 32.7, 11.5),
 }
 
 RUN_TOLERANCE = 0.05      # +/-5% on mean runs
@@ -538,7 +542,7 @@ def test_bowling_pitches_take_more_wickets(fmt):
 
 
 # ---------------------------------------------------------------------------
-# 3. Shape specs — the bug, as an executable specification
+# 3. Shape specs — rating differentiation independent of match state
 # ---------------------------------------------------------------------------
 
 def _isolated_profile(batting, bowling, pitch="Hard", batter_runs=0, balls_faced=10):
@@ -564,11 +568,6 @@ def _strike_rate(profile):
                   + 4 * profile["Four"] + 6 * profile["Six"])
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Phase 1 target: all six run outcomes share one blended_frac in "
-    "compute_weighted_prob, so the run-block shape normalises to the base "
-    "matrix for every rating. Remove this marker when the shape layer lands."
-))
 @pytest.mark.parametrize("pitch", ("Green", "Hard", "Flat"))
 def test_batting_rating_shapes_the_run_distribution(pitch):
     elite = _isolated_profile(95, 70, pitch)
@@ -591,10 +590,6 @@ def test_batting_rating_shapes_the_run_distribution(pitch):
     )
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Phase 1 target: batting rating currently moves strike rate by ~2 points "
-    "across the entire 25-95 range; the skill signal lands only on survival."
-))
 def test_batting_rating_produces_a_real_strike_rate_spread():
     elite = _strike_rate(_isolated_profile(95, 70))
     tail = _strike_rate(_isolated_profile(25, 70))
@@ -604,11 +599,6 @@ def test_batting_rating_produces_a_real_strike_rate_spread():
     )
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Phase 1 target: the graduated confidence curve (batter_runs >= 50 -> "
-    "x1.20) feeds effective_batting, which cancels out of the run block. A "
-    "set batter currently has the same scoring shape as one on nought."
-))
 def test_set_batter_accelerates():
     fresh = _strike_rate(_isolated_profile(85, 70, batter_runs=0, balls_faced=1))
     set_bat = _strike_rate(_isolated_profile(85, 70, batter_runs=85, balls_faced=50))
@@ -618,11 +608,6 @@ def test_set_batter_accelerates():
     )
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Phase 1 target (bowling mirror): bowling rating only sizes the wicket "
-    "column. Every bowler concedes the same shape, so economy rate is not a "
-    "real property and a containment bowler cannot be expressed."
-))
 def test_bowling_rating_shapes_what_is_conceded():
     elite = _isolated_profile(75, 95)
     weak = _isolated_profile(75, 35)
