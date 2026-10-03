@@ -1,12 +1,5 @@
 # Notes for AI agents
 
-## Branching
-
-- All development happens on the `dev` branch only. Check out `dev` before
-  making changes; do not commit feature or fix work directly to `main`.
-- `main` is production only. It receives changes solely by merging `dev`
-  (or an approved PR into it) when the user decides to release.
-
 ## Test accounts
 
 For any testing that needs logged-in users (community board, admin pages,
