@@ -344,6 +344,10 @@ GitHub Actions pipeline runs on every push:
 - **Steps**: checkout → setup-python → install deps → run tests → flake8 lint → bandit security scan → safety dependency audit
 - **Coverage**: `coverage.xml` generated for downstream reporting
 
+Production VM deployments are manual. Run the **Deploy to production** workflow
+from GitHub Actions when you want to update the VM from `main`; pushes to `main`
+do not trigger deployment.
+
 ---
 
 ## Running Locally
