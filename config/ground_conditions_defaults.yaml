@@ -89,13 +89,13 @@ formats:
       Flat:
         description: "True surface with even bounce — batting paradise, bowlers need skill"
         scoring_matrix:
-          Dot: 0.266
+          Dot: 0.267
           Single: 0.340
           Double: 0.140
           Three: 0.008
           Four: 0.108
           Six: 0.066
-          Wicket: 0.047
+          Wicket: 0.046
           Extras: 0.025
         run_factor: 1.08
         wicket_factors:
@@ -316,7 +316,7 @@ formats:
         run_factor: 0.98
         wicket_mult: 0.80
         dot_single:
-          Dot: 1.0
+          Dot: 1.02
           Single: 1.0
         fine_tune:
           Single: 1.03
@@ -332,7 +332,8 @@ formats:
           Single: 1.0
         fine_tune:
           Wicket: 0.85
-          Dot: 0.94
+          # Offset the new rating-driven scoring tilt on this batting surface.
+          Dot: 0.98
           Four: 1.06
           Six: 1.1
       # Target band: 360+ runs, 2-4 wickets. Dead used to land within 6 runs of
@@ -346,7 +347,7 @@ formats:
           Dot: 1.0
           Single: 1.0
         fine_tune:
-          Dot: 0.84
+          Dot: 1.02
           Four: 1.16
           Six: 1.22
     phase_boosts:
