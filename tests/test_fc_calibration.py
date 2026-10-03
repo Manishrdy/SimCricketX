@@ -484,10 +484,9 @@ def test_fc_elite_squad_sits_in_the_same_band(fc_stats_elite, pitch):
     """An all-star XI scores no more than a good domestic one, and the SAME
     bands hold for both.
 
-    This is not a coincidence, it is the shape of the model: skill_frac is
-    batting/(batting+bowling), a RATIO. Lifting a whole match from a top six
-    of 72 to one of 86 lifts the attacks with it, so the contest is unchanged.
-    Scores move when the two sides are unequal, not when both are good.
+    Survival uses the batting/bowling ratio; the scoring-shape layer uses
+    their effective rating gap. Raising both squads should keep an evenly
+    matched contest inside the same broad pitch bands.
     """
     lo, hi, rpo_lo, rpo_hi = FC_TARGET_BANDS[pitch]
     got = fc_stats_elite[pitch]
@@ -517,9 +516,10 @@ def test_fc_a_mismatched_attack_is_what_moves_the_score(fc_stats):
     'ratings do nothing'. An elite top six against a domestic attack DOES
     score far more — that gap is the lever, and it is why a user's all-star
     XI beating a weaker side posts totals no single-tier bench ever shows."""
-    mixed = [_fc_innings("Hard", s, xi=None) for s in SEEDS[:12]]
     strong_bat = []
-    for s in SEEDS[:12]:
+    # Use the same 40 seeds as the even-contest fixture. Twelve innings can
+    # make the comparison hinge on a few long partnerships after RNG shifts.
+    for s in SEEDS:
         random.seed(s)
         m = match_module.Match({
             "match_id": str(uuid.uuid4()), "created_by": "calibration",
@@ -543,7 +543,7 @@ def test_fc_a_mismatched_attack_is_what_moves_the_score(fc_stats):
             fc_declaration.should_declare = original
         strong_bat.append(m.fc_innings_totals.get(1, {}).get("score", m.score))
 
-    even = sum(r["runs"] for r in mixed) / len(mixed)
+    even = fc_stats["Hard"]["runs"]
     gapped = sum(strong_bat) / len(strong_bat)
     assert gapped > even * 1.15, (
         f"an elite top six against a domestic attack scored {gapped:.0f} vs "
