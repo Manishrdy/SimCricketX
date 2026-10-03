@@ -40,6 +40,18 @@ EXTRA_WEIGHT_MULTIPLIER = 2.2
 # Free hit boundary boost applied independently to Four and Six weights.
 FREE_HIT_BOUNDARY_BOOST = 1.10
 
+# Tilt the run distribution according to the batter/bowler rating gap.
+# Dots must move in the opposite direction to boundaries; multiplying every
+# run outcome by the same skill factor cancels when their weights normalise.
+# Singles sit between defence and attacking shots, with sixes most sensitive
+# to the contest. Saturate smoothly because form/confidence can push an
+# effective rating beyond the nominal 0–100 player-rating scale. The maximum
+# tilt is modest: dots x0.80–1.25, sixes x0.75–1.33, before normalisation.
+_RUN_SHAPE_SENSITIVITY = {
+    "Dot": -1.0, "Single": -0.15, "Double": 0.35,
+    "Three": 0.35, "Four": 1.0, "Six": 1.3,
+}
+
 # -----------------------------------------------------------------------------
 # ball_outcome.py
 #
@@ -644,6 +656,16 @@ def compute_weighted_prob(
         wicket_boost = 1.5
 
     raw_weight = base_prob * blended_frac * boundary_penalty * wicket_boost
+    if outcome_type in _RUN_SHAPE_SENSITIVITY:
+        # Limited-overs pitch matrices were calibrated with form/confidence
+        # bonuses on established batters: a +10 effective gap is their neutral
+        # scoring reference. FC's flatter confidence curve uses an equal contest.
+        reference_gap = 0.0 if _is_fc else 10.0
+        advantage = 0.22 * math.tanh((effective_batting - bowling - reference_gap) / 20.0)
+        # Respect a pitch-only configuration. The default skill share (0.4)
+        # gives full differentiation; larger shares retain the bounded tilt.
+        strength = max(0.0, min(1.0, beta / 0.4))
+        raw_weight *= math.exp(_RUN_SHAPE_SENSITIVITY[outcome_type] * advantage * strength)
     
     return max(raw_weight, 0.0)
 
