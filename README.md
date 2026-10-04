@@ -1,435 +1,259 @@
 # SimCricketX
 
-**Probabilistic ball-by-ball cricket simulation — run a full match, a series, or a whole tournament in your browser.**
+**Build a squad. Read the pitch. Play every ball. Run an entire cricket season.**
 
-[![CI/CD Pipeline](https://github.com/ManishYelam/SimCricketX/actions/workflows/ci.yml/badge.svg)](https://github.com/ManishYelam/SimCricketX/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
+SimCricketX is a browser-based cricket simulation platform that connects ball-by-ball gameplay with squad management, tournaments, multi-format tours, and persistent statistics. Underneath the scoreboard is a Python simulation engine that models player ability, conditions, match pressure, and tactical decisions.
 
-### ▶ [Try it live at simcricketx.app](https://simcricketx.app/)
+[Play SimCricketX](https://simcricketx.app/) · [Report an issue](https://github.com/ManishYelam/SimCricketX/issues) · [MIT License](LICENSE)
 
-![SimCricketX demo](docs/demo.gif)
+[![CI](https://github.com/ManishYelam/SimCricketX/actions/workflows/ci.yml/badge.svg)](https://github.com/ManishYelam/SimCricketX/actions/workflows/ci.yml)
 
-**Live match simulation | Tournament management | Admin panel | REST-style API | Full test suite**
+For developers, this repository brings together probabilistic modelling, cricket-specific state machines, recoverable delivery requests, relational data modelling, and the practical constraints of serving a stateful game over HTTP and WebSockets.
 
----
+## The game
 
-## Why This Project
+### Five formats, different tactical problems
 
-SimCricketX demonstrates end-to-end engineering across the full stack — probabilistic simulation, concurrency-safe state management, relational schema design, and a security-hardened admin system. It is not a toy: it serves real concurrent users, persists structured match data, enforces authentication and authorization at multiple layers, and ships with CI/CD and Docker deployment configuration.
+| Format | Match structure | What changes in play |
+| --- | --- | --- |
+| **T20** | 20 overs per side | Powerplay, consolidation, death-over acceleration, four-over bowling quotas, and Impact Player substitutions. |
+| **T10** | 10 overs per side | A dedicated short-format preset, three-over powerplay, two-over bowling quotas, and completion-aware bowling selection. |
+| **List A** | 40 or 50 overs per side | Longer innings construction, format-specific ratings, fielding phases, and eight- or ten-over bowling quotas. |
+| **The Hundred** | 100 legal balls per side | Five-ball sets, ten-ball end changes, a 25-ball powerplay, 20-ball bowling quotas, and an optional manual fielding timeout. |
+| **First-Class** | Four- or five-day matches, up to two innings per team | Sessions, declarations, follow-ons, new balls, bowler workload, pitch deterioration, weather, and draws. |
 
----
+Limited-overs formats support automatic and manual selection modes. First-Class uses automatic captaincy. The Hundred draws its squad and ratings from T20; T10 has a separate squad profile that can be initialized from an existing T20 squad.
 
-## List A match lengths
+### Build teams with an identity
 
-List A supports **40 or 50 overs per side** in standalone matches, tournaments,
-custom series, and tours. Choose the innings length during setup; 50 remains the
-default. Forty-over matches allow eight overs per bowler and use fielding phases
-of 8/24/8 overs. Both lengths share List A squads, ratings, ground settings, and
-career totals. List A statistics offer All / 40 / 50 filters based on the original
-scheduled length, even when rain shortens play.
+Create teams, manage format-specific squads, arrange batting orders, and select a playing XI and bowling options. Players carry batting, bowling, and fielding ratings alongside their cricket roles and bowling styles.
 
-This variant retains the existing List A Super Over and rain policies, including
-the 20-over minimum for a rain-affected result. It is not the complete ECB
-recreational competition ruleset.
+The player pool separates shared master players from personal custom players and rating overrides. Search and filter the pool, import players from JSON or CSV, and reuse player identities across squads without treating a shared identity as shared ownership. Team profiles keep format-specific selections and career records separate.
 
-Before deploying, run `python -m migrations.precheck` (or the usual `python migrate.py`).
-The idempotent scheduled-length migration also runs during normal startup. Legacy
-List A matches/tournaments become 50-over records; existing scores and career
-aggregates are preserved.
+### Shape the match, then watch it unfold
 
-Reproduce the 320-match, 16-seed comparison across five pitches and day/day-night:
+Choose from **Green, Dry, Hard, Flat, and Dead** pitches, configure ground conditions, and select day or day/night play. Conditions feed into scoring and wicket probabilities; pitch wear and dew can change the contest as the match progresses.
 
-```sh
-python scripts/bench_lista_lengths.py --out reports/lista_lengths.json
+The live dashboard combines delivery commentary with batting and bowling figures, partnerships, a wagon wheel, Manhattan charts, and innings comparison curves. Manual selection lets you make supported batting and bowling choices, while automatic selection handles the decisions for you. Tied limited-overs games use format- and competition-specific outcomes, including Super Overs and Hundred Super Fives where applicable.
+
+Rain can reduce allocations, revise targets, or produce a no result. First-Class weather consumes playing time and affects the available path to a result.
+
+For a different kind of match, enable dramatic scenarios or select a historical story pack. The included India–Pakistan 2022 T20 World Cup pack recreates a pressure arc with your chosen teams. Story packs guide score and wicket corridors rather than replaying an exact historical scorecard.
+
+### Turn individual matches into competitions
+
+The tournament engine supports seven structures:
+
+- Single and double round-robin leagues.
+- Knockout brackets, including byes.
+- Single and double round-robin leagues followed by semifinals and a final.
+- IPL-style playoffs with Qualifier 1, Eliminator, Qualifier 2, and Final.
+- Custom two-team series.
+
+Fixtures, standings, qualification, and player statistics connect to the match engine. Re-simulating a fixture reverses its recorded contributions and handles dependent playoff fixtures, so a changed result can propagate through the competition.
+
+**Tours** bring multiple series between a host and visitor into one ordered schedule. Combine formats, validate squad readiness, reorder series before play, and track results and leaders across the tour.
+
+### Keep the story after the final ball
+
+Match history and detailed scorecards sit alongside player profiles, team statistics, head-to-head records, partnership analysis, and cross-format player comparisons. Statistics distinguish the format actually played from the squad used to play it; Hundred matches do not become T20 career appearances.
+
+List A statistics can be filtered by the original scheduled length—40 or 50 overs—even after a rain reduction. Match archives, statistical exports, and scorecard image exports make results available outside the live dashboard.
+
+The surrounding platform includes account and session management, guided walkthroughs, and a community board with posts, comments, votes, mentions, notifications, image uploads, search, and moderation.
+
+### Simulation boundaries
+
+The rules and probability models are simulator implementations. Rain targets use an embedded **D/L Standard Edition approximation**, not professional DLS. Hundred competitions use the simulator's custom tournament structures; the official three-team Hundred playoff preset is not implemented. Fielding restrictions influence probabilities rather than simulating physical player positions.
+
+See the [T10 implementation notes](docs/t10.md) and [Hundred rules and limitations](docs/HUNDRED.md) for detailed coverage. The 40-over List A option shares the existing List A rain and tie policies, including the 20-over minimum for a rain-affected result; it is not a complete recreation of an ECB recreational ruleset.
+
+## Engineering the simulation
+
+### A delivery is a state transition
+
+The core loop lives in [engine/match.py](engine/match.py). It coordinates batting order, bowling selection, innings transitions, weather, scorecards, commentary, and format-specific decisions. Delivery probabilities live in [engine/ball_outcome.py](engine/ball_outcome.py), with separate modules for pressure, game state, conditions, and captaincy.
+
+Conceptually, each delivery connects these concerns:
+
+```text
+Format rules + player ratings + pitch and conditions
+                         |
+              Delivery outcome weights
+                         |
+       Phase, pressure, momentum and tactical modifiers
+                         |
+                  Sample an outcome
+                         |
+        Apply runs, extras, wickets and legal-ball rules
+                         |
+      Update match state, commentary and live presentation
+                         |
+        Persist checkpoints and completed match records
 ```
 
-The compact baseline is saved in `tests/fixtures/lista_length_baseline.json`.
-The detailed generated report includes both innings, phase scoring, boundaries,
-and each bowler's legal-ball usage. Forty-over par targets are scaled from the
-50-over model; simulated totals remain dependent on squads, pitch, and match state.
+Ratings change the shape of the scoring distribution: dots, singles, and boundaries respond differently to the batter–bowler contest. Match-state modifiers account for factors such as wickets in hand, recent scoring, partnerships, and required rate. Format-specific bounds and calibration tests help catch feedback loops in which pressure produces wickets that produce still more pressure.
 
-## Contributing
+[engine/format_catalog.py](engine/format_catalog.py) defines public format identities, squad sources, and available controls. [engine/format_config.py](engine/format_config.py) defines playing parameters and creates per-match configurations. Original scheduled length remains separate from rain-revised allocation.
 
-Contributions are welcome — start with the [Contributing Guide](CONTRIBUTING.md) for setup, test, and code-style instructions, then pick up a [good first issue](https://github.com/ManishYelam/SimCricketX/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+Bowling legality is also a planning problem. The short-format managers check whether a selection leaves a legal way to finish the innings, rather than checking only the selected bowler's remaining quota. Cricket arithmetic uses legal deliveries to avoid treating notation such as `19.5` as a decimal number of overs.
 
-The `engine/`, `routes/`, and `tests/` directories are the most self-contained places to start.
+### First-Class captaincy looks ahead
 
----
+The First-Class engine models a different objective: balancing runs, wickets, and remaining time across several innings.
 
-# Technical Deep-Dive
+[engine/fc_forecast.py](engine/fc_forecast.py) uses a fitted scoring/risk model and dynamic programming to estimate innings outcomes. [engine/fc_captain.py](engine/fc_captain.py) weighs win and draw probabilities when evaluating declarations, follow-ons, and batting tempo. These forecasts are deterministic and do not consume the delivery random stream.
 
-The rest of this README documents the internals: how the simulation works, how the app is structured, and how to run it yourself.
+The forecast coefficients are fitted from the ball engine through the calibration tooling. Decision budgets and cached forecasts constrain the cost of live decisions. Under gevent, expensive pure computation is offloaded to its thread pool so the server can continue serving requests and WebSocket heartbeats.
 
-A full-stack cricket simulation platform built with Flask, featuring a probabilistic ball-outcome engine, real-time WebSocket updates, role-based access control, and a multi-format tournament system. The project spans ~21,700 lines of Python across a modular monolith architecture with 126 tested API routes and production-grade deployment configuration.
+### One match, two delivery transports
 
----
+HTTP and Socket.IO share the same advancement path. [services/match_delivery.py](services/match_delivery.py) serializes delivery requests with a per-match lock and rotating tokens. Recent tokenized responses are cached: retrying a lost response can return the original delivery without bowling another ball. Stale tokens produce a conflict that directs the client to recover its state.
 
-## Tech Stack
+Live match objects remain in an in-process registry. Persistence combines SQL records with match JSON and format-specific snapshots. First-Class, Hundred, and Super Over recovery have dedicated paths; Hundred checkpoints also preserve the random stream and pending decisions. Ordinary T20, T10, and List A innings do **not** provide equivalent durable recovery after process loss.
 
-| Layer | Technology |
-|---|---|
-| **Backend** | Python 3.9+, Flask 2.0 |
-| **ORM / DB** | SQLAlchemy, SQLite |
-| **Auth** | Flask-Login, Werkzeug (bcrypt), Flask-WTF (CSRF) |
-| **Real-time** | Flask-SocketIO 5.3+, simple-websocket |
-| **Rate Limiting** | Flask-Limiter |
-| **Data** | Pandas, PyYAML, JSON |
-| **Templating** | Jinja2, HTML5/CSS3, JavaScript |
-| **Testing** | pytest, pytest-flask, pytest-cov, pytest-mock, Faker, factory-boy |
-| **Code Quality** | flake8, black, isort, bandit, safety |
-| **Deployment** | Docker (Python 3.9-slim), Gunicorn (1 worker, 4 threads), Waitress |
-| **CI/CD** | GitHub Actions (Ubuntu + Windows, Python 3.9–3.11) |
+### Statistics preserve cricket semantics
 
----
+The database separates team and pool identity, match records, scorecard rows, partnerships, competition fixtures, and cached tournament aggregates. That separation supports several subtle requirements:
 
-## Architecture Overview
+- Player identity can span formats while statistics remain scoped to the owning user's matches.
+- Super Over and Super Five contributions remain distinguishable from regular innings.
+- Hundred legal balls, sets, and bowling rates retain explicit units.
+- Tournament result reversal can undo recorded points and net-run-rate contributions.
+- Historical List A filters use scheduled length rather than the final rain-revised length.
 
-```
-SimCricketX/
-├── app.py                  # App factory, route registration, thread-safe match state
-├── database/
-│   ├── models.py           # 13 SQLAlchemy models (491 lines)
-│   └── __init__.py         # db instance
-├── routes/                 # Modular route registration (5,308 lines, 126 endpoints)
-│   ├── auth_routes.py
-│   ├── team_routes.py
-│   ├── match_routes.py
-│   ├── tournament_routes.py
-│   ├── stats_routes.py
-│   └── admin_routes.py     # 64+ admin endpoints
-├── engine/                 # Simulation core (11,740 lines)
-│   ├── match.py            # Ball-by-ball driver (6,500+ lines)
-│   ├── ball_outcome.py     # Probabilistic outcome model
-│   ├── game_state_engine.py# Momentum & par-score curves
-│   ├── pressure_engine.py  # Psychological pressure factors
-│   ├── scenario_engine.py  # Scripted dramatic outcomes
-│   ├── tournament_engine.py# Multi-format tournament logic (2,400+ lines)
-│   ├── commentary_engine.py# Ball-by-ball narrative generation
-│   └── stats_service.py    # Match stat persistence & aggregation
-├── auth/
-│   └── user_auth.py        # Auth functions, password policy, audit logging
-├── utils/                  # Config loading, logging helpers
-├── tests/                  # 126 routes tested (8 test files)
-├── Dockerfile
-├── gunicorn.conf.py
-├── pytest.ini
-└── migrations/
+See [database/models.py](database/models.py), [engine/stats_service.py](engine/stats_service.py), and [engine/player_comparison.py](engine/player_comparison.py).
+
+## Application architecture
+
+SimCricketX is a **Flask modular monolith**. The app factory wires route modules and shared dependencies; the browser uses Jinja templates, CSS, and JavaScript without a separate frontend build step.
+
+| Layer | Implementation |
+| --- | --- |
+| Web application | Flask, Jinja2, browser JavaScript, Chart.js |
+| Simulation and analysis | Python, NumPy, Pandas, YAML/JSON configuration |
+| Persistence | Flask-SQLAlchemy, SQLAlchemy, SQLite, match files |
+| Live updates | Flask-SocketIO, simple-websocket, gevent WebSocket worker |
+| Authentication and request protection | Flask-Login, Werkzeug password hashing, Flask-WTF, Flask-Limiter |
+| Testing | pytest and coverage tooling; Node test runner for JavaScript regressions |
+| Runtime and delivery | Gunicorn, Docker, GitHub Actions, systemd deployment script |
+
+```text
+app.py                 Application factory, shared runtime and transport wiring
+engine/                Delivery model, match lifecycle, formats, competitions, stats
+routes/                Gameplay, teams, tours, accounts, community and admin endpoints
+services/              Delivery recovery, community workflows and issue integration
+database/              SQLAlchemy models and database initialization
+auth/                  Authentication and authorization helpers
+middleware/            Request timing and session log capture
+utils/                 Configuration, email, diagnostics and CPU offloading
+templates/             Jinja pages and reusable partials
+static/                Browser interactions, charts and styles
+config/                Application settings and ground-condition defaults
+migrations/            Startup migrations, historical repairs and verification
+scripts/               Calibration, data maintenance, local QA and deployment tools
+tests/                 Engine, route, persistence, security and browser regressions
+docs/                  Format rules and operational notes
+match_archiver.py      Match archive generation
 ```
 
-### Key Architectural Decisions
+**The deployment is intentionally single-worker.** [gunicorn.conf.py](gunicorn.conf.py) configures one gevent WebSocket worker because live matches are held in memory. Per-match locks protect mutations, but they do not share objects across processes. Horizontal scaling would require a shared match-state design and coordinated delivery ownership.
 
-**Single-worker Gunicorn with 4 threads** — Match state lives in a Python in-memory dict (`MATCH_INSTANCES`). Multiple workers would cause state divergence, so the deployment intentionally uses one worker with thread-level concurrency protected by `threading.Lock()` per match instance. This is a deliberate trade-off documented in `gunicorn.conf.py`.
+Administration covers users, sessions, player pools, configuration, backups, maintenance access, community moderation, and diagnostic workspaces. Security mechanisms include ownership checks, CSRF protection, rate limits, failed-login controls, optional Turnstile, and authentication event records.
 
-**Modular route registration** — Each route module exports a `register_*_routes(app, db, limiter)` function. This dependency-injection pattern keeps modules decoupled and makes it straightforward to add or remove feature areas without modifying the app factory.
+Exceptions can be grouped by fingerprint and optionally linked to GitHub issues through a background queue. Request timing records request IDs, response duration, database time, and query counts without logging request payloads. The [request timing guide](docs/operations/request-timing.md) explains proxy correlation and diagnosis.
 
-**Thread-safe match file I/O** — Per-match `threading.Lock` objects stored in `_match_file_locks` prevent race conditions when concurrent requests read/write the same match's JSON archive. Global `MATCH_INSTANCES_LOCK` guards the dict itself.
+## Run locally
 
-**Graceful Socket.IO degradation** — The app imports `flask-socketio` inside a try/except. If the package is absent, Socket.IO features are silently disabled and all routes serve over standard HTTP.
-
----
-
-## Simulation Engine
-
-The engine is the core intellectual contribution of this project. It models a cricket match at the individual delivery level using a multi-layer probability pipeline.
-
-### Ball Outcome Pipeline
-
-Each delivery passes through four sequential modifier stages:
-
-```
-Base probability matrix
-  (batting_rating × bowling_rating × pitch_type)
-        ↓
-Phase multipliers
-  (powerplay / middle overs / death overs)
-        ↓
-Game state vector
-  (momentum, par score delta, RRR pressure)
-        ↓
-Pressure factors
-  (toss advantage, wickets lost, target pressure)
-        ↓
-Final outcome
-  (Dot | 1 | 2 | 3 | 4 | 6 | Wicket | Wide | NoBall | Byes | LegBye)
-```
-
-**Momentum model** (`game_state_engine.py`) — Tracks the last 18 deliveries with exponential decay (factor: 0.88). Computes a "game state vector" that encodes whether the batting team is ahead or behind par score. Multipliers are clamped to [0.35, 3.00] to prevent runaway probabilities.
-
-**Par score curves** — Pre-computed expected scores for all 20 overs per pitch type (Green, Dead, Balanced, High-scoring). Used to calculate whether a batting team is under- or over-performing.
-
-**Scenario engine** (`scenario_engine.py`) — Supports scripted dramatic templates: last-ball-six, win-by-1-run thriller, and super-over climax. These are applied as probability overrides when conditions match.
-
----
-
-## Tournament Engine
-
-Supports 7+ tournament formats:
-
-- Round-robin (single and double)
-- Knockout bracket
-- IPL-style (group stage → Eliminator → Qualifier → Final)
-- Custom series
-
-Standings are recalculated after each fixture using points (W=2, T=1, L=0) and Net Run Rate. Playoff qualification threshold is configurable per tournament.
-
----
-
-## Database Design
-
-13 SQLAlchemy models across two categories:
-
-**Business tables** — `users`, `teams`, `players`, `matches`, `match_scorecards`, `match_partnerships`, `tournaments`, `tournament_teams`, `tournament_fixtures`, `tournament_player_stats_cache`
-
-**Security tables** — `admin_audit_log`, `failed_login_attempts`, `blocked_ips`, `active_sessions`, `login_history`, `ip_whitelist`, `site_counters`
-
-Notable design choices:
-- `User.email` as primary key (legacy) + `User.stable_id` (UUID) as a forward-compatible identity anchor for future email-change flows
-- Transactional SQL for email updates to prevent orphaned records
-- Cascade deletion on foreign keys (team delete → player delete, etc.)
-- Indexes on `user_id`, `tournament_id`, `ip_address`, `timestamp` for query performance
-- `TournamentPlayerStatsCache` avoids expensive per-request aggregation of career stats
-
-### Player Pool Migration Runbook (Prod)
-
-Use this when migrating an existing DB from team-scoped players to the global/user pool model.
-
-1. Backup DB
-```bash
-cp cricket_sim.db cricket_sim.pre_migration_backup.db
-```
-
-2. Dry-run schema precheck
-```bash
-python3 scripts/precheck_dry_run.py --db ./cricket_sim.db
-```
-
-3. Apply idempotent schema migrations
-```bash
-python3 -m migrations.precheck
-```
-
-4. Cleanup orphaned stats (after `add_scorecard_cascade`)
-```bash
-python3 -m migrations.cleanup_orphaned_stats --apply
-```
-
-5. Verify post-migration state
-```bash
-python3 scripts/precheck_dry_run.py --db ./cricket_sim.db
-```
-
-Expected result after successful migration: `0 pending` checks and `cleanup_orphaned_stats` marked applied.
-
-### Linking Existing Players to Pool
-
-After schema migration, link legacy `players` rows to `master_players` / `user_players`:
-
-```bash
-python3 -m migrations.link_players_to_pool --dry-run
-python3 -m migrations.link_players_to_pool --commit
-```
-
-Behavior during linkage:
-- Exact master match (`name` + ratings fields): linked to `master_player_id`.
-- Master name match but rating differences: linked via user override (`user_players.master_player_id` set).
-- No master match: created/reused as user custom player (`user_players.master_player_id` is `NULL`).
-
-This fallback is intentional and protects user squads when names are typo variants or absent from global pool.
-
----
-
-## Security Implementation
-
-Authentication and authorization are not bolted on — they are integrated at every layer.
-
-**Authentication**
-- bcrypt password hashing via Werkzeug
-- Password policy: 8+ characters, uppercase, lowercase, digit (enforced at registration and admin reset)
-- Flask-Login session management with `ActiveSession` table for server-side session tracking
-- `LoginHistory` records every login and logout event
-
-**Authorization**
-- `@login_required` and `@admin_required` decorators on all protected routes
-- Admin-only routes return 403 (not redirect) to avoid information leakage
-
-**Rate Limiting**
-- Flask-Limiter: 30 req/10s for regular users, 90 req/10s for admins
-- Adaptive proof-of-work challenges on repeated failed logins
-- `FailedLoginAttempt` table tracks attempts per IP with configurable thresholds
-
-**IP-level Controls**
-- `BlockedIP` table for admin-managed IP bans
-- `IPWhitelistEntry` for maintenance mode access restriction
-- Trusted IP prefix bypass for internal tooling
-
-**Audit Trail**
-- `AdminAuditLog` persists every admin action with actor email, action type, target, and timestamp
-- Indexed for efficient querying across large audit histories
-
-**Exception Observability (DB + GitHub)**
-- All backend/python/sqlite exception handlers call `log_exception(...)` to persist structured records in `exception_log`
-- Production idempotency is enforced via exception fingerprinting: one canonical row per unique exception signature
-- Repeated occurrences do not duplicate rows; instead `occurrence_count` is incremented and `last_seen_at` is updated
-- Optional GitHub issue creation is triggered only for first-seen fingerprints, then linked back with `github_issue_number` and `github_issue_url`
-
-**CSRF**
-- Flask-WTF CSRF protection on all state-changing POST endpoints
-
----
-
-## API Surface (126 Routes)
-
-| Module | Endpoints | Notes |
-|---|---|---|
-| Core | 6 | Home, ground conditions CRUD |
-| Auth | 7 | Register, login, logout, display name |
-| Teams | 4 | List, create, edit, delete |
-| Matches | 20 | Setup, toss, ball simulation, scorecard, export |
-| Tournaments | 5 | Create, view, re-simulate fixture, delete |
-| Statistics | 8 | Player comparison, CSV/JSON export, partnership analysis |
-| Admin | 64+ | User management, DB backup/restore, IP controls, audit log, system monitoring |
-
-The admin panel alone covers: user CRUD, ban/unban, password reset, email change, database integrity checks, live system metrics (via `psutil`), configuration editing, maintenance mode toggle, session management, and user impersonation for support workflows.
-
----
-
-## Testing
-
-```
-tests/
-├── conftest.py               # Fixtures: app, client, authenticated_client, admin_client,
-│                             #           regular_user, admin_user, banned_user,
-│                             #           test_team, test_team_2, test_tournament
-├── test_auth_routes.py       # 7 auth endpoints
-├── test_core_routes.py       # 6 core endpoints
-├── test_team_routes.py       # 4 team endpoints
-├── test_match_routes.py      # 20 match endpoints
-├── test_tournament_routes.py # 5 tournament endpoints
-├── test_stats_routes.py      # 8 stats endpoints
-├── test_admin_routes.py      # 64+ admin endpoints
-└── test_admin_security.py    # Authorization boundary tests
-```
-
-**Test tooling**: pytest with pytest-flask, pytest-cov (HTML + terminal report), pytest-mock, Faker for synthetic data, factory-boy for ORM fixtures.
-
-**Test database**: In-memory SQLite spun up per test session via app factory. Each test gets a clean state through fixture teardown.
-
-**Coverage targets**: Overall 80%+, critical routes 90%+, core business logic 95%+.
-
-```bash
-# Run full suite with coverage
-pytest --cov=. --cov-report=html
-
-# Run by marker
-pytest -m admin
-pytest -m "auth or security"
-```
-
-### Local Sanity Check
-
-Run the focused route suite before shipping small Flask changes:
-
-```bash
-pytest tests/test_core_routes.py tests/test_auth_routes.py tests/test_team_routes.py
-```
-
----
-
-## CI/CD
-
-GitHub Actions pipeline runs on every push:
-
-- **Matrix**: Ubuntu + Windows, Python 3.9 / 3.10 / 3.11
-- **Steps**: checkout → setup-python → install deps → run tests → flake8 lint → bandit security scan → safety dependency audit
-- **Coverage**: `coverage.xml` generated for downstream reporting
-
-Production VM deployments are manual. Run the **Deploy to production** workflow
-from GitHub Actions when you want to update the VM from `main`; pushes to `main`
-do not trigger deployment.
-
----
-
-## Running Locally
-
-**Prerequisites**: Python 3.9+, Git
+Use Python 3.11 for the local workflow below. Dependencies are listed in [requirements.txt](requirements.txt); Node.js is needed only for JavaScript tests and related tooling.
 
 ```bash
 git clone https://github.com/ManishYelam/SimCricketX.git
 cd SimCricketX
-
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-
-pip install -r requirements.txt
-
+python3.11 -m venv .venv
+source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 python app.py
-# → http://127.0.0.1:5000
 ```
 
-**With Docker:**
+Open [localhost:7860](http://127.0.0.1:7860). Local startup also attempts to open a browser. The application uses `cricket_sim.db` in the repository root and runs startup migration checks.
+
+Configuration comes from [config/config.yaml](config/config.yaml), environment variables, and optional `.env` values. [.env.example](.env.example) documents GitHub issue and webhook integration. Email verification and password-reset delivery use `RESEND_API_KEY` with the email settings in YAML.
+
+For your own deployment, configure a private application secret. The current loader gives YAML `app.secret_key` precedence over `FLASK_SECRET_KEY`; set the YAML value to `change_me` to use the environment variable or generated persistent local secret. Keep real credentials out of commits.
+
+For local testing that requires authenticated accounts, follow [AGENTS.md](AGENTS.md) and the local `.claude/TEST_ACCOUNTS.md` guide. Use the five shared QA identities through `scripts/dev_test_accounts.py`; if their local credential file is missing, initialize them against the local/dev database:
+
+```bash
+.venv/bin/python scripts/dev_test_accounts.py seed
+```
+
+The generated credentials are local and gitignored.
+
+## Verification and calibration
+
+The test suite covers more than route responses: legal bowling allocations, free hits, rain interruptions, innings transitions, snapshot restoration, cross-format statistics, fixture reversal, delivery transport parity, and authentication boundaries all have regression coverage.
+
+```bash
+# Full Python suite; pytest.ini enables coverage reports by default.
+python -m pytest
+
+# Focused rules and delivery-recovery checks.
+python -m pytest -o addopts='' \
+  tests/test_cricket_math.py tests/test_match_delivery.py \
+  tests/test_t10.py tests/test_hundred.py
+
+# JavaScript regression tests.
+node --test tests/*.test.cjs tests/js/*.test.cjs
+```
+
+Seeded benchmarks complement example-based tests by measuring distributions across pitches and lighting conditions. They assess scoring bands, wicket rates, phase behaviour, and chase balance rather than assuming that one plausible scorecard proves the model is calibrated.
+
+```bash
+python scripts/bench_t10.py --seeds 120
+python scripts/bench_lista_lengths.py --out reports/lista_lengths.json
+```
+
+Additional tools cover List A, dew, and First-Class calibration, including fitting the First-Class forecast model. Benchmark bands describe engineering acceptance criteria for this simulator, not independently validated predictions of real matches.
+
+The current [CI workflow](.github/workflows/ci.yml) runs lint, formatting, import-order, and security checks on Python 3.11. These checks are configured as advisory. It does **not** currently run the Python or JavaScript test suites; run the relevant suites locally before submitting changes.
+
+## Deployment and database evolution
+
+Run the configured production server with:
+
+```bash
+gunicorn -c gunicorn.conf.py app:app
+```
+
+It binds to `127.0.0.1:5000` for a reverse proxy. The [Dockerfile](Dockerfile) exposes port 7860 and starts Gunicorn with a bind override:
 
 ```bash
 docker build -t simcricketx .
-docker run -p 7860:7860 simcricketx
+docker run --rm -p 7860:7860 simcricketx
 ```
 
-**Run tests:**
+That command is an ephemeral container run. Configure persistent storage for the SQLite database and generated data when retaining user state. The Dockerfile currently uses Python 3.9, while the local workflow above and CI use 3.11.
+
+The [production deployment workflow](.github/workflows/deploy.yml) is manually triggered. It invokes [scripts/deploy.sh](scripts/deploy.sh) on the configured OCI host to update code, install changed dependencies, snapshot the database, apply migrations, restart the service, and check health, with rollback handling for migration and health-check failures.
+
+Startup migrations are registered centrally and designed to be idempotent. For a read-only check of an existing database, use:
 
 ```bash
-pytest
+python -m migrations.precheck --check --db ./cricket_sim.db
 ```
 
-### Optional: Auto-create GitHub issues for exceptions
+Keep `--check`: omitting it applies migrations. The verifier rehearses changes on a disposable SQLite snapshot and reports schema drift, pending changes, and repairs requiring manual review. Destructive migrations also have runtime revision guards to detect older processes still holding the database. See the [migration verification guide](migrations/README.md) before database maintenance.
 
-Configure `.env` with:
+## Contributing
 
-```bash
-GITHUB_ISSUE_ON_EXCEPTION_ENABLED=true
-GITHUB_TOKEN=your_token_here
-GITHUB_REPOSITORY=owner/repo
-GITHUB_ISSUE_TITLE_PREFIX=[Auto Exception]
-GITHUB_ISSUE_LABELS=auto-exception
-GITHUB_ISSUE_ASSIGNEES=
-```
+Choose the layer closest to the behaviour you want to change: `engine/` for simulation rules, `routes/` and `services/` for application workflows, or `templates/` and `static/` for the interface.
 
-Token permissions:
-- Fine-grained PAT: repository selected + `Issues: Read and write`
-- Classic PAT: `public_repo` (public) or `repo` (private)
+For engine changes, add regressions for the affected rule and use seeded calibration when changing scoring probabilities. For persistence changes, include migration verification. For live interactions, consider both HTTP and WebSocket delivery, retries, and resume behaviour. Keep generated match data, credentials, database files, and reports out of unrelated commits.
 
----
-
-## Project Scale
-
-| Metric | Count |
-|---|---|
-| Total Python lines | ~21,700 |
-| Simulation engine lines | 11,740 |
-| Route handler lines | 5,308 |
-| SQLAlchemy models | 13 |
-| API endpoints | 126 |
-| Admin-only endpoints | 64+ |
-| Test files | 8 |
-| Tournament formats supported | 7+ |
-| CI matrix configurations | 6 (2 OS × 3 Python versions) |
-
----
-
-## Engineering Concepts Demonstrated
-
-- **Concurrency**: Thread-safe in-memory state with `threading.Lock`, per-resource locking granularity
-- **System Design**: Modular monolith with clean separation of concerns (engine / routes / models / auth)
-- **Database**: Relational schema design, ORM usage, indexing strategy, migration scripts
-- **Security**: Defense-in-depth (rate limiting + PoW + IP controls + CSRF + audit logging)
-- **Testing**: Fixture-driven test isolation, parametrized test clients, mocking, coverage enforcement
-- **Deployment**: Dockerized with Gunicorn, environment-aware configuration, graceful feature degradation
-- **API Design**: RESTful route structure, consistent error handling, 126-endpoint surface area
-- **Data Engineering**: Probabilistic simulation, time-series momentum tracking, NRR computation
-
----
-
-T10 setup, rules, calibration and extension notes: [T10 preset](docs/t10.md).
+Open an [issue](https://github.com/ManishYelam/SimCricketX/issues) or a pull request with the behaviour being changed and the validation performed.
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+SimCricketX is available under the [MIT License](LICENSE).
