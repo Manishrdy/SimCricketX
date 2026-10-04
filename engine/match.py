@@ -7037,6 +7037,13 @@ class Match(HundredPresentation):
             if status_code != 200:
                 return {"error": apply_result.get("error", "Failed to auto-resolve pending decision")}
 
+        # A completed FC chase takes precedence over weather, intervals and
+        # stumps, including when the winning run came off the day's last ball.
+        # Keep the later innings-end check for declarations made at a boundary.
+        if (self.is_fc and self.fc_innings == 4
+                and self.target is not None and self.score >= self.target):
+            return self._fc_transition_to_next_innings()
+
         # FC v2 weather is a delivery-boundary clock, so rain can interrupt
         # an over without altering or completing the delivery that follows.
         # Limited-overs rain remains in _check_rain_events below.
