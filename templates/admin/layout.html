@@ -129,6 +129,10 @@
                             class="admin-nav-link {% if request.endpoint and request.endpoint.startswith('admin_community') %}active{% endif %}">
                             <i class="fas fa-comments"></i> <span>Community</span>
                         </a></li>
+                    <li><a href="/admin/support-prompt" data-label="Support Prompt"
+                            class="admin-nav-link {% if request.endpoint == 'admin_support_prompt' %}active{% endif %}">
+                            <i class="fas fa-mug-hot"></i> <span>Support Prompt</span>
+                        </a></li>
                     <li><a href="/admin/issues" data-label="Exceptions"
                             class="admin-nav-link {% if request.endpoint and request.endpoint.startswith('admin_issue') %}active{% endif %}">
                             <i class="fas fa-bug"></i> <span>Exceptions</span>
