@@ -120,6 +120,7 @@ from routes.admin_issue_routes import register_admin_issue_routes
 from routes.webhook_routes import register_webhook_routes
 from routes.community_routes import register_community_routes
 from routes.admin_community_routes import register_admin_community_routes
+from routes.admin_support_routes import register_admin_support_routes
 from routes.player_pool_routes import register_player_pool_routes
 from routes.scenario_routes import register_scenario_routes
 from routes.guide_routes import register_guide_routes
@@ -859,6 +860,11 @@ def create_app():
         except Exception:
             log_exception(source="backend")
             return "0.0.0"
+
+    @app.context_processor
+    def inject_support_url():
+        from utils.support_prompt import SUPPORT_URL
+        return {"support_url": SUPPORT_URL}
 
     @app.context_processor
     def inject_app_version():
@@ -1654,6 +1660,7 @@ def create_app():
     # Community board (Q&A / bug reports / feature requests).
     register_community_routes(app, db=db, limiter=limiter)
     register_admin_community_routes(app, db=db)
+    register_admin_support_routes(app, db=db)
 
     # Admin-side issue tracker (PLAN-IR-001 Phase 2).
     register_admin_issue_routes(app, db=db)

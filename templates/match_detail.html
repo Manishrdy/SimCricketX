@@ -180,6 +180,16 @@
             </a>
         </div>
 
+        {% if show_support_note %}
+        <!-- Quiet thank-you, revealed by match_detail.js once the match is over
+             (at most once per browser session). Server decides eligibility. -->
+        <div class="support-note-bar" id="support-note-bar" hidden>
+            <span><i class="fa fa-mug-hot" aria-hidden="true"></i> Enjoyed that match? SimCricketX is free and built by one person. A coffee helps cover hosting and new features (optional).</span>
+            <a id="support-note-link" href="{{ support_url }}" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
+            <button type="button" id="support-note-close" aria-label="Dismiss"><i class="fa fa-xmark" aria-hidden="true"></i></button>
+        </div>
+        {% endif %}
+
         <div class="live-view-stack" id="live-view-stack">
             <!-- Premium AI-Style Code Block Console -->
             <div class="code-window view-pane pane-commentary is-active" data-view-pane="commentary">
