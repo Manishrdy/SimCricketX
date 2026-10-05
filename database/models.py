@@ -79,6 +79,13 @@ class User(UserMixin, db.Model):
     # NULL = never touched. Parsed and validated by utils/guide_state.py only.
     guide_state = db.Column(db.Text, nullable=True)
 
+    # Support (Buy Me a Coffee) prompt bookkeeping. NULL = never happened; the
+    # cooldown rules live only in utils/support_prompt.py.
+    support_prompt_shown_at = db.Column(db.DateTime, nullable=True)
+    support_prompt_dismissed_at = db.Column(db.DateTime, nullable=True)
+    support_prompt_clicked_at = db.Column(db.DateTime, nullable=True)
+    support_prompt_optout_at = db.Column(db.DateTime, nullable=True)
+
     # Relationships — cascade so deleting a User removes all owned data
     teams = relationship('Team', backref='owner', lazy=True, cascade="all, delete-orphan")
     matches = relationship('Match', backref='user', lazy=True, cascade="all, delete-orphan")
@@ -1178,6 +1185,26 @@ class UserGroundConfig(db.Model):
 
     user = relationship('User', backref=db.backref(
         'ground_config', uselist=False, cascade='all, delete-orphan'))
+
+
+class SupportPromptEvent(db.Model):
+    """One row per interaction with the Buy Me a Coffee prompt.
+
+    users.support_prompt_* only remember each user's LATEST action; this is the
+    history behind the admin analytics page (who clicked, per-day counts).
+    Events: shown | closed | clicked | optout.  Source: popup | postmatch.
+    """
+    __tablename__ = 'support_prompt_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='CASCADE'),
+                        nullable=False, index=True)
+    event = db.Column(db.String(12), nullable=False, index=True)
+    source = db.Column(db.String(12), nullable=False, default='popup')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    user = relationship('User', backref=db.backref('support_prompt_events',
+                                                   cascade='all, delete-orphan', passive_deletes=True))
 
 
 class AuthEventLog(db.Model):

@@ -54,7 +54,7 @@ def _import_all_models():
         UserGroundConfig, AnnouncementBanner, UserBannerDismissal,
         AuthEventLog, ExceptionLog, IssueWebhookEvent,
         CommunityPost, CommunityComment, CommunityVote, CommunityImage,
-        CommunityNotification, CommunityReport,
+        CommunityNotification, CommunityReport, SupportPromptEvent,
     )
 
 
