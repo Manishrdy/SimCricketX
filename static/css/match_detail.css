@@ -1775,3 +1775,51 @@
     .archive-ready-btn { transition: none; }
     .archive-ready-btn:hover { transform: none; }
 }
+
+
+/* ── Post-match support note ───────────────────────────────────────────────
+   A single quiet line under the archive bar. Hidden until the match ends and
+   only rendered at all for users the server decided may be asked. */
+.support-note-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-lg, var(--border-radius));
+    font-size: 0.82rem;
+    color: var(--fg-secondary);
+}
+
+.support-note-bar[hidden] { display: none; }
+
+.support-note-bar > span { flex: 1 1 260px; min-width: 0; }
+
+.support-note-bar i.fa-mug-hot { color: var(--accent); margin-right: 4px; }
+
+.support-note-bar a {
+    padding: 6px 12px;
+    background: #FFDD00;
+    color: #1a1a1a;
+    border-radius: var(--radius-full, 999px);
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.support-note-bar button {
+    background: none;
+    border: none;
+    color: var(--fg-secondary);
+    cursor: pointer;
+    padding: 6px;
+}
+
+.support-note-bar a:focus-visible,
+.support-note-bar button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
