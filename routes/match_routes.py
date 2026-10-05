@@ -17,6 +17,7 @@ from flask import flash, jsonify, redirect, render_template, request, send_file,
 from flask_login import current_user, login_required
 from sqlalchemy import or_
 from sqlalchemy.orm import joinedload
+from utils import support_prompt
 from utils.exception_tracker import log_exception
 from werkzeug.utils import secure_filename
 
@@ -683,6 +684,16 @@ def register_match_routes(
         }
         return format_map.get(normalized, ("T20", "T20"))
 
+    def _support_note_due():
+        """Whether the quiet post-match support note may be revealed on this page."""
+        try:
+            return support_prompt.should_show_postmatch_note(
+                current_user, DBMatch.query.filter_by(user_id=current_user.id).count()
+            )
+        except Exception as e:
+            log_exception(e)
+            return False
+
     def _match_header_meta(match_data):
         """Display-only labels for the match page's meta chips.
 
@@ -722,6 +733,7 @@ def register_match_routes(
                 if match_data:
                     return render_template(
                         "match_detail.html", match=match_data, resume_mode=True,
+                        show_support_note=_support_note_due(),
                         **_match_header_meta(match_data))
 
         match_data, _path, _err = _load_match_file_for_user(match_id)
@@ -738,7 +750,8 @@ def register_match_routes(
             return redirect(url_for("view_scoreboard", match_id=match_id))
 
         return render_template(
-            "match_detail.html", match=match_data, **_match_header_meta(match_data))
+            "match_detail.html", match=match_data,
+            show_support_note=_support_note_due(), **_match_header_meta(match_data))
 
     @app.route("/match/<match_id>/live-state", methods=["GET"])
     @login_required
