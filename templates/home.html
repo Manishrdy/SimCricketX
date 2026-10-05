@@ -119,6 +119,119 @@
         background: rgba(255, 255, 255, 0.24);
     }
 
+    /* ===== Support popup (Buy Me a Coffee) ===== */
+    .support-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        padding: 1rem;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 9998;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .support-modal {
+        width: min(460px, 100%);
+        max-height: 90vh;
+        overflow-y: auto;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+        padding: 1.1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.7rem;
+    }
+
+    .support-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+
+    .support-kicker {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        color: var(--fg-secondary);
+        text-transform: uppercase;
+    }
+
+    .support-kicker i { color: var(--accent); font-size: 1.05rem; }
+
+    .support-icon-close {
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        background: var(--bg-secondary);
+        color: var(--fg-secondary);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .support-title { margin: 0; font-size: 1.2rem; font-weight: 700; color: var(--fg); }
+
+    .support-text { margin: 0; font-size: 0.88rem; line-height: 1.55; color: var(--fg); }
+
+    .support-note { margin: 0; font-size: 0.8rem; line-height: 1.5; color: var(--fg-secondary); }
+
+    .support-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.2rem; }
+
+    .support-cta {
+        flex: 1 1 200px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 14px;
+        background: #FFDD00;
+        color: #1a1a1a;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    .support-cta:hover { filter: brightness(0.96); }
+
+    .support-later {
+        flex: 1 1 120px;
+        padding: 10px 14px;
+        background: var(--bg-secondary);
+        color: var(--fg);
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        font-size: 0.88rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .support-optout {
+        align-self: center;
+        background: none;
+        border: none;
+        padding: 4px;
+        color: var(--fg-secondary);
+        font-size: 0.76rem;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+
+    .support-cta:focus-visible,
+    .support-later:focus-visible,
+    .support-optout:focus-visible,
+    .support-icon-close:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+
     .changelog-backdrop {
         display: none;
         position: fixed;
@@ -340,6 +453,28 @@
 </div>
 {% endif %}
 
+{% if show_support_prompt %}
+<div id="support-backdrop" data-focus-dialog data-viewport-dialog data-dialog-close="#support-close-btn" role="dialog" aria-modal="true" aria-labelledby="support-title" class="support-backdrop" aria-hidden="true">
+    <div class="support-modal">
+        <div class="support-top">
+            <div class="support-kicker"><i class="fa-solid fa-mug-hot" aria-hidden="true"></i><span>A quick note</span></div>
+            <button id="support-close-btn" class="support-icon-close" type="button" aria-label="Close">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+        </div>
+        <h2 id="support-title" class="support-title">Enjoying SimCricketX?</h2>
+        <p class="support-text">SimCricketX is free, ad-free and built by one person. The server, the domain and the time that goes into new features and support are paid for out of pocket.</p>
+        <p class="support-text">If it has given you some good cricket, a coffee helps keep it running and growing.</p>
+        <p class="support-note">This is completely optional. The game stays free either way, and thank you for playing.</p>
+        <div class="support-actions">
+            <a id="support-cta" class="support-cta" href="{{ support_url }}" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-mug-hot" aria-hidden="true"></i> Buy me a coffee</a>
+            <button id="support-later" class="support-later" type="button">Maybe later</button>
+        </div>
+        <button id="support-optout" class="support-optout" type="button">Don't ask again</button>
+    </div>
+</div>
+{% endif %}
+
 {% if changelog_entries %}
 <div id="changelog-backdrop" data-focus-dialog data-viewport-dialog data-dialog-close="#changelog-icon-close-btn" role="dialog" aria-modal="true" aria-labelledby="changelog-title" class="changelog-backdrop" aria-hidden="true">
     <div class="changelog-modal">
@@ -457,6 +592,51 @@
                 }
             });
         }
+        {% endif %}
+
+        {% if show_support_prompt %}
+        (function () {
+            const backdrop = document.getElementById('support-backdrop');
+            if (!backdrop) return;
+            const report = (event) => {
+                try {
+                    fetch('/support-prompt/event', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ event, source: 'popup' }),
+                        keepalive: true,
+                    }).catch(() => {});
+                } catch (err) { /* bookkeeping only; never block the UI */ }
+            };
+            const hide = () => {
+                backdrop.style.display = 'none';
+                backdrop.setAttribute('aria-hidden', 'true');
+            };
+            // Never stack on the what's-new dialog or a guided tour.
+            const otherDialogOpen = () => {
+                const changelog = document.getElementById('changelog-backdrop');
+                return (changelog && changelog.style.display === 'flex') ||
+                    document.documentElement.classList.contains('scxg-open');
+            };
+            let attempts = 0;
+            const tryShow = () => {
+                if (otherDialogOpen()) {
+                    if (++attempts < 40) setTimeout(tryShow, 1500);
+                    return;
+                }
+                backdrop.style.display = 'flex';
+                backdrop.setAttribute('aria-hidden', 'false');
+                report('shown');
+            };
+            document.getElementById('support-close-btn').addEventListener('click', () => { hide(); report('closed'); });
+            document.getElementById('support-later').addEventListener('click', () => { hide(); report('closed'); });
+            document.getElementById('support-optout').addEventListener('click', () => { hide(); report('optout'); });
+            document.getElementById('support-cta').addEventListener('click', () => { hide(); report('clicked'); });
+            backdrop.addEventListener('click', (event) => {
+                if (event.target === backdrop) { hide(); report('closed'); }
+            });
+            setTimeout(tryShow, 1200);
+        })();
         {% endif %}
 
         {% if changelog_entries %}

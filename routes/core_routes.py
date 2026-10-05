@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 from flask import jsonify, render_template, request, send_from_directory, session
 from flask_login import current_user, login_required
 from utils.exception_tracker import log_exception
-from database.models import User, Match
+from database.models import User, Match, SupportPromptEvent
+from utils import support_prompt
 
 
 def register_core_routes(
@@ -114,6 +115,15 @@ def register_core_routes(
                     "position": position,
                 }
 
+        show_support_prompt = False
+        try:
+            show_support_prompt = support_prompt.should_show_popup(
+                current_user, Match.query.filter_by(user_id=current_user.id).count()
+            )
+        except Exception as e:
+            # The dashboard must render even if the prompt check fails.
+            log_exception(e)
+
         return render_template(
             "home.html",
             user=current_user,
@@ -122,7 +132,30 @@ def register_core_routes(
             app_version=app_version,
             changelog_entries=changelog_entries,
             announcement_banner=announcement_banner,
+            show_support_prompt=show_support_prompt,
         )
+
+    @app.route("/support-prompt/event", methods=["POST"])
+    @login_required
+    def support_prompt_event():
+        """Record what the user did with the support popup (shown/closed/clicked/optout)."""
+        payload = request.get_json(silent=True) or {}
+        event = str(payload.get("event") or "")
+        try:
+            if not support_prompt.record_event(current_user, event):
+                return jsonify({"error": "Unknown event"}), 400
+            source = str(payload.get("source") or "popup")
+            db.session.add(SupportPromptEvent(
+                user_id=current_user.id, event=event,
+                source=source if source in support_prompt.SOURCES else "popup",
+            ))
+            db.session.commit()
+            return jsonify({"ok": True}), 200
+        except Exception as e:
+            log_exception(e)
+            db.session.rollback()
+            app.logger.error(f"Failed to record support prompt event: {e}", exc_info=True)
+            return jsonify({"error": "Failed to record event"}), 500
 
     @app.route("/api/presence")
     @login_required
