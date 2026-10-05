@@ -2191,12 +2191,39 @@ async function saveMatchArchive() {
     }
 }
 
+// Quiet post-match thank-you. The server only renders the bar for users who may
+// be asked (not opted out, 5+ matches, not a recent supporter); this adds the
+// once-per-browser-session cap. Closing it records nothing, so it never counts
+// as having "asked" for the dashboard popup's cooldown.
+function revealSupportNote() {
+    const bar = document.getElementById('support-note-bar');
+    if (!bar || !bar.hidden) return;
+    try {
+        if (sessionStorage.getItem('scx_support_note_seen')) return;
+        sessionStorage.setItem('scx_support_note_seen', '1');
+    } catch (e) { /* storage blocked: still show, once per page load */ }
+    document.getElementById('support-note-close')?.addEventListener('click', () => { bar.hidden = true; });
+    document.getElementById('support-note-link')?.addEventListener('click', () => {
+        try {
+            fetch('/support-prompt/event', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ event: 'clicked', source: 'postmatch' }),
+                keepalive: true,
+            }).catch(() => {});
+        } catch (e) { /* bookkeeping only */ }
+        bar.hidden = true;
+    });
+    bar.hidden = false;
+}
+
 // Reveal the persistent download bar. It lives outside the scorecard modal so
 // closing the scorecard cannot lose the only route to the archive.
 function showArchiveDownload(archiveInfo) {
     const bar = document.getElementById('archive-ready-bar');
     const link = document.getElementById('archive-download-link');
     if (!bar || !link) return;
+    revealSupportNote();
 
     link.href = archiveInfo.download_url;
     if (archiveInfo.filename) link.setAttribute('download', archiveInfo.filename);
@@ -2219,6 +2246,7 @@ function showArchiveError() {
     const link = document.getElementById('archive-download-link');
     const meta = document.getElementById('archive-ready-meta');
     if (!bar || !link) return;
+    revealSupportNote();
 
     const label = bar.querySelector('.archive-ready-text strong');
     if (label) label.textContent = 'Match archive could not be created';
