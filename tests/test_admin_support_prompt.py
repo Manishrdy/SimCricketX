@@ -100,3 +100,27 @@ def test_deleting_a_user_removes_their_events(app, regular_user):
     db.session.delete(db.session.get(User, regular_user.id))
     db.session.commit()
     assert SupportPromptEvent.query.count() == 0
+
+
+def test_ensure_schema_creates_the_events_table_on_an_otherwise_complete_db(app):
+    """Regression: ensure_schema only ran create_all() when a table on its own
+    hard-coded list was missing, so a NEW table never appeared on an existing
+    database and the event endpoint 500'd at boot-time upgrade."""
+    from scripts.fix_db_schema import ensure_schema
+    from sqlalchemy import inspect
+
+    SupportPromptEvent.__table__.drop(db.engine)
+    assert "support_prompt_events" not in inspect(db.engine).get_table_names()
+
+    ensure_schema(db.engine, db)
+
+    assert "support_prompt_events" in inspect(db.engine).get_table_names()
+
+
+def test_user_state_survives_a_missing_history_table(authenticated_client, regular_user):
+    """The popup must stop repeating even if the analytics table is unavailable."""
+    SupportPromptEvent.__table__.drop(db.engine)
+    res = authenticated_client.post("/support-prompt/event", json={"event": "shown", "source": "popup"})
+    assert res.status_code == 200
+    db.session.expire_all()
+    assert db.session.get(User, regular_user.id).support_prompt_shown_at is not None

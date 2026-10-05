@@ -144,12 +144,20 @@ def register_core_routes(
         try:
             if not support_prompt.record_event(current_user, event):
                 return jsonify({"error": "Unknown event"}), 400
-            source = str(payload.get("source") or "popup")
-            db.session.add(SupportPromptEvent(
-                user_id=current_user.id, event=event,
-                source=source if source in support_prompt.SOURCES else "popup",
-            ))
+            # The user's own state is what stops the popup repeating, so it is
+            # committed first; the analytics history is best-effort and must
+            # never undo it (e.g. if that table is missing or locked).
             db.session.commit()
+            source = str(payload.get("source") or "popup")
+            try:
+                db.session.add(SupportPromptEvent(
+                    user_id=current_user.id, event=event,
+                    source=source if source in support_prompt.SOURCES else "popup",
+                ))
+                db.session.commit()
+            except Exception as history_error:
+                db.session.rollback()
+                log_exception(history_error)
             return jsonify({"ok": True}), 200
         except Exception as e:
             log_exception(e)
