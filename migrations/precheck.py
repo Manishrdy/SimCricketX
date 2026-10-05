@@ -189,6 +189,9 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # users.guide_state — onboarding guide progress (page tours seen,
     # new-user journey). NULL means nothing seen, so no backfill.
     ("add_user_guide_state",     _loader("migrations.add_user_guide_state")),
+    # users.support_prompt_* — when the Buy Me a Coffee popup was shown,
+    # closed, clicked or opted out of. NULL means never asked, so no backfill.
+    ("add_user_support_prompt",  _loader("migrations.add_user_support_prompt")),
 ]
 
 
