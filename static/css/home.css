@@ -1,6 +1,6 @@
 /* Editorial dashboard; all colors inherit the main application theme. */
 .home-dashboard { padding: 12px 0 24px; }
-.home-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 32px; }
+.home-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 32px; }
 .home-eyebrow { color: var(--brand-primary); font: 500 .66rem var(--font-mono); letter-spacing: .16em; text-transform: uppercase; margin-bottom: 10px; }
 .home-heading > div { min-width: 0; }
 .home-heading > .platform-stats { margin: 0; flex-shrink: 0; }
