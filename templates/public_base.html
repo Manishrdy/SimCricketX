@@ -16,19 +16,26 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_manage.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/public.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/navigation.css') }}">
 <script>try { document.documentElement.dataset.theme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch(e) {}</script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="public-nav">
-<a class="wordmark" href="/">SimCricketX
+<header class="public-nav navbar scx-nav">
+<a class="nav-brand" href="/">
+<span class="nav-brand-mark" aria-hidden="true"><i class="fas fa-baseball-ball"></i></span>
+<span class="nav-logo-text">SimCricketX</span>
 </a>
-<nav aria-label="Main navigation">
-<a href="/about">About</a>{% if current_user.is_authenticated %}
-<a class="button" href="/">Dashboard ↗</a>{% else %}
-<a href="/login">Sign In</a>
-<a class="button" href="/register">Get started ↗</a>{% endif %}
-<button id="theme-toggle" type="button" aria-label="Toggle color theme">◐</button>
+<nav class="nav-items" aria-label="Main navigation">
+<a class="nav-control" href="/about"{% if request.path == '/about' %} aria-current="page"{% endif %}>About</a>{% if current_user.is_authenticated %}
+<a class="button nav-cta" href="/">Dashboard ↗</a>{% else %}
+<a class="nav-control" href="/login">Sign In</a>
+<a class="button nav-cta" href="/register">Get started ↗</a>{% endif %}
+<button id="theme-toggle" class="nav-control" type="button" aria-label="Toggle color theme">
+<i class="fas fa-moon theme-moon" aria-hidden="true"></i>
+<i class="fas fa-sun theme-sun" aria-hidden="true"></i>
+</button>
 </nav>
 </header>
 <main id="main">{% block content %}{% endblock %}
@@ -44,6 +51,22 @@
 <a href="{{ support_url }}" target="_blank" rel="noopener noreferrer">Buy me a coffee ↗</a>
 </nav>
 </footer>
-<script>document.getElementById('theme-toggle').addEventListener('click', function(){var t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('theme',t)}catch(e){}});</script>
+<script>
+(function () {
+    const toggle = document.getElementById('theme-toggle');
+    function updateLabel() {
+        const label = document.documentElement.dataset.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+        toggle.setAttribute('aria-label', label);
+        toggle.title = label;
+    }
+    updateLabel();
+    toggle.addEventListener('click', function () {
+        const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = theme;
+        try { localStorage.setItem('theme', theme); } catch (e) {}
+        updateLabel();
+    });
+})();
+</script>
 </body>
 </html>
