@@ -37,12 +37,40 @@ a:focus-visible,button:focus-visible {
     padding-inline:48px
 }
 .public-nav {
-    min-height:100px;
+    min-height:var(--nav-height);
+    max-width:none;
     display:flex;
     align-items:center;
     justify-content:space-between;
-    gap:24px;
-    border-bottom:1px solid var(--line)
+    position:sticky;
+    top:0;
+    z-index:50;
+}
+.public-nav .nav-brand {
+    text-decoration:none;
+    font-weight:700;
+}
+.public-nav .nav-control {
+    font-family:inherit;
+    text-decoration:none;
+    font-weight:600;
+}
+.public-nav .nav-control[aria-current="page"] {
+    color:var(--brand-primary);
+    background:var(--accent-light);
+}
+.public-nav .nav-cta {
+    min-height:40px;
+    padding:0 16px;
+    border-radius:10px;
+    white-space:nowrap;
+}
+#theme-toggle .theme-sun,
+[data-theme="dark"] #theme-toggle .theme-moon {
+    display:none;
+}
+[data-theme="dark"] #theme-toggle .theme-sun {
+    display:inline-block;
 }
 .wordmark {
     text-decoration:none;
@@ -50,25 +78,10 @@ a:focus-visible,button:focus-visible {
     font-size:28px;
     letter-spacing:-1.5px
 }
-.public-nav nav,.public-footer nav {
+.public-footer nav {
     display:flex;
     align-items:center;
-    gap:26px
-}
-.public-nav nav a {
-    font-size:14px;
-    text-decoration:none;
-    font-weight:600
-}
-#theme-toggle {
-    background:transparent;
-    border:1px solid var(--line);
-    color:var(--ink);
-    border-radius:50%;
-    width:36px;
-    height:36px;
-    cursor:pointer;
-    font-size:24px
+    gap:26px;
 }
 .button {
     display:inline-flex;
@@ -429,19 +442,6 @@ p {
     .public-nav,main,.public-footer {
     padding-inline:20px
 }
-.public-nav {
-    min-height:80px;
-    gap:12px
-}
-.public-nav nav {
-    gap:14px
-}
-.public-nav nav a {
-    font-size:12px
-}
-.public-nav .button {
-    padding:10px
-}
 .wordmark {
     font-size:23px
 }
@@ -513,13 +513,13 @@ section {
 
 
 @media (max-width: 480px) {
-    .public-nav {
+    .public-nav.scx-nav.navbar {
         flex-wrap: wrap;
         padding-block: 16px;
     }
     .public-nav nav {
         width: 100%;
-        justify-content: space-between;
+        justify-content: flex-end;
     }
 }
 
