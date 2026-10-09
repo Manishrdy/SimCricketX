@@ -249,8 +249,9 @@ def test_match_cleanup_reverses_once(authenticated_client, make_tour, test_team,
     tour_summary(tour)
     assert player.total_runs == 80
     if action == 'resimulate':
-        response = authenticated_client.post(f'/fixture/{fixture.id}/resimulate')
-        assert response.status_code == 302
+        preview = authenticated_client.get(f'/fixture/{fixture.id}/replay-preview').get_json()
+        response = authenticated_client.post(f'/fixture/{fixture.id}/resimulate', json={'token': preview['token']})
+        assert response.status_code == 200
         assert tour.status == 'Active'
         assert tour_summary(tour)['played'] == 0
         assert series.tour_started_at is not None

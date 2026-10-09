@@ -1399,6 +1399,9 @@ def create_app():
     def _load_match_file_for_user(match_id):
         if not _is_valid_match_id(match_id):
             return None, None, (jsonify({"error": "Invalid match id"}), 400)
+        from utils.fixture_replay import is_voided
+        if is_voided(match_id):
+            return None, None, (jsonify({"error": "This match was removed by a fixture replay. Return to the tournament."}), 410)
         match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
         if not os.path.isdir(match_dir):
             return None, None, (jsonify({"error": "Match not found"}), 404)
@@ -1859,6 +1862,20 @@ def create_app():
             # Step 2: Begin explicit transaction (not nested)
             # Using manual transaction control for better error handling
             try:
+                from utils.fixture_replay import lock_tournament, is_voided
+                lock_tournament(tournament_id)
+                if is_voided(match_id):
+                    db.session.rollback()
+                    match.data["current_state"] = "completed"
+                    logger.info("Discarded invalidated fixture match %s", match_id)
+                    return
+                # Repeated completion of the same recorded result is a no-op.
+                recorded_fixture = db.session.get(TournamentFixture, fixture_id)
+                if recorded_fixture and recorded_fixture.match_id == match_id and recorded_fixture.status == 'Completed':
+                    db.session.rollback()
+                    match.data["current_state"] = "completed"
+                    return
+
                 # Step 2a: Handle resimulation - reverse previous standings if match exists
                 existing_match = db.session.get(DBMatch, match_id)
                 if existing_match:

@@ -327,15 +327,9 @@ class TestTournamentDetailRoute:
         response = authenticated_client.get("/tournaments/99999")
         assert response.status_code in [404, 302]
 
-    def test_tournament_detail_other_user(self, client, admin_user, test_tournament):
+    def test_tournament_detail_other_user(self, admin_client, admin_user, test_tournament):
         """Test accessing another user's tournament is denied."""
-        # Login as admin (who does not own test_tournament)
-        client.post("/login", data={
-            "email": admin_user.email,
-            "password": "Admin123!",
-        })
-
-        response = client.get(f"/tournaments/{test_tournament.id}")
+        response = admin_client.get(f"/tournaments/{test_tournament.id}")
         # Route should deny access for non-owners (403, 404, or redirect)
         assert response.status_code in [403, 404, 302]
 
@@ -603,15 +597,9 @@ class TestTournamentDeletionRoute:
         )
         assert response.status_code in [200, 404]
 
-    def test_delete_other_user_tournament(self, client, admin_user, test_tournament):
+    def test_delete_other_user_tournament(self, admin_client, admin_user, test_tournament):
         """Test that a user cannot delete another user's tournament."""
-        # Login as admin (who does not own test_tournament)
-        client.post("/login", data={
-            "email": admin_user.email,
-            "password": "Admin123!",
-        })
-
-        response = client.post(
+        response = admin_client.post(
             f"/tournaments/{test_tournament.id}/delete",
             follow_redirects=True,
         )
@@ -782,7 +770,7 @@ class TestFixtureResimulationRoute:
 
     def test_resimulate_fixture_unauthenticated(self, client):
         """Test re-simulating fixture without login redirects."""
-        response = client.post("/fixture/test-fixture-id/resimulate")
+        response = client.post("/fixture/999999/resimulate")
         assert response.status_code == 302
 
     def test_resimulate_nonexistent_fixture(self, authenticated_client):
@@ -794,14 +782,13 @@ class TestFixtureResimulationRoute:
         assert response.status_code in [404, 200]
 
     def test_resimulate_db_error_before_fixture_loads_does_not_crash(
-        self, authenticated_client, monkeypatch
+        self, authenticated_client, monkeypatch, regular_user
     ):
         """A DB error during the very first lookup (before `fixture` is ever
         assigned — e.g. a Postgres type-mismatch on a malformed fixture_id,
         which SQLite silently tolerates but Postgres doesn't) must not
         crash the except handler itself with UnboundLocalError. It should
-        fall through to the same graceful flash+redirect as any other
-        failure in this route.
+        return a JSON failure without changing any results.
         """
         from app import db as app_db
         from database.models import TournamentFixture as TF
@@ -815,17 +802,12 @@ class TestFixtureResimulationRoute:
 
         monkeypatch.setattr(type(app_db.session), "get", flaky_get)
 
-        response = authenticated_client.post(
-            "/fixture/1/resimulate",
-            follow_redirects=True,
-        )
-        # The route can't know the fixture's real tournament_id (the lookup
-        # that would tell it never completed), so it falls back to
-        # redirecting at tournament_id=0 — which itself 404s since that
-        # tournament doesn't exist. That's the correct, graceful outcome
-        # here; what matters is that no UnboundLocalError escaped the
-        # except handler and no 500 was raised.
-        assert response.status_code == 404
+        from utils.fixture_replay import signer
+        token = signer().dumps({'user': regular_user.id, 'fixture': 1, 'version': 'test'})
+        response = authenticated_client.post('/fixture/1/resimulate', json={'token': token})
+        assert response.status_code == 500
+        assert 'preserved' in response.get_json()['error']
+
 
 
 class TestResimulateStatsReversal:
@@ -851,7 +833,7 @@ class TestResimulateStatsReversal:
 
     @pytest.mark.parametrize("match_format", ["T20", "FC"])
     def test_resimulate_reverses_career_and_cache_then_replay_is_clean(
-        self, authenticated_client, regular_user, test_team, test_team_2, match_format
+        self, authenticated_client, regular_user, test_team, test_team_2, match_format, ready_tournament_teams
     ):
         engine = TournamentEngine()
         tournament = engine.create_tournament(
@@ -920,8 +902,9 @@ class TestResimulateStatsReversal:
         assert bowler.name in body
 
         # --- Resimulate ---
+        preview = authenticated_client.get(f"/fixture/{fixture.id}/replay-preview").get_json()
         response = authenticated_client.post(
-            f"/fixture/{fixture.id}/resimulate", follow_redirects=True
+            f"/fixture/{fixture.id}/resimulate", json={"token": preview["token"]}
         )
         assert response.status_code == 200
 
@@ -1047,15 +1030,9 @@ class TestTournamentOwnership:
         assert response.status_code == 200
         assert test_tournament.name.encode() in response.data
 
-    def test_cannot_use_other_user_teams_in_tournament(self, client, admin_user, test_team):
+    def test_cannot_use_other_user_teams_in_tournament(self, admin_client, admin_user, test_team):
         """Test that users cannot create tournaments using teams they do not own."""
-        # Login as admin (who does not own test_team)
-        client.post("/login", data={
-            "email": admin_user.email,
-            "password": "Admin123!",
-        })
-
-        response = client.post(
+        response = admin_client.post(
             "/tournaments/create",
             data={
                 "name": "Invalid Tournament",

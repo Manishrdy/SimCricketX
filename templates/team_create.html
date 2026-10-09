@@ -909,6 +909,46 @@
     font-family: var(--font-mono, monospace);
     font-size: 0.7rem;
 }
+
+/* Squad workspace: one format context, one readiness summary, roomy lists. */
+.tc-squad-workspace { margin-top: 28px; }
+.tc-workspace-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
+.tc-eyebrow { color: var(--fg-secondary); font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.tc-workspace-heading h2 { margin: 5px 0 0; font-size: 1.35rem; color: var(--fg); }
+.tc-workspace-heading p { margin: 0; font-size: .85rem; color: var(--fg-secondary); }
+.tc-squad-workspace > .tc-tabs { margin: 18px 0 0; padding-bottom: 10px; }
+.tc-readiness { padding: 18px 20px; border: 1px solid var(--tc-panel-border); border-radius: 12px; background: var(--tc-panel); }
+.tc-readiness-top { display: flex; justify-content: space-between; gap: 12px; color: var(--fg); font-size: .85rem; }
+.tc-readiness-top > span { color: var(--fg-secondary); }
+.tc-readiness-track { height: 4px; border-radius: 4px; background: var(--tc-panel-border); margin: 12px 0; overflow: hidden; }
+.tc-readiness-track > span { display: block; height: 100%; background: var(--tc-accent); transition: width .2s; }
+.tc-readiness-checks { display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--fg-secondary); font-size: .76rem; }
+.tc-readiness-checks .is-met { color: var(--tc-success-fg); }
+.tc-next-step { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--tc-panel-border); font-size: .85rem; color: var(--fg); }
+.tc-next-step p { margin: 4px 0 0; color: var(--fg-secondary); font-size: .76rem; }
+.tc-next-step button { flex-shrink: 0; }
+.tc-builder { grid-template-columns: 1fr 1.1fr; align-items: start; }
+.tc-panel { min-height: 0; max-height: none; }
+.tc-panel-head { padding: 16px; }
+.tc-panel-title { font-size: .95rem; }
+.tc-list { flex: none; height: 440px; min-height: 200px; padding: 10px; }
+.tc-player { padding: 9px 10px; margin-bottom: 6px; }
+.tc-player-actions button { min-height: 32px; min-width: 32px; }
+.tc-counter { padding: 10px 16px; font-size: .76rem; }
+.tc-leaders { background: var(--tc-input-bg); }
+.tc-actions { gap: 16px; }
+@media (max-width: 900px) {
+  .tc-builder { grid-template-columns: 1fr; }
+  .tc-workspace-heading { align-items: start; flex-direction: column; gap: 8px; }
+  .tc-list { height: 340px; }
+}
+@media (max-width: 520px) {
+  .tc-readiness { padding: 14px; }
+  .tc-next-step { align-items: stretch; flex-direction: column; gap: 12px; }
+  .tc-next-step button { width: 100%; justify-content: center; }
+  .tc-readiness-checks { gap: 8px 12px; }
+}
+
 </style>
 {% endblock %}
 
@@ -1007,19 +1047,32 @@
       </div>
     </section>
 
+    <section class="tc-squad-workspace" aria-label="Build your squads">
+      <div class="tc-workspace-heading"><div><span class="tc-eyebrow">Squad selection</span><h2>Build your squad</h2></div><p>Choose a format, add players, then set your leaders.</p></div>
+          <div class="tc-tabs" role="tablist">
+            {% for fmt in ['FC', 'ListA', 'T20', 'T10'] if fmt in squad_formats %}
+            <button type="button" class="tc-tab {{ 'active' if fmt == 'T20' }}" data-fmt="{{ fmt }}" role="tab">
+              <span class="tc-tab-status" id="tc-tab-status-{{ fmt }}" aria-hidden="true"></span>
+              <span>{{ 'First Class' if fmt == 'FC' else 'T20/Hundred' if fmt == 'T20' else format_labels[fmt] }}</span>
+              <span class="tc-tab-count" id="tc-count-{{ fmt }}">0</span>
+            </button>
+            {% endfor %}
+          </div>
+      <div id="tc-readiness" class="tc-readiness" aria-live="polite"></div>
     <!-- Builder Split -->
     <div class="tc-builder">
       <!-- Left: Player Pool -->
       <section class="tc-panel">
         <div class="tc-panel-head">
           <div class="tc-panel-title">Player Pool</div>
-          <div class="tc-panel-sub">Use Add or drag the grip to add a player to the active roster.</div>
+          <div class="tc-panel-sub">Find a player and select Add.</div>
           <div class="tc-filter-row">
             <input id="tc-pool-search" class="tc-input" type="search" placeholder="Search by name…">
             <select id="tc-pool-role" class="tc-select">
               <option value="">All roles</option>
               <option value="Batsman">Batsman</option>
               <option value="Bowler">Bowler</option>
+              <option value="Bowling options">Bowlers / all-rounders</option>
               <option value="All-rounder">All-rounder</option>
               <option value="Wicketkeeper">Wicketkeeper</option>
             </select>
@@ -1031,23 +1084,10 @@
       <!-- Right: Roster Builder -->
       <section class="tc-panel">
         <div class="tc-panel-head tc-roster-head">
-          <div class="tc-panel-title">Team Roster</div>
-          <div class="tc-panel-sub">Build your squad, then use the arrows to set the order.</div>
-          <div class="tc-roster-requirements" aria-label="Squad requirements">
-            <span>{{ SQUAD_MIN_PLAYERS }}–{{ SQUAD_MAX_PLAYERS }} players</span>
-            <span>At least {{ SQUAD_MIN_WICKETKEEPERS }} wicketkeeper</span>
-            <span>{{ SQUAD_MIN_BOWLING_OPTIONS }}+ bowlers / all-rounders</span>
-          </div>
-          <div class="tc-tabs" role="tablist">
-            {% for fmt in ['FC', 'ListA', 'T20', 'T10'] if fmt in squad_formats %}
-            <button type="button" class="tc-tab {{ 'active' if fmt == 'T20' }}" data-fmt="{{ fmt }}" role="tab">
-              <span class="tc-tab-status" id="tc-tab-status-{{ fmt }}" aria-hidden="true"></span>
-              <span>{{ 'First Class' if fmt == 'FC' else 'T20/Hundred' if fmt == 'T20' else format_labels[fmt] }}</span>
-              <span class="tc-tab-count" id="tc-count-{{ fmt }}">0</span>
-            </button>
-            {% endfor %}
-          </div>
-          <p class="tc-roster-note">T20 and The Hundred share a squad.</p>
+          <div class="tc-panel-title">Selected players</div>
+          <div class="tc-panel-sub">Drag or use the arrows to set the batting order.</div>
+
+
         </div>
         <div id="tc-copy-bar" class="tc-copy-bar" hidden>
           <button type="button" id="tc-copy-btn" class="tc-copy-btn">
@@ -1073,6 +1113,8 @@
         </div>
       </section>
     </div>
+
+    </section>
 
     <!-- Actions -->
     <div class="tc-actions">
@@ -1120,6 +1162,7 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/player_touch_drag.js') }}"></script>
+<script src="{{ url_for('static', filename='js/squad_readiness.js') }}"></script>
 <script>
 (function () {
   'use strict';
@@ -1356,7 +1399,7 @@
       poolList.innerHTML = `
         <div class="tc-empty">
           ${state.pool.search || state.pool.role
-            ? 'No players match your filters.'
+            ? 'No players match your filters. <a href="/player-pool">Create or import players</a>.'
             : `No players in your pool yet. <br><a href="/player-pool">Add players to your pool &rarr;</a>`}
         </div>`;
       return;
@@ -1738,23 +1781,7 @@
   });
 
   function renderCounter(list) {
-    const wk = list.filter(p => p.role === 'Wicketkeeper').length;
-    const bowl = list.filter(p => p.role === 'Bowler' || p.role === 'All-rounder').length;
-    const count = list.length;
-    const countOk = count >= MIN_PLAYERS && count <= MAX_PLAYERS;
-    const wkOk = wk >= MIN_WK;
-    const bowlOk = bowl >= MIN_BOWL;
-    rosterCounter.innerHTML = `
-      <span class="${countOk ? 'ok' : (count ? 'warn' : '')}">
-        <strong>${count}</strong>/${MAX_PLAYERS} players
-      </span>
-      <span class="${wkOk ? 'ok' : 'warn'}">
-        <strong>${wk}</strong> WK
-      </span>
-      <span class="${bowlOk ? 'ok' : 'warn'}">
-        <strong>${bowl}</strong> Bowl/AR
-      </span>
-    `;
+    rosterCounter.textContent = `${list.length} selected · ${MIN_PLAYERS}–${MAX_PLAYERS} players allowed`;
     renderCopyBar();
   }
 
@@ -1863,6 +1890,8 @@
       renderRoster();
       renderLeaders();
       renderCopyBar();
+      updateValidation();
+      scheduleAutoSave();
     });
   });
 
@@ -1926,15 +1955,44 @@
     ];
   }
 
-  function renderRuleChips() {
-    const checks = computeRuleChecks(state.activeFmt);
-    const chips = checks.map(c =>
-      `<span class="tc-chip ${c.ok ? 'ok' : 'bad'}">
-         <span class="dot" aria-hidden="true"></span>${escHtml(c.label)}
-       </span>`
-    ).join('');
-    validationMsg.innerHTML =
-      `<span class="tc-rules-label">${escHtml(state.activeFmt)}</span>${chips}`;
+  function focusSquadAction(action) {
+    let target;
+    if (['captain', 'keeper', 'roster'].includes(action)) {
+      target = $(action === 'captain' ? 'tc-captain' : action === 'keeper' ? 'tc-wk' : 'tc-roster-list');
+    } else {
+      poolSearch.value = '';
+      state.pool.search = '';
+      poolRole.value = action === 'all' ? '' : action;
+      state.pool.role = poolRole.value;
+      fetchPool(true);
+      target = poolSearch;
+    }
+    target.scrollIntoView({block: 'center'});
+    if (action === 'roster') target.tabIndex = -1;
+    target.focus({preventScroll: true});
+  }
+
+  function renderReadiness() {
+    const list = state.rosters[state.activeFmt];
+    const leaders = state.leaders[state.activeFmt];
+    const result = SquadReadiness.checks(list, leaders.captain, leaders.wicketkeeper,
+      {min: MIN_PLAYERS, max: MAX_PLAYERS, wk: MIN_WK, bowl: MIN_BOWL});
+    const completed = result.rows.filter(row => row.ok).length;
+    // Prioritize roles while adding players so every addition helps completion.
+    const next = list.length > MAX_PLAYERS ? result.rows[0] :
+      [result.rows[1], result.rows[2], result.rows[0], result.rows[3], result.rows[4]].find(row => !row.ok);
+    const labels = [`${list.length}/${MIN_PLAYERS} players`, `${list.filter(p => p.role === 'Wicketkeeper').length}/${MIN_WK} wicketkeepers`, `${list.filter(p => ['Bowler', 'All-rounder'].includes(p.role)).length}/${MIN_BOWL} bowling options`, 'Captain', 'Keeper assigned'];
+    const container = $('tc-readiness');
+    container.innerHTML = `
+      <div class="tc-readiness-top"><strong>${result.ready ? '✓ Squad complete' : `${completed} of 5 requirements met`}</strong><span>${escHtml(state.activeFmt === 'T20' ? 'T20 + The Hundred' : FMT_LABEL[state.activeFmt] || state.activeFmt)}</span></div>
+      <div class="tc-readiness-track" aria-hidden="true"><span style="width:${completed * 20}%"></span></div>
+      <div class="tc-readiness-checks">${result.rows.map((row, i) => `<span class="${row.ok ? 'is-met' : ''}"><span aria-hidden="true">${row.ok ? '✓' : '○'}</span> ${labels[i]}</span>`).join('')}</div>
+      <div class="tc-next-step"><div><strong>${result.ready ? 'Your squad is ready.' : escHtml(next.text)}</strong><p>${result.ready ? 'Review your batting order and save when ready.' : escHtml(result.note || 'Complete the requirements above to save this squad.')}</p></div>${next ? '<button type="button" class="tc-btn tc-btn-primary" id="tc-next-action"></button>' : ''}</div>`;
+    if (next) {
+      const button = $('tc-next-action');
+      button.textContent = next.label;
+      button.addEventListener('click', () => focusSquadAction(next.action));
+    }
   }
 
   function updateTabStatus() {
@@ -1964,14 +2022,12 @@
                        colorInput.value;
     const anyPlayers = VALID_FORMATS.some(f => state.rosters[f].length > 0);
 
+    renderReadiness();
     updateTabStatus();
+    tabButtons.forEach(btn => btn.setAttribute('aria-selected', String(btn.dataset.fmt === state.activeFmt)));
 
-    if (!anyPlayers) {
-      validationMsg.innerHTML =
-        `<span class="tc-rules-empty">Fill team identity and add players to save.</span>`;
-    } else {
-      renderRuleChips();
-    }
+    const unfinished = VALID_FORMATS.filter(fmt => state.rosters[fmt].length && !computeRuleChecks(fmt).every(c => c.ok));
+    validationMsg.textContent = !identityOk ? 'Complete your team details to save.' : !anyPlayers ? 'Build a squad in at least one format to save.' : unfinished.length ? `Finish your ${unfinished.map(fmt => FMT_LABEL[fmt] || fmt).join(', ')} squad${unfinished.length > 1 ? 's' : ''} to save.` : 'All squads are ready to save.';
 
     if (!identityOk || !anyPlayers) {
       saveBtn.disabled = true;

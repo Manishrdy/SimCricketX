@@ -1,3 +1,12 @@
+[3.0.1] 2026-10-09
+- Added Continue Match on Home so unfinished games are easier to find and resume; removed the pending-match list from the profile dropdown
+- Added live squad-readiness guidance on Create/Edit Team and Manage Squad, with actions to find wicketkeepers and bowling options, select leaders, and resolve squad-size requirements
+- Redesigned Create Team with clearer format navigation, roster controls, readiness feedback and a save summary, including improved phone layouts
+- Added safe tournament fixture replay: review every affected fixture and squad blocker before explicitly confirming a reset and opening fresh match setup
+- Replay now reverses affected results, standings and player statistics together, resets dependent knockout/playoff fixtures, and refreshes tournament and tour status
+- Protected replay against stale previews, duplicate or simultaneous confirmations, and late completion or restoration of invalidated matches; failed archive cleanup is tracked and retried on the next tournament dashboard visit
+- Verified replay and related tournament/match behavior with 260 passing regression tests and desktop/mobile browser checks
+
 [3.0.0] 2026-09-28
 - Added First-Class (multi-day) cricket: play Test-style matches with sessions, days, weather, declarations, follow-ons and draws, and run full First-Class tournaments
 - Added the T10 format: 10-over matches and tournaments, with its own T10 squad (copy your T20 squad in one click)

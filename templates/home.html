@@ -406,7 +406,8 @@
         <div><p class="home-eyebrow">Your cricket. Your way.</p><h1>Welcome back, {{ user.display_name or user.id.split('@')[0] }}.</h1><p>Build your side. Set the stage. Write the next chapter.</p></div>
         {% include "partials/platform_stats.html" %}
     </header>
-    <section class="home-options" aria-label="Dashboard options">
+    {% set pending_matches = user_stats.active_matches %}
+    <section class="home-options{% if pending_matches %} home-options-pending{% endif %}" aria-label="Dashboard options">
         {% for href, icon, label, description, category in [
             ('/match/setup', 'circle-play', 'Simulate Match', 'Choose your teams, set the conditions, and bring every delivery to life.', 'Match day'),
             ('/team/create', 'users', 'Create Team', 'Build a new team and assemble your squad.', 'Build'),
@@ -418,7 +419,7 @@
             ('/statistics', 'chart-column', 'Statistics', 'Explore player records and performance trends.', 'Analyze'),
             ('/community', 'comments', 'Community', 'Share ideas, ask questions, and talk cricket.', 'Connect')
         ] %}
-        <a class="home-option home-option-{{ loop.index }}{% if loop.first %} home-option-primary{% endif %}" href="{{ href }}" data-guide="{{ href.strip('/').replace('/', '-') }}">
+        <a class="home-option home-option-{{ 3 if pending_matches and loop.index == 2 else loop.index }}{% if pending_matches and loop.index == 3 %} home-option-manage{% endif %}{% if loop.first %} home-option-primary{% endif %}" href="{{ href }}" data-guide="{{ href.strip('/').replace('/', '-') }}">
             {% if loop.first %}
             <svg class="home-stadium" viewBox="0 0 420 420" fill="none" aria-hidden="true">
                 <ellipse cx="210" cy="210" rx="192" ry="158"/><ellipse cx="210" cy="210" rx="165" ry="134"/><ellipse cx="210" cy="210" rx="116" ry="95" stroke-dasharray="4 8"/>
@@ -430,6 +431,21 @@
             <div class="home-card-copy"><h2>{{ label }}</h2><p>{{ description }}</p></div>
             {% if loop.first %}<span class="home-card-cta">Start a match <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></span>{% endif %}
         </a>
+        {% if loop.first and pending_matches %}
+        <section class="home-option home-option-2 home-resume" aria-labelledby="home-resume-title">
+            <div class="home-card-top"><span class="home-card-icon"><i class="fa-solid fa-play" aria-hidden="true"></i></span><span class="home-category">{{ pending_matches|length }} pending {{ 'match' if pending_matches|length == 1 else 'matches' }}</span></div>
+            <div class="home-card-copy"><h2 id="home-resume-title">Continue Match</h2></div>
+            <div class="home-resume-list">
+                {% for m in pending_matches %}
+                <a class="home-resume-match" href="{{ url_for('match_detail', match_id=m.match_id) }}">
+                    <span><strong>{{ m.team_home.rsplit('_', 1)[0] }} vs {{ m.team_away.rsplit('_', 1)[0] }}</strong>
+                    <small>{{ format_labels.get(m.match_format, m.match_format) }} · Innings {{ m.innings }} · {{ m.score }}/{{ m.wickets }}</small></span>
+                    <span class="home-resume-action">Resume <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></span>
+                </a>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
         {% endfor %}
     </section>
     <div id="scxg-journey-mount"></div>

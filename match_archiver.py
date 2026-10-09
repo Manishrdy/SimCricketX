@@ -671,6 +671,13 @@ class MatchArchiver:
     def _save_to_database(self) -> bool:
         """Save match results and stats to SQLite database"""
         try:
+            if self.match_data.get('tournament_id'):
+                from utils.fixture_replay import lock_tournament, is_voided
+                lock_tournament(int(self.match_data['tournament_id']))
+                if is_voided(self.match_id):
+                    db.session.rollback()
+                    self.logger.info("Refusing to archive invalidated match %s", self.match_id)
+                    return False
             home_team = None
             away_team = None
             db_match = DBMatch.query.get(self.match_id)

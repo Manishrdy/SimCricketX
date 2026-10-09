@@ -1502,3 +1502,24 @@ class MatchDiagnosticEvent(db.Model):
     payload_bytes = db.Column(db.Integer)
     payload_truncated = db.Column(db.Boolean)
     metrics_json = db.Column(db.Text)
+
+
+class FixtureReplay(db.Model):
+    """Committed replay receipt; also a durable queue for artifact cleanup."""
+    __tablename__ = 'fixture_replays'
+    id = db.Column(db.String(64), primary_key=True)
+    user_id = db.Column(db.String(120), nullable=False, index=True)
+    tournament_id = db.Column(db.Integer, nullable=False, index=True)
+    fixture_id = db.Column(db.Integer, nullable=False)
+    impact_json = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    cleanup_pending = db.Column(db.Boolean, default=True, nullable=False)
+    cleanup_error = db.Column(db.Text, nullable=True)
+
+
+class VoidedFixtureMatch(db.Model):
+    """Permanent tombstone: a stale simulation must never restore this match."""
+    __tablename__ = 'voided_fixture_matches'
+    match_id = db.Column(db.String(36), primary_key=True)
+    replay_id = db.Column(db.String(64), db.ForeignKey('fixture_replays.id'), nullable=False)
+    json_path = db.Column(db.Text, nullable=True)

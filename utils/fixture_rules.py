@@ -113,11 +113,22 @@ def claim_fixture(fixture, match_id):
     from database import db
     from database.models import TournamentFixture
 
+    from utils.fixture_replay import lock_tournament, is_voided
+    expected_pairing = (fixture.home_team_id, fixture.away_team_id)
+    lock_tournament(fixture.tournament_id)
+    if (fixture.home_team_id, fixture.away_team_id) != expected_pairing:
+        db.session.rollback()
+        return False
+    if is_voided(match_id) or fixture_start_block(fixture):
+        db.session.rollback()
+        return False
+
     updated = (
         db.session.query(TournamentFixture)
         .filter(
             TournamentFixture.id == fixture.id,
             TournamentFixture.active_match_id.is_(None),
+            TournamentFixture.status == "Scheduled",
         )
         .update({"active_match_id": match_id}, synchronize_session=False)
     )

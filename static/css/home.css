@@ -55,3 +55,26 @@
 @media (max-width: 760px) { .home-heading { align-items: flex-start; flex-direction: column; gap: 18px; } .home-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } .home-option { grid-column: span 1; } .home-option-primary { grid-column: span 2; grid-row: auto; min-height: 340px; } .home-option-primary .home-card-top { margin-bottom: 25px; } .home-option-primary .home-card-copy { max-width: 65%; } .home-option-primary h2 { max-width: none; } .home-stadium { right: -30px; opacity: .25; } .home-option-2, .home-option-3 { padding: 22px; } .home-option-2 .home-card-top, .home-option-3 .home-card-top { position: relative; margin-bottom: 22px; } .home-option-2 .home-card-icon, .home-option-3 .home-card-icon { position: static; transform: none; width: 38px; height: 38px; } .home-option-2 .home-arrow, .home-option-3 .home-arrow { position: static; } .home-option-4 { grid-column: span 2; } .home-option-9 { grid-column: span 2; } }
 @media (max-width: 480px) { .home-options { grid-template-columns: 1fr; } .home-option, .home-option-primary, .home-option-4, .home-option-9 { grid-column: span 1; min-height: 0; } .home-option-primary { padding: 26px; min-height: 345px; } .home-option-primary .home-card-copy { max-width: 100%; } .home-option-primary h2 { max-width: 200px; } .home-stadium { right: -185px; opacity: .16; } .home-option-primary .home-card-copy p { max-width: 230px; } .home-card-top { margin-bottom: 18px; } .home-option-4 { min-height: 210px; } .home-option-5 .home-category, .home-option-6 .home-category { display: inline; } }
 @media (prefers-reduced-motion: reduce) { .home-option, .home-arrow { transition: none; } .home-option:hover, .home-option:hover .home-arrow { transform: none; } }
+
+/* Pending matches occupy the first secondary card; existing features flow after it. */
+.home-resume-list { max-height: 160px; overflow-y: auto; position: relative; z-index: 1; }
+.home-resume-match { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 2px; color: var(--text-main); border-top: 1px solid var(--border-light); }
+.home-resume-match strong { display: block; font-size: .8rem; overflow-wrap: anywhere; }
+.home-resume-match small { display: block; color: var(--text-muted); font-size: .72rem; margin-top: 4px; }
+.home-resume-action { font-size: .75rem; color: var(--brand-primary); white-space: nowrap; }
+.home-resume-match:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: -2px; }
+.home-resume-match:hover strong { text-decoration: underline; }
+.home-options-pending .home-option-manage { padding: 25px; justify-content: flex-start; }
+.home-options-pending .home-option-manage .home-card-top { position: relative; margin-bottom: 22px; }
+.home-options-pending .home-option-manage .home-card-icon { position: static; transform: none; width: 38px; height: 38px; }
+.home-options-pending .home-option-manage .home-arrow { position: static; }
+@media (min-width: 761px) {
+    .home-options-pending > :nth-child(n+4):nth-child(-n+7) { grid-column: span 3; }
+    .home-options-pending > :nth-child(n+8) { grid-column: span 4; }
+    .home-options-pending .home-option-4 .home-card-copy { max-width: 100%; }
+    .home-options-pending .home-bracket { display: none; }
+}
+@media (min-width: 481px) and (max-width: 760px) {
+    .home-options-pending > :nth-child(n+4) { grid-column: span 1; }
+    .home-options-pending > :last-child { grid-column: span 2; }
+}
