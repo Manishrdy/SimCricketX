@@ -1511,6 +1511,9 @@ def register_match_routes(
         present, so a restart/eviction mid-match resumes instead of stranding
         the match (or silently resimulating it). Returns (match,
         error_response); exactly one is non-None."""
+        from utils.fixture_replay import is_voided
+        if is_voided(match_id):
+            return None, (jsonify(error="This match was removed by a fixture replay. Return to the tournament."), 410)
         with MATCH_INSTANCES_LOCK:
             match = MATCH_INSTANCES.get(match_id)
             if match is not None:
@@ -1581,6 +1584,9 @@ def register_match_routes(
         and the claim's owner is already implied by the fixture's tournament.
         """
         if not _is_valid_match_id(match_id):
+            return False
+        from utils.fixture_replay import is_voided
+        if is_voided(match_id):
             return False
         with MATCH_INSTANCES_LOCK:
             instance = MATCH_INSTANCES.get(match_id)

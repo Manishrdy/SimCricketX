@@ -67,6 +67,7 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # One in-flight match per fixture: tournament_fixtures.active_match_id.
     ("add_fixture_active_match",
      _loader("migrations.add_fixture_active_match")),
+    ("add_fixture_replays", _loader("migrations.add_fixture_replays")),
     ("add_account_lockout",      _loader("migrations.add_account_lockout")),
     ("add_pending_email",        _loader("migrations.add_pending_email")),
     ("add_exception_log",        _loader("migrations.add_exception_log")),

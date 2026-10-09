@@ -301,14 +301,12 @@
                                 class="action-btn outline-btn">
                                 <i class="fas fa-list-ol"></i> Scoreboard
                             </a>
-                            <form action="{{ url_for('resimulate_fixture', fixture_id=fixture.id) }}" method="POST"
-                                class="inline-form"
-                                onsubmit="return confirm('Re-simulating will delete the current match result and stats. Continue?');">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="action-btn resimulate-btn">
-                                    <i class="fas fa-redo"></i> Re-simulate
-                                </button>
-                            </form>
+                            <button type="button" class="action-btn resimulate-btn"
+                                data-replay-preview="{{ url_for('replay_fixture_preview', fixture_id=fixture.id) }}"
+                                data-replay-submit="{{ url_for('resimulate_fixture', fixture_id=fixture.id) }}"
+                                aria-haspopup="dialog">
+                                <i class="fas fa-redo" aria-hidden="true"></i> Replay fixture
+                            </button>
                             {% endif %}
                         </div>
                         {% endif %}
@@ -1472,4 +1470,41 @@
             }
         })();
     </script>
+    <dialog id="replay-dialog" aria-labelledby="replay-title" aria-describedby="replay-intro">
+        <div class="replay-heading"><h2 id="replay-title">Replay fixture</h2><button type="button" data-replay-close aria-label="Close replay preview">×</button></div>
+        <p id="replay-intro">Review the impact before resetting. Nothing changes until you confirm.</p>
+        <div id="replay-status" role="status" aria-live="polite"></div>
+        <div id="replay-content" hidden>
+            <p id="replay-summary"></p>
+            <ul id="replay-fixtures"></ul>
+            <p id="replay-effects"></p>
+            <div id="replay-blockers"></div>
+            <p class="replay-warning"><strong>This cannot be undone.</strong> Completed results, scorecards, and their player statistics will be removed. A replay uses current squads and new match setup choices; its result can differ. If you leave setup, the selected fixture stays scheduled.</p>
+        </div>
+        <div class="replay-actions">
+            <button type="button" class="action-btn outline-btn" data-replay-close>Cancel</button>
+            <button type="button" class="action-btn outline-btn" id="replay-refresh" hidden>Review updated impact</button>
+            <button type="button" class="action-btn resimulate-btn" id="replay-confirm" disabled>Reset and continue</button>
+        </div>
+    </dialog>
+    <style>
+    #replay-dialog { margin:auto; width: min(620px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); box-sizing: border-box; overflow-y: auto; border: 1px solid var(--card-border); border-radius: 16px; padding: 24px; color: var(--fg); background: var(--card-bg); box-shadow: 0 20px 80px #0004; }
+    #replay-dialog::backdrop { background: #10182099; }
+    .replay-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .replay-heading h2 { margin:0; font-size:1.3rem; }
+    .replay-heading button { background:none; border:0; color:inherit; font-size:1.6rem; cursor:pointer; min-width:40px; min-height:40px; }
+    #replay-dialog p { line-height:1.6; font-size:.9rem; }
+    #replay-fixtures { list-style:none; padding:0; max-height:240px; overflow:auto; }
+    #replay-fixtures li { padding:12px 0; border-bottom:1px solid var(--card-border); line-height:1.5; }
+    #replay-fixtures small { display:block; color:var(--fg-secondary); }
+    .replay-warning, #replay-blockers:not(:empty) { background:var(--bg-secondary); border-left:3px solid #c67a30; padding:12px; border-radius:4px; }
+    .replay-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; margin-top:20px; }
+    .replay-actions .action-btn { width:auto; }
+    #replay-confirm { background: #a33626; color: #fff; border: 1px solid #a33626; }
+    #replay-confirm:hover:not(:disabled) { background: #84271a; color:#fff; }
+    #replay-dialog button:disabled { opacity:.5; cursor:wait; }
+    #replay-dialog [hidden] { display:none !important; }
+    @media(max-width:520px) { #replay-dialog { padding:18px; } .replay-actions > button { flex:1 1 100%; } }
+    </style>
+    <script src="{{ url_for('static', filename='js/fixture_replay.js') }}" data-csrf="{{ csrf_token() }}"></script>
     {% endblock %}
