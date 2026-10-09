@@ -1034,14 +1034,10 @@ class TestFixtureSingleMatchReservation:
 
         db.session.rollback()
 
-    def test_resimulate_clears_a_claim_with_no_completed_match(
+    def test_abandon_clears_a_claim_with_no_completed_match(
         self, authenticated_client, regular_user, test_team, test_team_2
     ):
-        """Re-simulate is also a reset, so it must void the claim too.
-
-        It returns early when the fixture has no match_id, which for a fixture
-        holding only an in-flight match used to mean the claim survived.
-        """
+        """Unfinished matches use Abandon; replay requires a recorded result."""
         tournament, fixture = self._fixture(
             regular_user.id, test_team, test_team_2, name="Resim Claim"
         )
@@ -1051,7 +1047,7 @@ class TestFixtureSingleMatchReservation:
         )
 
         authenticated_client.post(
-            f"/fixture/{fixture.id}/resimulate", follow_redirects=True
+            f"/fixture/{fixture.id}/abandon", follow_redirects=True
         )
 
         db.session.refresh(fixture)

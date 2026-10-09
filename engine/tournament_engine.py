@@ -2080,7 +2080,7 @@ class TournamentEngine:
             f"in tournament {tournament_id}"
         )
 
-    def reverse_standings(self, match, commit=False):
+    def reverse_standings(self, match, commit=False, cascade=True):
         """
         Reverses the stats update for a match (used for re-simulation).
         """
@@ -2183,7 +2183,7 @@ class TournamentEngine:
             fixture.standings_applied = False
             fixture.match_id = None
 
-            if fixture.stage != self.STAGE_LEAGUE:
+            if cascade and fixture.stage != self.STAGE_LEAGUE:
                 self._reset_knockout_bracket(match.tournament_id, fixture.bracket_position)
 
         # Reset tournament status if it was completed
@@ -2208,7 +2208,7 @@ class TournamentEngine:
                 # tournament whose stage claimed it was finished. (Tour
                 # series escaped it only because refresh_tour recomputes
                 # current_stage below; standalone ones had nothing to.)
-                if tournament.mode in [self.MODE_ROUND_ROBIN_KNOCKOUT,
+                if cascade and tournament.mode in [self.MODE_ROUND_ROBIN_KNOCKOUT,
                                        self.MODE_DOUBLE_ROUND_ROBIN_KNOCKOUT,
                                        self.MODE_IPL_STYLE]:
                     self._reset_post_league_fixtures(match.tournament_id)

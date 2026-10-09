@@ -8,6 +8,13 @@
     overflow: hidden;
 }
 
+/* The nav is normally centred in a 1136px column (navigation.css), but this
+   page is full-bleed, so line the nav up with the page's 1rem content gutter. */
+body .scx-nav.navbar {
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
 /* Main Grid Layout - Fills Viewport */
 .match-layout {
     display: grid;

@@ -12,6 +12,7 @@ from flask import (
 from flask_login import current_user, login_required
 from auth.decorators import admin_required
 from utils.exception_tracker import log_exception
+from utils.squad_rules import BOWLING_ROLES
 
 VALID_ROLES = {"Batsman", "Bowler", "All-rounder", "Wicketkeeper"}
 VALID_BATTING_HANDS = {"Left", "Right", ""}
@@ -278,6 +279,7 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
         an autocomplete keystroke should not cost a full-pool materialisation.
         """
         query, tokens = _search_terms(search)
+        roles = BOWLING_ROLES if role_filter == "Bowling options" else (role_filter,)
 
         overrides = {}
         customs = []
@@ -301,7 +303,7 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
                 name, role, kind, key = override.name, override.role, "override", override
             else:
                 name, role, kind, key = master_name, master_role, "master", master_id
-            if role_filter and (role or "") != role_filter:
+            if role_filter and (role or "") not in roles:
                 continue
             rank = _match_rank(name, query, tokens)
             if rank is None:
@@ -309,7 +311,7 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
             matches.append((rank[0], rank[1], _fold(name), kind, key, master_id))
 
         for custom in customs:
-            if role_filter and (custom.role or "") != role_filter:
+            if role_filter and (custom.role or "") not in roles:
                 continue
             rank = _match_rank(custom.name, query, tokens)
             if rank is None:

@@ -4,7 +4,7 @@ import json
 import os
 import secrets
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import flash, redirect, render_template, request, url_for, jsonify
 from flask_login import current_user, login_required
 from sqlalchemy import func as sa_func
 from utils.exception_tracker import log_exception
@@ -335,6 +335,7 @@ def register_tournament_routes(
         if not t or t.user_id != current_user.id:
             return "Tournament not found", 404
 
+        _retry_replay_cleanup(tournament_id)
         standings = tournament_engine.get_standings(tournament_id)
 
         # Eagerly load fixtures with relationships to avoid N+1
@@ -629,75 +630,62 @@ def register_tournament_routes(
 
         return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament_id))
 
-    @app.route("/fixture/<fixture_id>/resimulate", methods=["POST"])
+    def _retry_replay_cleanup(tournament_id):
+        from database.models import FixtureReplay
+        from utils.fixture_replay import cleanup
+        for receipt in FixtureReplay.query.filter_by(
+            tournament_id=tournament_id, user_id=current_user.id, cleanup_pending=True
+        ).all():
+            try:
+                cleanup(receipt, PROJECT_ROOT, MATCH_INSTANCES, MATCH_INSTANCES_LOCK)
+            except Exception:
+                db.session.rollback()
+                app.logger.exception("Replay artifact cleanup will be retried")
+
+    @app.get("/fixture/<int:fixture_id>/replay-preview")
+    @login_required
+    def replay_fixture_preview(fixture_id):
+        from utils.fixture_replay import impact, preview_token, ReplayError
+        fixture = db.session.get(TournamentFixture, fixture_id)
+        if not fixture or fixture.tournament.user_id != current_user.id:
+            return jsonify(error="Fixture not found."), 404
+        try:
+            plan = impact(tournament_engine, fixture, current_user.id)
+            plan['token'] = preview_token(plan, current_user.id)
+            for blocker in plan['blockers']:
+                blocker['url'] = url_for('team_squad', team_id=blocker['team_id'], fmt=blocker['format'])
+            return jsonify(plan)
+        except ReplayError as exc:
+            return jsonify(error=str(exc)), exc.status
+
+    @app.route("/fixture/<int:fixture_id>/resimulate", methods=["POST"])
     @login_required
     @limiter.limit("10 per minute")
     def resimulate_fixture(fixture_id):
-        """Reset a fixture to Scheduled and clear old simulation artifacts."""
-        # Bound up front so the except handler's `fixture if fixture else 0`
-        # can never raise UnboundLocalError if the very first lookup below
-        # is what fails.
-        fixture = None
+        from utils.fixture_replay import execute, cleanup, ReplayError
+        payload = request.get_json(silent=True) or request.form
         try:
-            fixture = db.session.get(TournamentFixture, fixture_id)
-            if not fixture:
-                flash("Fixture not found.", "danger")
-                return redirect(url_for("tournaments"))
-
-            if fixture.tournament.user_id != current_user.id:
-                flash("Unauthorized to modify this fixture.", "danger")
-                return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament_id))
-
-            # A fixture being reset holds no valid in-flight match, whether
-            # or not one ever completed. Discard it before the early return
-            # below, or an abandoned setup keeps the fixture locked.
-            discarded = _discard_in_flight_match(fixture, commit=False)
-
-            match_id = fixture.match_id
-            if not match_id:
-                db.session.commit()
-                if discarded:
-                    flash("In-progress match discarded. The fixture is ready to play again.", "success")
-                else:
-                    flash("No match data found to reset.", "warning")
-                return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament_id))
-
-            db_match = db.session.get(DBMatch, match_id)
-            if db_match:
-                app.logger.info(f"Reversing stats for match {match_id}")
-                reversed_ok = tournament_engine.reverse_standings(db_match, commit=False)
-                if not reversed_ok:
-                    fixture.status = "Scheduled"
-                    fixture.winner_team_id = None
-                    fixture.match_id = None
-                    fixture.standings_applied = False
-
-                _cleanup_match_artifacts(db_match, delete_json=False)
-                db.session.delete(db_match)
-            else:
-                fixture.status = "Scheduled"
-                fixture.winner_team_id = None
-                fixture.match_id = None
-                fixture.standings_applied = False
-
-            if fixture.tournament.tour_id:
-                from engine.tour_engine import refresh_tour
-                refresh_tour(fixture.tournament.tour)
-            db.session.commit()
-            if db_match:
-                _delete_match_json(db_match)
-            flash("Match reset successfully. You can now re-simulate.", "success")
-            return redirect(
-                url_for("match_setup", fixture_id=fixture.id, tournament_id=fixture.tournament_id)
-            )
-        except Exception as e:
-            log_exception(e)
+            receipt, changed = execute(tournament_engine, fixture_id, current_user.id, payload.get('token', ''))
+        except ReplayError as exc:
             db.session.rollback()
-            app.logger.error(f"Resimulation error: {e}", exc_info=True)
-            flash("Failed to reset match.", "danger")
-            return redirect(
-                url_for(
-                    "tournament_dashboard",
-                    tournament_id=fixture.tournament_id if fixture else 0,
-                )
-            )
+            return jsonify(error=str(exc)), exc.status
+        except Exception:
+            # Roll back before exception reporting, which may itself write to the DB.
+            db.session.rollback()
+            app.logger.exception("Fixture replay failed; reset transaction rolled back")
+            return jsonify(error="The reset failed. Existing results were preserved. Please try again."), 500
+        count = len(json.loads(receipt.impact_json)['fixtures'])
+        pending = False
+        try:
+            pending = not cleanup(receipt, PROJECT_ROOT, MATCH_INSTANCES, MATCH_INSTANCES_LOCK)
+        except Exception:
+            db.session.rollback()
+            pending = True
+            app.logger.exception("Replay committed; artifact cleanup will be retried")
+        # A retry must never reset a newly started/completed replacement match.
+        destination = url_for('match_setup', fixture_id=fixture_id, tournament_id=receipt.tournament_id) if changed else url_for('tournament_dashboard', tournament_id=receipt.tournament_id)
+        message = f"{count} fixture{'s' if count != 1 else ''} reset. Set up the fixture to play again." if changed else "This replay reset was already completed."
+        if pending:
+            message += " Result reset succeeded; archived-file cleanup is queued for retry."
+        flash(message, "success")
+        return jsonify(message=message, redirect=destination, cleanup_pending=pending, already_reset=not changed)

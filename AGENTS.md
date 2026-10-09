@@ -14,3 +14,7 @@ permissions), use the five shared QA accounts instead of creating users:
 If the JSON file is missing (fresh clone), run
 `.venv/bin/python scripts/dev_test_accounts.py seed`. It generates new
 credentials locally. Local/dev databases only.
+
+## User UX backlog
+
+See `docs/UX_TODO.md` for the user-selected improvements and their status. All three selected improvements are implemented; consult the backlog before starting further UX work.

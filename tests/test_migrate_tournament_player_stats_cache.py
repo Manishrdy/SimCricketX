@@ -337,7 +337,7 @@ class TestResimulateAgainstLegacyCache:
     --apply the same resimulate path must succeed."""
 
     def test_resimulate_keeps_json_when_cache_insert_fails_then_succeeds_after_apply(
-        self, app, authenticated_client, regular_user, test_team, test_team_2
+        self, app, authenticated_client, regular_user, test_team, test_team_2, ready_tournament_teams
     ):
         from app import db as app_db, PROJECT_ROOT
         from database.models import (
@@ -388,11 +388,13 @@ class TestResimulateAgainstLegacyCache:
         fixture.status = "Completed"
         app_db.session.commit()
 
+        fixture_id = fixture.id
+        token = authenticated_client.get(f"/fixture/{fixture_id}/replay-preview").get_json()['token']
         try:
             response = authenticated_client.post(
-                f"/fixture/{fixture.id}/resimulate", follow_redirects=True
+                f"/fixture/{fixture_id}/resimulate", json={'token': token}
             )
-            assert response.status_code == 200
+            assert response.status_code == 500
             # Rolled back: match still there, JSON still on disk.
             assert app_db.session.get(DBMatch, match_id) is not None
             assert os.path.isfile(json_path)
@@ -403,7 +405,7 @@ class TestResimulateAgainstLegacyCache:
             app_db.session.remove()
 
             response = authenticated_client.post(
-                f"/fixture/{fixture.id}/resimulate", follow_redirects=True
+                f"/fixture/{fixture_id}/resimulate", json={"token": token}
             )
             assert response.status_code == 200
             app_db.session.expire_all()

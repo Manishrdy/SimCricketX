@@ -3,6 +3,7 @@
 {% block title %}Squad Builder — {{ team.name }} | SimCricketX{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/squad_readiness.css') }}">
 <style>
 /* Classic theme-aligned squad builder */
 :root {
@@ -794,6 +795,7 @@
                     <button class="sb-chip" data-role="Batsman">Bat</button>
                     <button class="sb-chip" data-role="All-rounder">AR</button>
                     <button class="sb-chip" data-role="Bowler">Bowl</button>
+                    <button class="sb-chip" data-role="Bowling options">Bowl / AR</button>
                 </div>
                 <div class="sb-pool-help">
                     <i class="fas fa-arrows-left-right"></i> Slide to browse players
@@ -848,7 +850,7 @@
                     </div>
                 </div>
 
-                <div class="sb-validation sb-val-warn" id="validationBox"></div>
+                <div class="squad-readiness" id="validationBox" aria-live="polite"></div>
                 <div class="sb-feedback" id="feedback"></div>
                 <div class="sb-draft-ts" id="draftTs"></div>
             </div>
@@ -858,6 +860,7 @@
 
 <style>.player-touch-handle { touch-action: none; user-select: none; cursor: grab; padding: 8px; }</style>
 <script src="{{ url_for('static', filename='js/player_touch_drag.js') }}"></script>
+<script src="{{ url_for('static', filename='js/squad_readiness.js') }}"></script>
 <script>
 (function () {
     'use strict';
@@ -1372,30 +1375,27 @@
 
     // ── Validation ─────────────────────────────────────────────────────────
     function updateValidation() {
-        var n         = draft.players.length;
-        var wkCount   = draft.players.filter(function (p) { return p.role === 'Wicketkeeper'; }).length;
-        var bowlCount = draft.players.filter(function (p) { return p.role === 'Bowler' || p.role === 'All-rounder'; }).length;
-        var issues    = [];
-
-        if (n < MIN_PLAYERS) issues.push('Need ' + (MIN_PLAYERS - n) + ' more player' + ((MIN_PLAYERS - n) > 1 ? 's' : '') + ' (min ' + MIN_PLAYERS + ')');
-        if (n > MAX_PLAYERS) issues.push('Too many players (max ' + MAX_PLAYERS + ')');
-        if (wkCount < MIN_WK) issues.push('Need at least ' + MIN_WK + ' Wicketkeeper');
-        if (bowlCount < MIN_BOWL) issues.push('Need ' + (MIN_BOWL - bowlCount) + ' more Bowler/All-rounder' + ((MIN_BOWL - bowlCount) > 1 ? 's' : '') + ' (min ' + MIN_BOWL + ')');
-        if (!draft.captain_name) issues.push('Select a captain');
-        if (!draft.wk_name) issues.push('Designate a wicketkeeper');
-
-        var box = document.getElementById('validationBox');
-        if (issues.length === 0) {
-            box.className = 'sb-validation sb-val-ok';
-            box.innerHTML = '<div><i class="fas fa-circle-check"></i> Ready to publish! (' + n + ' players)</div>';
-        } else {
-            box.className = 'sb-validation sb-val-warn';
-            box.innerHTML = issues.map(function (i) {
-                return '<div><i class="fas fa-triangle-exclamation"></i> ' + i + '</div>';
-            }).join('');
-        }
-
-        document.getElementById('publishBtn').disabled = issues.length > 0;
+        var ready = SquadReadiness.render(document.getElementById('validationBox'),
+            draft.players, draft.captain_name, draft.wk_name,
+            {min: MIN_PLAYERS, max: MAX_PLAYERS, wk: MIN_WK, bowl: MIN_BOWL}, function (action) {
+                var target;
+                if (['captain', 'keeper', 'roster'].includes(action)) {
+                    target = document.getElementById(action === 'captain' ? 'captainSelect' : action === 'keeper' ? 'wkSelect' : 'squadList');
+                } else {
+                    document.getElementById('searchInput').value = '';
+                    pool.search = '';
+                    pool.role = action === 'all' ? '' : action;
+                    document.querySelectorAll('#roleChips .sb-chip').forEach(function (chip) {
+                        chip.classList.toggle('active', chip.dataset.role === pool.role);
+                    });
+                    fetchPool(true);
+                    target = document.getElementById('searchInput');
+                }
+                target.scrollIntoView({block: 'center'});
+                if (action === 'roster') target.tabIndex = -1;
+                target.focus({preventScroll: true});
+            });
+        document.getElementById('publishBtn').disabled = !ready;
     }
 
     // ── Squad count + composition strip ────────────────────────────────────
