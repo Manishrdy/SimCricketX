@@ -115,7 +115,10 @@ def safe_print(*args, **kwargs):
 print = safe_print
 
 
-class Match(HundredPresentation):
+from engine.captaincy import CaptaincyMixin
+
+
+class Match(CaptaincyMixin, HundredPresentation):
     def __init__(self, match_data):
         created_at = match_data.get("created_at")
         if not isinstance(created_at, (int, float)):
@@ -126,11 +129,26 @@ class Match(HundredPresentation):
         self.first_innings_score = None
         self.target = None
         self.data = match_data
+        self._init_captaincy()
         self.simulation_mode = match_data.get("simulation_mode", "auto")
         self.pending_decision = None
         self.pitch = match_data["pitch"]
         self.stadium = match_data["stadium"]
         self.ground_config = match_data.get("ground_config")  # per-user snapshot; None for legacy matches
+        if match_data.get('conditions_model_version') in ('stadium_v1', 'stadium_v2', 'stadium_v3'):
+            snapshot = match_data.get('conditions_snapshot')
+            if not snapshot or snapshot.get('conditions_model_version') != match_data['conditions_model_version']:
+                raise ValueError('Missing or unsupported stadium conditions snapshot.')
+            self.pitch = snapshot['pitch']
+            self.stadium = snapshot['name']
+            self.ground_config = copy.deepcopy(snapshot['ground_config'])
+            self.ground_config['_stadium'] = snapshot
+            for key in ('weather_script', 'fc_weather_script'):
+                if key in snapshot:
+                    match_data[key] = copy.deepcopy(snapshot[key])
+            match_data['weather_forecast'] = snapshot['forecast']
+        elif match_data.get('conditions_model_version') not in (None, 'legacy'):
+            raise ValueError('Unsupported match conditions model.')
         self.home_xi = match_data["playing_xi"]["home"]
         self.away_xi = match_data["playing_xi"]["away"]
 
@@ -214,7 +232,8 @@ class Match(HundredPresentation):
         # correct_decision() is the same helper spin_toss uses to make the
         # call, so the choice the AI captain makes and the choice he is
         # graded against here cannot drift apart.
-        _correct_choice = correct_decision(self.fmt, self.pitch, is_day_night=_is_dn)
+        _correct_choice = correct_decision(self.fmt, self.pitch, is_day_night=_is_dn,
+            venue_forecast=(match_data.get('conditions_snapshot') or {}).get('public_forecast'))
         self._toss_choice_correct = (
             (self.toss_decision or "").strip().lower() == _correct_choice.lower()
         )
@@ -589,6 +608,19 @@ class Match(HundredPresentation):
         return max(0, total_balls_in_innings - balls_played)
 
     def _compute_pitch_wear(self):
+        snapshot = (self.ground_config or {}).get('_stadium')
+        if not snapshot:
+            return self._legacy_pitch_wear()
+        if self.is_fc:
+            wear = self._legacy_pitch_wear()
+        else:
+            # Fixed original budget: interruption reductions never accelerate wear.
+            completed = getattr(self, 'stadium_completed_balls', 0)
+            wear = (completed + self.innings_balls_bowled) / max(1, snapshot.get('wear_reference_balls') or 2 * snapshot['scheduled_innings_balls'])
+        multiplier = snapshot['temperature_wear_multiplier'] if snapshot['conditions_model_version'] in ('stadium_v2', 'stadium_v3') else snapshot['surface']['wear_rate_multiplier']
+        return min(1.0, wear * multiplier)
+
+    def _legacy_pitch_wear(self):
         """
         FC: continuous calendar-day wear, with light wear through day 3
         and most deterioration on days 4-5. Innings changes never age the
@@ -862,6 +894,9 @@ class Match(HundredPresentation):
 
     def _create_next_bowler_decision(self):
         candidates = self._get_manual_bowler_candidates()
+        if self.captaincy_enabled:
+            legal_names = {p['name'] for p in self._captain_eligible()}
+            candidates = [(idx, p) for idx, p in candidates if p['name'] in legal_names]
         # FC has no fixed overs-per-bowler cap (see _get_manual_bowler_candidates)
         # — "overs_remaining" isn't a meaningful concept there, so sort by
         # bowling_rating alone instead of the T20/ListA overs-remaining-first
@@ -900,6 +935,11 @@ class Match(HundredPresentation):
             },
             "options": options
         }
+        if self.captaincy_enabled and candidates:
+            recommended = self._captain_pick_bowler([b for _, b in candidates])
+            decision['recommendation'] = recommended['name']
+            for option in options:
+                option['recommended'] = option['name'] == recommended['name']
         self.pending_decision = decision
         return decision
 
@@ -1566,6 +1606,8 @@ class Match(HundredPresentation):
             # Create archiver and generate archive
             if self.is_hundred:
                 self.data["format_metadata"] = self.hundred_archive_metadata()
+            if self.captaincy_enabled:
+                self.data['captaincy_events'] = copy.deepcopy(self.captaincy_events)
             archiver = MatchArchiver(self.match_data, self)
             success = archiver.create_archive(original_json_path, commentary_to_archive)
             
@@ -2699,6 +2741,7 @@ class Match(HundredPresentation):
         self.recent_wickets_count = 0
 
         # Feature 3: reset pitch wear counter for new innings
+        self.stadium_completed_balls = getattr(self, "stadium_completed_balls", 0) + self.innings_balls_bowled
         self.innings_balls_bowled = 0
 
         # Feature 8: reset per-over bowler feedback for new innings
@@ -4069,6 +4112,13 @@ class Match(HundredPresentation):
 
 
     def pick_bowler(self):
+        if self.captaincy_enabled:
+            selected = self._captain_pick_bowler()
+            self._update_bowler_tracking(selected)
+            return selected
+        return self._legacy_pick_bowler()
+
+    def _legacy_pick_bowler(self):
         """
         Production-level bowler selection with ENHANCED POWERPLAY + STAR PRIORITY:
         Priority 1A: Strict 4-overs policy (no bowler exceeds 4 overs)
@@ -5003,7 +5053,7 @@ class Match(HundredPresentation):
                 "commentary": final_commentary
             }
 
-    def _fc_build_match_state(self):
+    def _fc_build_match_state(self, captain_baseline=False):
         """Match-state dict for FCPressureEngine.get_pressure_effects() —
         deliberately NOT _calculate_current_match_state()'s shape, which is
         T20/ListA innings==1/2-keyed and has no fc_innings/days_remaining/
@@ -5038,6 +5088,14 @@ class Match(HundredPresentation):
         # Never set in a real match, so production behaviour is unchanged.
         _pinned = getattr(self, "fc_intent_override", None)
         intent = dict(batting_intent(context), **_pinned) if _pinned else batting_intent(context)
+        if self.captaincy_enabled and not captain_baseline and not _pinned:
+            intent = dict(intent)
+            side = self._captain_side(self.batting_team)
+            action = self._captain_state(side)['batting']
+            delta = {'rebuild': -.10, 'balanced': 0., 'attack': .10, 'all_out': .20}[action]
+            # Preserve established survival/stumps signals and tail protection.
+            intent['attack'] = max(0., min(1 - intent['survival'], intent['attack'] + delta))
+            intent['neutral'] = max(0., 1 - intent['attack'] - intent['survival'])
         required_run_rate = needed / max(1/6, overs_remaining) if needed is not None else 0.0
         survival_mode = intent["survival"] >= 0.5
         acceleration_mode = intent["attack"] >= 0.5
@@ -5095,6 +5153,9 @@ class Match(HundredPresentation):
         make different calls — under the old fixed win-probability
         thresholds every captain on every surface had identical nerve.
         """
+        if self.captaincy_enabled:
+            side = self._captain_side(self.batting_team)
+            return 1.4 - .8 * self.captaincy_configs[side]['batting_aggression'] / 100
         captain = next((p for p in self.batting_team if p.get("is_captain")), None)
         temperament = (captain or {}).get("temperament_rating")
         if temperament is None:
@@ -5261,6 +5322,13 @@ class Match(HundredPresentation):
         )
 
     def _fc_pick_bowler(self):
+        if self.captaincy_enabled:
+            selected = self._captain_pick_bowler()
+            self._update_bowler_tracking(selected)
+            return selected
+        return self._legacy_fc_pick_bowler()
+
+    def _legacy_fc_pick_bowler(self):
         """
         FC bowler selection: MCC Law 17.2 eligibility (no consecutive overs)
         plus a weighted captaincy preference covering current ability,
@@ -5369,7 +5437,13 @@ class Match(HundredPresentation):
             score -= 0.35
             reasons.append("spin_working")
 
-        return score >= 0.50, ",".join(reasons), score
+        if self.captaincy_enabled:
+            cfg = self.captaincy_configs[self._captain_side(self.bowling_team)]
+            quality = (cfg['match_awareness'] + cfg['bowling_management']) / 200
+            threshold = .50 + .10 * (1 - quality) + (50 - cfg['bowling_aggression']) / 1000
+        else:
+            threshold = .50
+        return score >= threshold, ",".join(reasons), score
 
     def _fc_consider_new_ball(self) -> bool:
         """Reassess the available replacement ball and take it when justified."""
@@ -6956,12 +7030,19 @@ class Match(HundredPresentation):
     def next_ball(self, wait_for_decision=True):
         if self.is_hundred and self.timeout_active:
             return {**self.hundred_state(), "commentary": "Strategic timeout — resume when ready."}
+        captain_events_start = len(self.captaincy_events)
         if self.is_hundred:
             self._hundred_delivery_context = None
             self._hundred_delivery_event = None
-            with random.use_state(self.hundred_rng_state) as rng:
+            with random.use_state(self.captaincy_rng_state if self.captaincy_enabled else self.hundred_rng_state) as rng:
                 result = self._next_ball_impl(wait_for_decision)
                 self.hundred_rng_state = rng.getstate()
+                if self.captaincy_enabled:
+                    self.captaincy_rng_state = rng.getstate()
+        elif self.captaincy_enabled:
+            with random.use_state(self.captaincy_rng_state) as rng:
+                result = self._next_ball_impl(wait_for_decision)
+                self.captaincy_rng_state = rng.getstate()
         else:
             result = self._next_ball_impl(wait_for_decision)
         if self.is_hundred:
@@ -6986,6 +7067,8 @@ class Match(HundredPresentation):
                 self.result = self.result.replace("Super Over", "Super Five")
                 if "result" in result:
                     result["result"] = self.result
+        if self.captaincy_enabled:
+            result['captaincy'] = self.captaincy_status(captain_events_start)
         return result
 
     def _next_ball_impl(self, wait_for_decision=True):
@@ -7050,6 +7133,9 @@ class Match(HundredPresentation):
         if self.is_fc and getattr(self, "fc_weather_v2", False):
             _fc_weather = self._fc_weather_pre_delivery()
             if _fc_weather is not None:
+                if self.captaincy_enabled:
+                    for side in ('home', 'away'):
+                        self._captain_state(side)['review'] = 'interruption'
                 return _fc_weather
 
         # Rain check at the start of a fresh over — this is where deferred
@@ -7081,6 +7167,8 @@ class Match(HundredPresentation):
         if self._innings_should_end():
             return self._transition_to_next_innings()
 
+        self._captain_evaluate()
+
         if self.current_ball == 0:
             # Initialize partnership contributions if new partnership (moved from inner block)
             if self.current_partnership_balls == 0 and self.current_partnership_runs == 0:
@@ -7105,8 +7193,8 @@ class Match(HundredPresentation):
                     log_exception(e)
                     logger.exception("Bowler selection failed at over %s.%s: %s", self.current_over, self.current_ball, e)
 
-                    if getattr(self.fmt, "strict_short_bowling", False):
-                        eligible = self.bowler_manager.get_eligible_bowlers(self.current_over, self.overs - self.current_over)
+                    if self.captaincy_enabled or getattr(self.fmt, "strict_short_bowling", False):
+                        eligible = self._captain_eligible() if self.captaincy_enabled else self.bowler_manager.get_eligible_bowlers(self.current_over, self.overs - self.current_over)
                         if not eligible:
                             self.match_status = "aborted"
                             return {"error": "No legal bowling allocation remains", "match_over": True, "result": "Match aborted: invalid bowling state"}
@@ -7451,7 +7539,10 @@ class Match(HundredPresentation):
             # since HistoricalScenarioEngine.get_override_outcome() always returns
             # None, that routed every single ball through this branch.
 
+            # Stadium phases count legal balls; the pitch-wear counter also
+            # includes wides and no-balls and can exceed the innings budget.
             outcome = calculate_outcome(
+                captain_tactics=self._captain_tactics(),
                 batter=_batter_with_form,
                 bowler=_effective_bowler,
                 pitch=self.pitch,
@@ -7469,6 +7560,7 @@ class Match(HundredPresentation):
                 fielding_quality=_team_fielding_avg,
                 fielding_team=self.bowling_team,
                 ground_config_override=self.ground_config,
+                legal_balls_completed=self.current_over * self.balls_per_over + self.current_ball,
                 format_config=self.fmt,
                 is_day_night=self.data.get("is_day_night", False),
                 fc_session_number=(self._fc_current_session() if self.is_fc else None),
@@ -7481,6 +7573,7 @@ class Match(HundredPresentation):
             contact = None
             if outcome.get("extra_type") == "No Ball" and needed != 1:
                 contact = calculate_outcome(
+                    captain_tactics=self._captain_tactics(),
                     batter=_no_ball_batter if not scenario_override else self.current_striker,
                     bowler=_effective_bowler if not scenario_override else self.current_bowler,
                     pitch=self.pitch, streak=self.batter_streaks.get(self.current_striker["name"], {}),
@@ -7489,6 +7582,7 @@ class Match(HundredPresentation):
                     balls_faced=self.batsman_stats[self.current_striker["name"]]["balls"],
                     pitch_wear=self._compute_pitch_wear(), format_config=self.fmt,
                     fielding_team=self.bowling_team, ground_config_override=self.ground_config,
+                    legal_balls_completed=self.current_over * self.balls_per_over + self.current_ball,
                     batting_position=self.batting_team.index(self.current_striker)+1,
                     is_day_night=self.data.get("is_day_night", False),
                     fc_session_number=self._fc_current_session(),
@@ -7576,6 +7670,7 @@ class Match(HundredPresentation):
         extra_type = outcome.get("extra_type")
         if not self.is_fc and outcome.get("is_extra") and extra_type == "No Ball":
             bat_outcome = calculate_outcome(
+                captain_tactics=self._captain_tactics(),
                 batter=_no_ball_batter if self.is_fc else self.current_striker,
                 bowler=_effective_bowler,
                 pitch=self.pitch,
@@ -7592,6 +7687,7 @@ class Match(HundredPresentation):
                 batting_position=_batting_position,
                 game_mode_override=_game_mode_override,
                 ground_config_override=self.ground_config,
+                legal_balls_completed=self.current_over * self.balls_per_over + self.current_ball,
                 format_config=self.fmt,
                 is_day_night=self.data.get("is_day_night", False),
                 fc_session_number=(self._fc_current_session() if self.is_fc else None),
@@ -7698,6 +7794,7 @@ class Match(HundredPresentation):
             self.batter_streaks.pop(_bd_striker, None)
 
         # ── GSME: append this delivery to the rolling 18-ball history ──
+        self._captain_record(outcome)
         _ball_event = make_ball_event(outcome)
         self.ball_history.append(_ball_event)
         if len(self.ball_history) > BALL_HISTORY_WINDOW:
@@ -8659,6 +8756,8 @@ class Match(HundredPresentation):
             min(1.0, self.innings_balls_bowled / _so_total_balls) if _so_total_balls else 0.0
         )
 
+        if (self.ground_config or {}).get('_stadium'):
+            self.super_over_pitch_wear = self._compute_pitch_wear()
         scorecard_data = self._generate_detailed_scorecard()
         scorecard_data["target_info"] = "Match Tied - Super Five Required!" if self.is_hundred else "Match Tied - Super Over Required!"
 
@@ -8924,6 +9023,16 @@ class Match(HundredPresentation):
         """Select best bowler by rating"""
         bowlers = [p for p in team if p.get("will_bowl", False)]
         if bowlers:
+            if self.captaincy_enabled:
+                from engine.captaincy import choose_action
+                config = self.captaincy_configs[self._captain_side(team)]
+                scores = {p['name']: min(1., self._get_super_over_effective_bowler(p)['bowling_rating'] / 100
+                          + (.08 if (self.pitch == 'Dry') == ('spin' in str(p.get('bowling_type', '')).lower()) else 0))
+                          for p in bowlers}
+                with random.use_state(self.captaincy_rng_state) as rng:
+                    name = choose_action(scores, config, 'bowling', 1., rng)
+                    self.captaincy_rng_state = rng.getstate()
+                return next(p for p in bowlers if p['name'] == name)
             return max(bowlers, key=lambda p: p.get("bowling_rating", 0))
         if team:
             return max(team, key=lambda p: p.get("bowling_rating", 0))
@@ -8981,17 +9090,26 @@ class Match(HundredPresentation):
         return eff
 
     def next_super_over_ball(self):
-        if not self.is_hundred:
-            return self._next_super_over_ball_impl()
-        with random.use_state(self.hundred_rng_state) as rng:
+        events_start = len(self.captaincy_events)
+        if self.captaincy_enabled or self.is_hundred:
+            stream = self.captaincy_rng_state if self.captaincy_enabled else self.hundred_rng_state
+            with random.use_state(stream) as rng:
+                result = self._next_super_over_ball_impl()
+                if self.captaincy_enabled:
+                    self.captaincy_rng_state = rng.getstate()
+                if self.is_hundred:
+                    self.hundred_rng_state = rng.getstate()
+        else:
             result = self._next_super_over_ball_impl()
-            self.hundred_rng_state = rng.getstate()
-        for key in ("commentary", "result"):
-            if isinstance(result.get(key), str):
-                result[key] = result[key].replace("Super Over", "Super Five")
-        if self.result:
-            self.result = self.result.replace("Super Over", "Super Five")
-        result["balls_per_over"] = 5
+        if self.is_hundred:
+            for key in ("commentary", "result"):
+                if isinstance(result.get(key), str):
+                    result[key] = result[key].replace("Super Over", "Super Five")
+            if self.result:
+                self.result = self.result.replace("Super Over", "Super Five")
+            result["balls_per_over"] = 5
+        if self.captaincy_enabled:
+            result['captaincy'] = self.captaincy_status(events_start)
         return result
 
     def _next_super_over_ball_impl(self):
@@ -9034,7 +9152,9 @@ class Match(HundredPresentation):
         striker_so_stats = self.super_over_batsman_stats[self.super_over_current_striker["name"]]
         effective_batter = self._get_super_over_effective_batter(self.super_over_current_striker)
         effective_bowler = self._get_super_over_effective_bowler(self.super_over_bowler)
+        self._captain_evaluate(shootout=True)
         outcome = calculate_super_over_outcome(
+            captain_tactics=self._captain_tactics(shootout=True),
             batter=effective_batter,
             bowler=effective_bowler,
             pitch=self.pitch,
@@ -9063,6 +9183,7 @@ class Match(HundredPresentation):
                 outcome["type"] = "extra" if outcome.get("is_extra") else "run"
                 outcome.pop("fielder_name", None)
                 outcome["description"] = "Free hit! Batter survives."
+        self._captain_record(outcome, shootout=True)
         self.super_over_ball_history.append(make_ball_event(outcome))
 
         runs, wicket, extra = outcome["runs"], outcome["batter_out"], outcome["is_extra"]
@@ -9623,6 +9744,7 @@ class Match(HundredPresentation):
 
         snap = {
             "v": 1,
+            "captaincy": self.captaincy_snapshot(),
             "innings": self.innings,
             "main_match": {
                 # Side batting the (tied) second innings — batting_team identity
@@ -9712,6 +9834,7 @@ class Match(HundredPresentation):
         if not isinstance(snap, dict) or snap.get("v") != 1:
             raise ValueError("Unsupported super-over snapshot format")
 
+        self.restore_captaincy(snap.get("captaincy"))
         xi = {"home": self.home_xi, "away": self.away_xi}
         other = {"home": "away", "away": "home"}
 
@@ -9841,6 +9964,7 @@ class Match(HundredPresentation):
 
         snap = {
             "v": 2,
+            "captaincy": self.captaincy_snapshot(),
             "fc_innings": self.fc_innings,
             "batting_side": _side(self.batting_team),
             "bowling_side": _side(self.bowling_team),
@@ -9915,6 +10039,7 @@ class Match(HundredPresentation):
             "target": getattr(self, "target", None),
             "first_innings_score": getattr(self, "first_innings_score", None),
             "match_balls_bowled": self.match_balls_bowled,
+            "stadium_completed_balls": getattr(self, "stadium_completed_balls", 0),
             "innings_balls_bowled": self.innings_balls_bowled,
             "current_partnership_balls": self.current_partnership_balls,
             "current_partnership_runs": self.current_partnership_runs,
@@ -9972,6 +10097,7 @@ class Match(HundredPresentation):
         self.prev_delivery_was_extra = snap.get("prev_delivery_was_extra", False)
         self.pending_pre_ball_commentary = list(
             snap.get("pending_pre_ball_commentary") or [])
+        self.restore_captaincy(snap.get("captaincy"))
         self.ball_history = list(snap.get("ball_history") or [])
         self.batter_idx = list(snap.get("batter_idx", [0, 1]))
         self.remaining_batter_indices = set(snap.get("remaining_batter_indices", []))
@@ -10085,6 +10211,7 @@ class Match(HundredPresentation):
         if snap.get("first_innings_score") is not None:
             self.first_innings_score = snap["first_innings_score"]
         self.match_balls_bowled = snap.get("match_balls_bowled", 0)
+        self.stadium_completed_balls = snap.get("stadium_completed_balls", 0)
         self.innings_balls_bowled = snap.get("innings_balls_bowled", 0)
 
         self.current_partnership_balls = snap.get("current_partnership_balls", 0)

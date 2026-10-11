@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from utils.exception_tracker import log_exception
 from utils.squad_rules import validate_squad_composition
 
+from engine.captaincy import parse_config, preset_name
 from engine.format_catalog import SQUAD_FORMATS
 VALID_FORMATS = SQUAD_FORMATS
 SHORT_CODE_RE = re.compile(r'^[A-Z0-9]{2,5}$')
@@ -34,6 +35,8 @@ def register_team_routes(
     TournamentFixture=None,
     Tournament=None,
 ):
+    app.jinja_env.globals.update(captaincy_preset=preset_name, captaincy_parse=parse_config)
+
     # ── Internal helpers ──────────────────────────────────────────────────────
 
     def _touch_team(team):
@@ -351,7 +354,13 @@ def register_team_routes(
             players, err = _extract_player_list(raw_players)
             if err:
                 return None, f"{fmt} profile — {err}"
+            try:
+                captaincy = parse_config(pdata.get('captaincy_config'))
+            except ValueError as exc:
+                return None, f'{fmt} captaincy: {exc}'
             result[fmt] = {
+                'captaincy_config': captaincy,
+                '_captaincy_supplied': 'captaincy_config' in pdata,
                 "captain": (pdata.get("captain") or "").strip(),
                 "wicketkeeper": (pdata.get("wicketkeeper") or "").strip(),
                 "players": players,
@@ -367,7 +376,8 @@ def register_team_routes(
         for fmt, pdata in profiles_dict.items():
             if not pdata["players"]:
                 continue  # Skip empty profiles
-            profile = DBTeamProfile(team_id=team_id, format_type=fmt)
+            profile = DBTeamProfile(team_id=team_id, format_type=fmt,
+                                    captaincy_config=parse_config(pdata.get('captaincy_config')))
             db.session.add(profile)
             db.session.flush()  # get profile.id
 
@@ -410,6 +420,9 @@ def register_team_routes(
         - Create new rows only when no reusable identity exists.
         - Detach rows removed from squad instead of deleting.
         """
+        if pdata.get('_captaincy_supplied', 'captaincy_config' in pdata):
+            profile.captaincy_config = parse_config(pdata.get('captaincy_config'))
+
         captain = (pdata.get("captain") or "").strip()
         wk_name = (pdata.get("wicketkeeper") or "").strip()
         incoming = pdata.get("players", []) or []
@@ -477,6 +490,26 @@ def register_team_routes(
             query = query.filter(DBTeam.id != exclude_team_id)
         return query.first()
 
+    def _resolve_team_stadium(form, team=None):
+        from services.stadium_tuning import playable_stadium
+        selected = form.get('stadium_id', '').strip()
+        if not selected and team is not None and team.venue_mode == 'legacy':
+            return None
+        if not selected and team is not None:
+            selected = team.stadium_id
+        if selected == '__custom__':
+            raise ValueError('Create your stadium on the Stadiums page, then select it here.')
+        if not selected:
+            if form.get('action') == 'save_draft':
+                return None
+            raise ValueError('Select a stadium from My stadiums. Create or adopt one on the Stadiums page first.')
+        return playable_stadium(selected, current_user.id, team.stadium_id if team else None)
+
+    def _stadium_identity(row):
+        from services.stadiums import current_profile
+        p = current_profile(row)
+        return p['name'], p['pitch_defaults']['T20']
+
     # ── Routes ────────────────────────────────────────────────────────────────
 
     @app.route("/team/create", methods=["GET", "POST"])
@@ -486,8 +519,13 @@ def register_team_routes(
             try:
                 name = request.form["team_name"].strip()
                 short_code = request.form["short_code"].strip().upper()
-                home_ground = request.form["home_ground"].strip()
-                pitch = request.form["pitch_preference"]
+                try:
+                    stadium = _resolve_team_stadium(request.form)
+                except ValueError as exc:
+                    return render_template('team_create.html', error=str(exc)), 400
+                home_ground, pitch = _stadium_identity(stadium) if stadium else (
+                    request.form.get('home_ground', '').strip() or 'Stadium not selected',
+                    request.form.get('pitch_preference') or 'Hard')
 
                 if not (name and short_code and home_ground and pitch):
                     return render_template(
@@ -551,6 +589,9 @@ def register_team_routes(
 
                     is_draft = (request.form.get("action") == "save_draft") and not raw_payload
 
+                    if not stadium and not is_draft:
+                        return render_template('team_create.html', error='Select a stadium before publishing.'), 400
+
                     # Strict validation on every non-empty profile unless this is
                     # the legacy draft-save action.
                     for fmt, pdata in non_empty.items():
@@ -562,6 +603,8 @@ def register_team_routes(
                         user_id=current_user.id,
                         name=name,
                         short_code=short_code,
+                        stadium_id=stadium.id if stadium else None,
+                        venue_mode="stadium",
                         home_ground=home_ground,
                         pitch_preference=pitch,
                         team_color=color,
@@ -590,6 +633,8 @@ def register_team_routes(
                 # Legacy flow: identity only → create draft team + default T20 profile.
                 new_team = DBTeam(
                     user_id=current_user.id,
+                    stadium_id=stadium.id if stadium else None,
+                    venue_mode="stadium",
                     name=name,
                     short_code=short_code,
                     home_ground=home_ground,
@@ -702,7 +747,8 @@ def register_team_routes(
                   "batting_hand", "bowling_hand", "bowling_type", "batting_style", "bowling_style",
                   "is_captain", "is_wicketkeeper", "master_player_id", "user_player_id")
         try:
-            profile = DBTeamProfile(team_id=team_id, format_type="T10")
+            profile = DBTeamProfile(team_id=team_id, format_type="T10",
+                                    captaincy_config=parse_config(source.captaincy_config))
             db.session.add(profile)
             db.session.flush()
             for player in source.players:
@@ -747,6 +793,7 @@ def register_team_routes(
             profile=profile,
             squad=squad,
             squad_json=squad_json,
+            captaincy_config=parse_config(profile.captaincy_config if profile else None),
             formats=VALID_FORMATS,
         )
 
@@ -883,6 +930,10 @@ def register_team_routes(
         )
         if error:
             return json.dumps({"error": error}), 400, {"Content-Type": "application/json"}
+        from services.stadiums import team_venue_error
+        venue_error = team_venue_error(team, current_user.id)
+        if venue_error:
+            return json.dumps({"error": venue_error}), 400, {"Content-Type": "application/json"}
         team.is_draft = False
         _touch_team(team)
         db.session.commit()
@@ -904,10 +955,18 @@ def register_team_routes(
             return json.dumps({"error": "Invalid format."}), 400, {"Content-Type": "application/json"}
 
         data = request.get_json(silent=True) or {}
+        try:
+            captaincy = parse_config(data.get('captaincy_config'))
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
         raw_players = data.get("players", [])
         captain_name = (data.get("captain_name") or "").strip()
         wk_name = (data.get("wk_name") or "").strip()
         is_draft = bool(data.get("is_draft", False))
+        from services.stadiums import team_venue_error
+        venue_error = team_venue_error(team, current_user.id) if not is_draft else None
+        if venue_error:
+            return json.dumps({"error": venue_error}), 400, {"Content-Type": "application/json"}
 
         if not isinstance(raw_players, list) or len(raw_players) == 0:
             return json.dumps({"error": "No players provided."}), 400, {"Content-Type": "application/json"}
@@ -981,6 +1040,8 @@ def register_team_routes(
             team_id,
             profile,
             {
+                'captaincy_config': captaincy,
+                '_captaincy_supplied': 'captaincy_config' in data,
                 "captain": captain_name,
                 "wicketkeeper": wk_name,
                 "players": resolved,
@@ -1083,6 +1144,7 @@ def register_team_routes(
                     profiles_info.append({
                         "format_type": prof.format_type,
                         "player_count": len(prof.players),
+                        "captaincy_config": parse_config(prof.captaincy_config),
                         "captain": captain,
                     })
 
@@ -1092,11 +1154,14 @@ def register_team_routes(
                     profiles_info[0] if profiles_info else None,
                 )
 
+                from services.stadiums import team_stadium_name
                 teams.append({
                     "id": t.id,
                     "team_name": t.name,
                     "short_code": t.short_code,
-                    "home_ground": t.home_ground,
+                    "home_ground": team_stadium_name(t),
+                    "venue_mode": t.venue_mode,
+                    "stadium_id": t.stadium_id,
                     "pitch_preference": t.pitch_preference,
                     "team_color": t.team_color,
                     "captain": primary["captain"] if primary else "—",
@@ -1234,11 +1299,23 @@ def register_team_routes(
 
                     team.name = request.form["team_name"].strip()
                     new_short_code = request.form["short_code"].strip().upper()
-                    team.home_ground = request.form["home_ground"].strip()
-                    team.pitch_preference = request.form["pitch_preference"]
+                    try:
+                        stadium = _resolve_team_stadium(request.form, team)
+                    except ValueError as exc:
+                        return _edit_error(str(exc))
+                    if stadium:
+                        team.stadium_id = stadium.id
+                        team.venue_mode = 'stadium'
+                        # Preserve legacy identity fields when explicitly adopting.
+                    elif team.venue_mode == 'legacy':
+                        if (request.form.get('home_ground', team.home_ground).strip() != team.home_ground
+                                or request.form.get('pitch_preference', team.pitch_preference) != team.pitch_preference):
+                            return _edit_error('To change your ground, create or adopt a stadium on the Stadiums page and select it here.')
+                    if team.venue_mode == 'stadium' and not team.stadium_id and request.form.get('action') != 'save_draft':
+                        return _edit_error('Select a dedicated stadium before publishing.')
                     team.team_color = request.form["team_color"]
 
-                    if not (team.name and new_short_code and team.home_ground and team.pitch_preference):
+                    if not (team.name and new_short_code) or (team.venue_mode == "legacy" and not (team.home_ground and team.pitch_preference)):
                         return _edit_error("All team fields are required.")
 
                     if not SHORT_CODE_RE.match(new_short_code):
@@ -1371,10 +1448,19 @@ def register_team_routes(
                 if not SHORT_CODE_RE.match(clone_code):
                     clone_code = f"CP{code_suffix}".upper()
 
+            from services.stadium_tuning import playable_stadium
+            clone_stadium_id = None
+            if source.stadium_id:
+                try:
+                    clone_stadium_id = playable_stadium(source.stadium_id, user_id).id
+                except ValueError:
+                    pass
             new_team = DBTeam(
                 user_id=user_id,
                 name=clone_name,
                 short_code=clone_code,
+                venue_mode="stadium",
+                stadium_id=clone_stadium_id,
                 home_ground=source.home_ground,
                 pitch_preference=source.pitch_preference,
                 team_color=source.team_color,
@@ -1386,6 +1472,7 @@ def register_team_routes(
             for prof in source.profiles:
                 new_prof = DBTeamProfile(
                     team_id=new_team.id, format_type=prof.format_type,
+                    captaincy_config=parse_config(prof.captaincy_config),
                 )
                 db.session.add(new_prof)
                 db.session.flush()
@@ -1431,6 +1518,7 @@ def register_team_routes(
                 (p.name for p in prof.players if p.is_wicketkeeper), ""
             )
             profiles_dict[prof.format_type] = {
+                'captaincy_config': parse_config(prof.captaincy_config),
                 "captain": captain,
                 "wicketkeeper": wk,
                 "players": [
@@ -1454,6 +1542,9 @@ def register_team_routes(
         return {
             "team_name": team.name,
             "short_code": team.short_code,
+            "id": team.id,
+            "stadium_id": team.stadium_id,
+            "venue_mode": team.venue_mode,
             "home_ground": team.home_ground,
             "pitch_preference": team.pitch_preference,
             "team_color": team.team_color,

@@ -1,3 +1,4 @@
+from engine.stadium_conditions import uses_v1_dew
 from engine import random_source as random
 import math
 import logging
@@ -973,6 +974,8 @@ def calculate_outcome(
     fc_session_number: int = None,
     ball_overs_bowled: int = 0,
     new_ball_overs: int = 80,
+    captain_tactics: dict = None,
+    legal_balls_completed: int = None,
 ) -> dict:
     """
     Determines the outcome of a single delivery.
@@ -1042,6 +1045,10 @@ def calculate_outcome(
     _short = bool(format_config and format_config.strict_short_bowling) if not _fmt_is_fc else False
     if _gc is None and _short:
         _gc = _gc_defaults(format_config.name)
+    _v3 = (_gc or {}).get('_stadium', {}).get('conditions_model_version') == 'stadium_v3'
+    if _v3 and _fmt_name != 'FC':
+        from engine.stadium_tuning import legal_ball_phase
+        _v3_phase = legal_ball_phase(format_config, legal_balls_completed)
     _is_lista = (format_config is not None and format_config.name == "ListA")
     _is_fc = (format_config is not None and getattr(format_config, "format_family", None) == "multi_day")
     _fc_technique_weight = 0.30
@@ -1163,7 +1170,7 @@ def calculate_outcome(
             # Powerplay boosts
             pp_start = _pp_cfg.get("overs_start", 0)
             pp_end = _pp_cfg.get("overs_end", 5)
-            if (format_config.is_powerplay(over_number) if _short else pp_start <= over_number <= pp_end):
+            if ((_v3_phase == 'powerplay') if _v3 and _fmt_name == 'Hundred' else (format_config.is_powerplay(over_number) if _short else pp_start <= over_number <= pp_end)):
                 if outcome in ("Four", "Six"):
                     pp_boost = _pp_cfg.get("boundary_multiplier", 1.25)
                     logger.debug(f"  [Powerplay] Boosting {outcome} by {pp_boost}x")
@@ -1172,7 +1179,7 @@ def calculate_outcome(
             # Death-over boosts (last 4 overs: 17-20)
             death_start = _death_cfg.get("overs_start", 16)
             death_end = _death_cfg.get("overs_end", 19)
-            in_death = format_config.is_death(over_number) if _short else death_start <= over_number <= death_end
+            in_death = (_v3_phase == 'death') if _v3 and _fmt_name == 'Hundred' else (format_config.is_death(over_number) if _short else death_start <= over_number <= death_end)
 
             if in_death:
                 if outcome in ("Four", "Six"):
@@ -1221,8 +1228,9 @@ def calculate_outcome(
                                                   config=_gc)
             logger.debug("[ListA PitchWear=%.3f] Applied ListA wear model.", pitch_wear)
         # Dew factor for Day/Night matches (2nd innings evening)
-        raw_weights = _apply_dew_factor(raw_weights, innings, over_number,
-                                        is_day_night, format_config, config=_gc)
+        if not uses_v1_dew(_gc):
+            raw_weights = _apply_dew_factor(raw_weights, innings, over_number,
+                                            is_day_night, format_config, config=_gc)
         # Pitch-specific fine-tuning after wear and dew layers, then the
         # rotation profile, then wicket scaling. Order is significant.
         _scale_outcomes(raw_weights, _gc_lista_fine_tune(pitch, config=_gc))
@@ -1278,10 +1286,20 @@ def calculate_outcome(
             raw_weights = _apply_pitch_wear(raw_weights, pitch, pitch_wear)
             logger.debug("[PitchWear=%.3f] Applied T20 pitch deterioration.", pitch_wear)
 
-    if _fmt_name == "Hundred":
+    if _fmt_name == "Hundred" and not uses_v1_dew(_gc):
         raw_weights = _apply_hundred_dew(raw_weights, innings, over_number * 5, is_day_night, _gc)
 
 
+
+    if _v3:
+        from engine.stadium_tuning import apply_adjustments
+        raw_weights = apply_adjustments(raw_weights, _gc['_stadium'], bowling_type,
+            format_config, legal_balls_completed, innings)
+
+    if (_gc or {}).get('_stadium'):
+        from engine.stadium_conditions import apply_venue_weights
+        raw_weights = apply_venue_weights(raw_weights, _gc['_stadium'], bowling_type,
+            innings, over_number * getattr(format_config, 'balls_per_over', 6))
 
     # 3.5) Apply Game State Momentum Engine (GSME) adjustments.
     # This layer accounts for ball history (last 18 deliveries), run-rate
@@ -1300,6 +1318,11 @@ def calculate_outcome(
             raw_weights, pressure_effects, total_weight
         )
     
+    if captain_tactics:
+        from engine.captaincy import apply_tactics
+        raw_weights = apply_tactics(raw_weights, captain_tactics, is_fc=_is_fc)
+        total_weight = sum(raw_weights.values())
+
     # 4) Free hit: slight boundary boost (+10%) for both Four and Six.
     if free_hit and "Four" in raw_weights and "Six" in raw_weights:
         raw_weights["Four"] *= FREE_HIT_BOUNDARY_BOOST

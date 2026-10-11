@@ -693,9 +693,11 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/team_cards.css') }}">
 </head>
 
 <body>
+<nav style="padding:12px 24px;text-align:right"><a href="{{ url_for('stadiums') }}">Explore stadiums</a></nav>
     <header class="nav-header">
         <div class="nav-brand">
             <a href="{{ url_for('home') }}" class="home-btn" title="Home">
@@ -777,45 +779,50 @@
                 </div>
 
                 <div class="card-body">
-                    <!-- Profile badges -->
-                    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:1rem;">
+                    {% set primary = (t.profiles | selectattr('format_type', 'equalto', 'T20') | first) or (t.profiles | first) %}
+                    {% if t.profiles %}
+                    <div class="format-tabs" role="tablist" aria-label="Squad formats for {{ t.team_name }}">
                         {% for prof in t.profiles %}
-                            {% if prof.format_type in ('T20', 'T10') %}
-                                <span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:rgba(16,185,129,0.12);color:#059669;border:1px solid rgba(16,185,129,0.3);">
-                                    <i class="fa-solid fa-bolt" style="font-size:0.65rem;"></i> {{ prof.format_type }} &middot; {{ prof.player_count }}
-                                </span>
-                            {% elif prof.format_type == 'ListA' %}
-                                <span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:rgba(59,130,246,0.12);color:#2563eb;border:1px solid rgba(59,130,246,0.3);">
-                                    <i class="fa-solid fa-cricket-bat-ball" style="font-size:0.65rem;"></i> List A &middot; {{ prof.player_count }}
-                                </span>
-                            {% elif prof.format_type == 'FC' %}
-                                <span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:rgba(217,119,6,0.12);color:#b45309;border:1px solid rgba(217,119,6,0.3);">
-                                    <i class="fa-solid fa-hourglass-half" style="font-size:0.65rem;"></i> First-Class &middot; {{ prof.player_count }}
-                                </span>
-                            {% endif %}
+                        {% set selected = prof == primary %}
+                        <button type="button" class="format-tab" role="tab"
+                            id="format-tab-{{ t.id }}-{{ prof.format_type }}"
+                            aria-controls="format-panel-{{ t.id }}-{{ prof.format_type }}"
+                            aria-selected="{{ 'true' if selected else 'false' }}"
+                            tabindex="{{ '0' if selected else '-1' }}">
+                            {{ 'List A' if prof.format_type == 'ListA' else prof.format_type }}
+                        </button>
                         {% endfor %}
-                        {% if not t.profiles %}
-                            <span style="font-size:0.8rem;color:var(--text-muted);">No profiles yet</span>
-                        {% endif %}
                     </div>
-
-                    <div class="info-grid">
-                        <div class="info-item">
-                            <span class="info-label">Captain</span>
-                            <span class="info-value info-accent">{{ t.captain }}</span>
+                    {% for prof in t.profiles %}
+                    <div class="format-panel" role="tabpanel"
+                        id="format-panel-{{ t.id }}-{{ prof.format_type }}"
+                        aria-labelledby="format-tab-{{ t.id }}-{{ prof.format_type }}"
+                        {% if prof != primary %}hidden{% endif %}>
+                        <div class="squad-summary">
+                            <span><strong>{{ prof.player_count }}</strong> players</span>
+                            <a class="squad-link" href="{{ url_for('team_squad', team_id=t.id, fmt=prof.format_type) }}">
+                                Manage squad <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                            </a>
                         </div>
-                        <div class="info-item">
-                            <span class="info-label">Home Ground</span>
-                            <span class="info-value">{{ t.home_ground }}</span>
+                        <div class="info-grid squad-details">
+                            <div class="info-item">
+                                <span class="info-label">Captain</span>
+                                <span class="info-value info-accent" title="{{ prof.captain or 'Not selected' }}">{{ prof.captain or 'Not selected' }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Captaincy</span>
+                                <span class="info-value" title="{{ captaincy_preset(prof.captaincy_config) }}">{{ captaincy_preset(prof.captaincy_config) }}</span>
+                            </div>
                         </div>
-                        <div class="info-item">
-                            <span class="info-label">Formats</span>
-                            <span class="info-value">{{ t.profiles | length }} Profile{{ 's' if t.profiles | length != 1 else '' }}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Pitch</span>
-                            <span class="info-value">{{ t.pitch_preference }}</span>
-                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="no-formats">No squads yet. <a href="{{ url_for('edit_team', short_code=t.short_code) }}">Add a format</a></div>
+                    {% endif %}
+                    <div class="team-venue" title="{{ t.home_ground }} · {{ t.pitch_preference }} pitch">
+                        <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                        <span>{{ t.home_ground }}</span>
+                        <span class="pitch-label">{{ t.pitch_preference }}</span>
                     </div>
                 </div>
 
@@ -831,11 +838,11 @@
                         {% endif %}
                     </div>
                     <div class="card-actions">
-                        <button class="action-btn edit" onclick="editTeam('{{ t.short_code }}')" title="Edit Team">
+                        <button class="action-btn edit" onclick="editTeam('{{ t.short_code }}')" title="Edit Team" aria-label="Edit {{ t.team_name }}">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
                         <button class="action-btn delete" onclick="confirmDelete('{{ t.short_code }}')"
-                            title="Delete Team">
+                            title="Delete Team" aria-label="Delete {{ t.team_name }}">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                     </div>
@@ -995,7 +1002,7 @@
 
         document.querySelectorAll('.glass-card[data-code]').forEach(card => {
             card.addEventListener('click', (e) => {
-                if (e.target.closest('.action-btn')) return;
+                if (e.target.closest('button, a, [role="tablist"]')) return;
                 const code = card.getAttribute('data-code');
                 editTeam(code);
             });
@@ -1058,6 +1065,7 @@
             });
         });
     </script>
+    <script src="{{ url_for('static', filename='js/team_cards.js') }}"></script>
     {% include 'partials/guide.html' %}
 </body>
 

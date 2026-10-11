@@ -1,0 +1,31 @@
+<section class="stadium-tuning" aria-labelledby="tuning-heading">
+<h2 id="tuning-heading">Stadium conditions</h2>
+<p>Adjustments multiply this stadium's preserved tuning. <strong>1× keeps the baseline</strong>; 1.2× increases that outcome's weight by 20%. Match totals also depend on players and match state.</p>
+<p><a href="{{ url_for('stadium_conditions_guide') }}">How stadium conditions work</a></p>
+<label>Format<select id="tuning-format">{% for fmt in stadium_tuning_formats %}<option value="{{ fmt }}">{{ {'ListA':'List A','FC':'First class','Hundred':'The Hundred'}.get(fmt,fmt) }}</option>{% endfor %}</select></label>
+{% if editable %}<input type="hidden" name="format_settings" id="format-settings" value="{{ request.form.get('format_settings', profile.format_settings|tojson)|forceescape }}">{% endif %}
+<script type="application/json" id="tuning-data">{{ profile.format_settings|tojson }}</script>
+<script type="application/json" id="tuning-ranges">{{ stadium_phase_ranges|tojson }}</script>
+{% for fmt in stadium_tuning_formats %}{% set settings = profile.format_settings[fmt] %}
+<div class="tuning-format-panel" data-format="{{ fmt }}">
+<fieldset class="stadium-editor-group" {% if not editable %}disabled{% endif %}><legend>{{ {'ListA':'List A','FC':'First class','Hundred':'The Hundred'}.get(fmt,fmt) }} blending</legend>
+<label>Pitch influence <output id="blend-{{ fmt }}">{{ (settings.blending.pitch_weight*100)|round|int }}% pitch / {{ (settings.blending.skill_weight*100)|round|int }}% skill</output><input type="range" min="0" max="100" step="0.01" value="{{ settings.blending.pitch_weight*100 }}" data-blend="{{ fmt }}" aria-label="{{ fmt }} pitch influence (%)" aria-describedby="blend-{{ fmt }}"></label>
+</fieldset>
+<fieldset class="stadium-editor-group" {% if not editable %}disabled{% endif %}><legend>Pitch adjustments</legend>
+<label>Pitch profile<select class="tuning-pitch-select" data-format="{{ fmt }}">{% for option in pitch_options[fmt] %}{% set pitch = option.key %}<option value="{{ pitch }}" {% if pitch == profile.pitch_defaults[fmt] %}selected{% endif %}>{{ pitch }}</option>{% endfor %}</select></label>
+{% for option in pitch_options[fmt] %}{% set pitch = option.key %}{% set adjustments = settings.pitches[pitch] %}<div class="tuning-pitch-panel" data-pitch="{{ pitch }}">
+<h3>{{ pitch }}</h3><div class="stadium-editor-grid stadium-boundary-grid">
+{% for factor,label in [('scoring','Scoring'),('wicket','Overall wickets'),('pace','Favours pace: wickets'),('spin','Favours spin: wickets')] %}<label>{{ label }} (×)<input type="number" min="0" max="3" step="0.01" required value="{{ adjustments[factor] }}" data-tuning-path='{{ [fmt,"pitches",pitch,factor]|tojson }}'></label>{% endfor %}
+</div></div>{% endfor %}
+</fieldset>
+{% if fmt != 'FC' %}<fieldset class="stadium-editor-group" {% if not editable %}disabled{% endif %}><legend>Phase adjustments</legend>
+{% if fmt == 'ListA' %}<label>Show phase ranges for<select id="tuning-lista-length"><option value="50">50 overs</option><option value="40">40 overs</option></select></label>{% endif %}
+<p class="tuning-phase-help">Ranges follow format rules and adjust after rain. Stadium settings do not change phase lengths.</p>
+{% for phase in ['powerplay','middle','death'] %}{% set adjustments = settings.phases[phase] %}
+<div class="tuning-phase"><h3>{{ phase|title }} <small data-phase-range="{{ fmt }}:{{ phase }}"></small></h3><div class="stadium-editor-grid stadium-pitch-grid">
+{% for factor in ['scoring','boundary','wicket'] %}<label>{{ factor|title }} (×)<input type="number" min="0" max="3" step="0.01" required value="{{ adjustments[factor] }}" data-tuning-path='{{ [fmt,"phases",phase,factor]|tojson }}'></label>{% endfor %}
+</div><details><summary>Chasing adjustments</summary><div class="stadium-editor-grid stadium-environment-grid">{% for factor in ['scoring','wicket'] %}<label>{{ factor|title }} (×)<input type="number" min="0" max="3" step="0.01" required value="{{ adjustments.chasing[factor] }}" data-tuning-path='{{ [fmt,"phases",phase,"chasing",factor]|tojson }}'></label>{% endfor %}</div></details></div>
+{% endfor %}</fieldset>{% else %}<p>First-class retains its day-aware pitch wear and ball conditions. It has no powerplay, middle or death adjustments.</p>{% endif %}
+</div>{% endfor %}
+{% if editable %}<p id="tuning-draft-status" role="status"></p><button type="button" id="tuning-discard-draft" hidden>Discard recovered draft</button>{% endif %}
+</section>

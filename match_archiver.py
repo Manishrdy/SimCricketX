@@ -738,6 +738,10 @@ class MatchArchiver:
                 db_match.home_team_id = home_team.id
                 db_match.away_team_id = away_team.id
                 db_match.winner_team_id = winner_team.id if winner_team else None
+                db_match.stadium_id = self.match_data.get('stadium_id')
+                db_match.stadium_revision = self.match_data.get('stadium_revision')
+                db_match.conditions_model_version = self.match_data.get('conditions_model_version', 'legacy')
+                db_match.conditions_snapshot = self.match_data.get('conditions_snapshot')
                 db_match.venue = self.match_data.get('stadium')
                 db_match.pitch_type = self.match_data.get('pitch')
                 db_match.date = datetime.utcnow()
@@ -802,6 +806,10 @@ class MatchArchiver:
                     home_team_id=home_team.id,
                     away_team_id=away_team.id,
                     winner_team_id=winner_team.id if winner_team else None,
+                    stadium_id=self.match_data.get('stadium_id'),
+                    stadium_revision=self.match_data.get('stadium_revision'),
+                    conditions_model_version=self.match_data.get('conditions_model_version', 'legacy'),
+                    conditions_snapshot=self.match_data.get('conditions_snapshot'),
                     venue=self.match_data.get('stadium'),
                     pitch_type=self.match_data.get('pitch'),
                     date=datetime.utcnow(),
@@ -1306,6 +1314,13 @@ class MatchArchiver:
                 json.load(f)  # Validate JSON format
             
             shutil.copy2(original_path, destination)
+            if self.match_data.get('captaincy_model_version'):
+                with open(destination, 'r', encoding='utf-8') as source:
+                    archived = json.load(source)
+                for key in ('captaincy_model_version', 'captaincy', 'captaincy_events'):
+                    archived[key] = self.match_data.get(key)
+                with open(destination, 'w', encoding='utf-8') as target:
+                    json.dump(archived, target, indent=2)
             self.created_files.append(destination)
             
             self.logger.debug(f"JSON file copied: {self.filenames['json']}")

@@ -54,6 +54,9 @@ function setup({ extraRoster = [] } = {}) {
     colorInput: { value: '#123456' },
     saveBtn: { disabled: true },
     validationMsg: { innerHTML: '' },
+    FMT_LABEL: { T20: 'T20', ListA: 'List A', T10: 'T10', FC: 'First Class' },
+    tabButtons: [],
+    renderReadiness() {},
     updateTabStatus() {},
     renderRuleChips() {},
   };
