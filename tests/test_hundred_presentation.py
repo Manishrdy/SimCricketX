@@ -285,3 +285,24 @@ def test_full_manual_match_and_pending_decision_restore(monkeypatch):
     assert sum('opens the bowling' in text for text in announcements) == 2
     assert sum('continues for balls' in text for text in announcements) > 0
     assert all(s['balls_bowled'] <= 20 for s in n.bowler_stats.values())
+
+
+@pytest.mark.parametrize('fmt', ['T20', 'ListA'])
+def test_limited_overs_byes_count_runs_not_deliveries(monkeypatch, fmt):
+    from tests.test_hundred import _build_match_data
+    m = module.Match(_build_match_data(fmt, 5))
+    scripted(monkeypatch, [delivery(4, 'Byes'), delivery(2, 'Leg Bye'), delivery(1, 'Wide'), delivery(1, 'No Ball'), delivery(0), delivery(0)])
+    for _ in range(5): m.next_ball()
+    b = m.bowler_stats[m.current_bowler['name']]
+    assert (b['byes'], b['legbyes'], b['wides'], b['noballs']) == (4, 2, 1, 1)
+
+
+def test_final_ball_bye_counts_runs(monkeypatch):
+    from tests.test_hundred import _build_match_data
+    m = module.Match(_build_match_data('T20', 5))
+    m.innings = 2
+    m.target = m.score + 3
+    scripted(monkeypatch, [delivery(4, 'Byes')])
+    r = m.next_ball()
+    assert r.get('match_over')
+    assert m.bowler_stats[m.current_bowler['name']]['byes'] == 4
