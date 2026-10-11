@@ -2113,6 +2113,17 @@ class Match(CaptaincyMixin, HundredPresentation):
         
         raise Exception("No non-consecutive bowler available for emergency selection")
 
+    def _t20_over_mark(self, full_length_over):
+        """An over index tuned for a 20-over innings, scaled to the current
+        innings length. Full-length innings get the number back unchanged, so
+        calibrated behaviour is untouched; a rain-cut one gets the same point
+        in proportion (never below the second over, never past the last)."""
+        fmt = self.fmt
+        if not fmt.scheduled_overs or fmt.overs == fmt.scheduled_overs:
+            return full_length_over
+        scaled = int(full_length_over * fmt.overs / fmt.scheduled_overs + 0.5)
+        return max(1, min(scaled, fmt.overs - 1))
+
     def _pick_death_overs_bowler(self):
         """
         Pre-calculated death overs bowler selection.
@@ -2123,11 +2134,14 @@ class Match(CaptaincyMixin, HundredPresentation):
         
         # ================ CHECK IF WE NEED TO CALCULATE NEW PLAN ================
         death_start = self.fmt.death_phase.start
-        existing_plan_start = getattr(self, 'death_overs_plan_start', None)
+        # One plan per (innings length, death start): a rain cut that lands
+        # mid-death starts its plan at the current over, and must not be
+        # rebuilt every over just because that start differs from death_start.
+        plan_key = (self.fmt.overs, death_start)
         needs_new_plan = (
             self.current_over == death_start
             or not getattr(self, 'death_overs_plan', None)
-            or existing_plan_start != death_start
+            or getattr(self, 'death_overs_plan_key', None) != plan_key
         )
 
         if needs_new_plan:
@@ -2155,6 +2169,7 @@ class Match(CaptaincyMixin, HundredPresentation):
             # Calculate complete death plan for all remaining configured death overs
             self.death_overs_plan = self._calculate_death_overs_plan_safe(bowler_quota)
             self.death_overs_plan_start = self.current_over
+            self.death_overs_plan_key = plan_key
             self.death_overs_bowler_objects = {}
             
             # Store bowler objects for quick lookup
@@ -2765,6 +2780,7 @@ class Match(CaptaincyMixin, HundredPresentation):
         self.lista_plan_roster = ()
         self.death_overs_plan = []
         self.death_overs_plan_start = None
+        self.death_overs_plan_key = None
         self.death_overs_bowler_objects = {}
         # Restore any modified bowler ratings
         self._restore_bowler_ratings()
@@ -3021,7 +3037,7 @@ class Match(CaptaincyMixin, HundredPresentation):
                 return "mixed"
 
         elif pattern == "spin_heavy":
-            if over_number < 3:                      # Very early overs (new ball)
+            if over_number < self._t20_over_mark(3):  # Very early overs (new ball)
                 return "fast"
             elif self.fmt.is_death(over_number):    # Death overs
                 return "fast"
@@ -3620,8 +3636,8 @@ class Match(CaptaincyMixin, HundredPresentation):
         """Prevent any bowler from bowling more than 2 overs in first 10 overs"""
         print(f"  🎯 Over-Utilization Prevention (Over {self.current_over + 1}):")
         
-        if self.current_over >= 10:
-            print(f"    After over 10 - no over-utilization limits")
+        if self.current_over >= self._t20_over_mark(10):
+            print(f"    After over {self._t20_over_mark(10)} - no over-utilization limits")
             return eligible_bowlers
         
         balanced_bowlers = []
@@ -3917,10 +3933,10 @@ class Match(CaptaincyMixin, HundredPresentation):
             overs_bowled = quota_analysis[star['name']]['overs_bowled'] 
             
             # Star bowler neglect criteria
-            if self.current_over >= 10 and overs_bowled == 0:
+            if self.current_over >= self._t20_over_mark(10) and overs_bowled == 0:
                 neglected_stars.append((star, 'zero_overs'))
                 print(f"  🚨 CRITICAL NEGLECT: {star['name']} (0 overs by over {self.current_over + 1})")
-            elif self.current_over >= 14 and overs_bowled <= 1:
+            elif self.current_over >= self._t20_over_mark(14) and overs_bowled <= 1:
                 neglected_stars.append((star, 'under_bowled'))
                 print(f"  ⚠️  MODERATE NEGLECT: {star['name']} ({overs_bowled} overs by over {self.current_over + 1})")
         
@@ -4030,7 +4046,7 @@ class Match(CaptaincyMixin, HundredPresentation):
                 reason = "Saving stars for death overs"
         
         # Strategy 2: Balance workload in middle overs (overs 8-14)
-        elif 8 <= self.current_over < 15:
+        elif self._t20_over_mark(8) <= self.current_over < self._t20_over_mark(15):
             regular_bowlers_used = sum(
                 1 for regular in bowler_tiers['regular'] 
                 if quota_analysis[regular['name']]['overs_bowled'] >= 2
@@ -4040,7 +4056,7 @@ class Match(CaptaincyMixin, HundredPresentation):
                 reason = "Balancing workload among regulars"
         
         # Strategy 3: Fresh bowler injection (any over after 7)
-        elif self.current_over >= 7:
+        elif self.current_over >= self._t20_over_mark(7):
             unused_bowlers = sum(
                 1 for bowler in eligible_low_rated
                 if quota_analysis[bowler['name']]['overs_bowled'] == 0
@@ -4222,7 +4238,7 @@ class Match(CaptaincyMixin, HundredPresentation):
         quota_analysis = self._analyze_quota_status(all_bowlers)
         
         # ================ NEW: EARLY OVERS FAST BOWLER OVERRIDE ================
-        if self.current_over < 4:  # Early overs 1-4 only
+        if self.current_over < self._t20_over_mark(4):  # New-ball overs (1-4 at full length)
             early_overs_result = self._try_early_overs_fast_selection(bowler_tiers, quota_analysis)
             # STRICT CONSECUTIVE GUARD — even if the helper somehow returns the previous
             # bowler (e.g. due to an internal bug), we refuse to use that result.
@@ -4235,7 +4251,7 @@ class Match(CaptaincyMixin, HundredPresentation):
                       f"consecutive overs — falling through to main pipeline")
 
         # ================ NEW: STAR NEGLECT PREVENTION ================
-        if self.current_over >= 10:  # After over 10
+        if self.current_over >= self._t20_over_mark(10):  # After over 10 (scaled when cut)
             neglect_result = self._prevent_star_neglect(bowler_tiers, quota_analysis)
             # _prevent_star_neglect already calls _is_constraint_eligible (which now checks
             # consecutive), but we add an explicit outer guard as a second layer of defence.
@@ -4248,7 +4264,7 @@ class Match(CaptaincyMixin, HundredPresentation):
                       f"consecutive overs — falling through to main pipeline")
 
         # ================ NEW: LOW-RATED BOWLER STRATEGIC USAGE ================
-        if self.current_over >= 5:  # After early overs
+        if self.current_over >= self._t20_over_mark(5):  # After early overs (scaled when cut)
             low_rated_result = self._try_low_rated_bowler_usage(bowler_tiers, quota_analysis)
             # _try_low_rated_bowler_usage already calls _is_constraint_eligible (which now checks
             # consecutive), but we add an explicit outer guard as a second layer of defence.
@@ -4557,6 +4573,7 @@ class Match(CaptaincyMixin, HundredPresentation):
         self.lista_bowler_plan = {}
         self.death_overs_plan = []
         self.death_overs_plan_start = None
+        self.death_overs_plan_key = None
 
     def _dls_suffix(self):
         return (" (D/L approximation)" if self.is_hundred else " (DLS method)") if getattr(self, "rain_affected", False) else ""

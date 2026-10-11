@@ -108,3 +108,141 @@ def test_super_over_restore_keeps_reduced_t20_phases(monkeypatch):
     assert restored.overs == 12 and restored.fmt.death_phase.start == 10
     assert restored.fmt.max_bowler_overs == 3 and restored.rain_events_log == m.rain_events_log
     assert restored.super_over_phase == m.super_over_phase
+
+
+# --- T20 bowler-picker thresholds scale with the innings length -------------
+
+from engine.ball_outcome import scale_boost_windows
+
+
+def _t20_match(overs=None):
+    m = match_module.Match(_build_match_data('T20'))
+    if overs:
+        m._set_innings_overs(overs)
+    return m
+
+
+@pytest.mark.parametrize('base', [3, 4, 5, 7, 8, 10, 14, 15])
+def test_full_length_marks_are_unchanged(base):
+    assert _t20_match()._t20_over_mark(base) == base
+
+
+@pytest.mark.parametrize('overs,marks', [
+    (5, {4: 1, 10: 3, 14: 4}),
+    (8, {4: 2, 10: 4, 14: 6}),
+    (12, {4: 2, 10: 6, 14: 8}),
+])
+def test_reduced_marks_scale(overs, marks):
+    m = _t20_match(overs)
+    for base, want in marks.items():
+        assert m._t20_over_mark(base) == want
+        assert 1 <= m._t20_over_mark(base) <= overs - 1
+
+
+def _tiers(m):
+    all_b = [p for p in m.bowling_team if p.get('will_bowl', False)]
+    tiers = m._classify_bowlers_by_tier(all_b)
+    if not tiers['star']:                      # fixture squads have no star: promote one
+        tiers['star'] = [tiers['regular'].pop(0)]
+    return tiers, m._analyze_quota_status(all_b)
+
+
+@pytest.mark.parametrize('overs', [5, 8, 12])
+def test_star_neglect_fires_in_reduced_innings(overs):
+    m = _t20_match(overs)
+    tiers, quota = _tiers(m)
+    for b in quota.values():
+        b['overs_bowled'] = 0
+    m.current_bowler = None
+    early = m._t20_over_mark(10) - 1
+    m.current_over = early
+    assert m._prevent_star_neglect(tiers, quota) is None
+    m.current_over = m._t20_over_mark(10)
+    assert m._prevent_star_neglect(tiers, quota) is not None
+
+
+def test_star_neglect_unchanged_at_full_length():
+    m = _t20_match()
+    tiers, quota = _tiers(m)
+    for b in quota.values():
+        b['overs_bowled'] = 0
+    m.current_bowler = None
+    m.current_over = 9
+    assert m._prevent_star_neglect(tiers, quota) is None
+    m.current_over = 10
+    assert m._prevent_star_neglect(tiers, quota) is not None
+
+
+@pytest.mark.parametrize('overs,over,expected', [(5, 0, True), (5, 1, False), (12, 1, True), (12, 2, False)])
+def test_new_ball_override_window_scales(monkeypatch, overs, over, expected):
+    m = _t20_match(overs)
+    calls = []
+    monkeypatch.setattr(m, '_try_early_overs_fast_selection', lambda *a: calls.append(1))
+    m.current_over, m.current_bowler = over, None
+    m.bowler_selected_for_over = -1
+    m.pick_bowler()
+    assert bool(calls) is expected
+
+
+def test_new_ball_override_window_unchanged_at_full_length(monkeypatch):
+    for over, expected in [(3, True), (4, False)]:
+        m = _t20_match()
+        calls = []
+        monkeypatch.setattr(m, '_try_early_overs_fast_selection', lambda *a, c=calls: c.append(1))
+        m.current_over, m.current_bowler = over, None
+        m.pick_bowler()
+        assert bool(calls) is expected
+
+
+# --- death plan is built once per death phase, even when a cut lands mid-death
+
+def test_mid_death_cut_builds_one_plan():
+    m = _t20_match()
+    m.current_over = 13
+    m._set_innings_overs(15)            # death now starts at 12 -> we are mid-death
+    assert m.fmt.death_phase.start == 12
+    plans = []
+    real = m._calculate_death_overs_plan_safe
+    m._calculate_death_overs_plan_safe = lambda q: plans.append(1) or real(q)
+    prev = None
+    for over in (13, 14):
+        m.current_over, m.current_bowler = over, prev
+        prev = m._pick_death_overs_bowler()
+    assert len(plans) == 1 and m.death_overs_plan_start == 13
+
+
+def test_death_plan_not_rebuilt_across_death_overs(monkeypatch):
+    m = _t20_match(12)
+    plans = []
+    real = m._calculate_death_overs_plan_safe
+    m._calculate_death_overs_plan_safe = lambda q: plans.append(1) or real(q)
+    prev = None
+    for over in range(10, 12):
+        m.current_over, m.current_bowler = over, prev
+        prev = m._pick_death_overs_bowler()
+    assert len(plans) == 1 and m.death_overs_plan_start == 10
+
+
+# --- admin boost windows scale with the cut ---------------------------------
+
+def test_boost_windows_full_length_identity():
+    assert scale_boost_windows((0, 5), (16, 19), 20, 20) == (0, 5, 16, 19)
+
+
+@pytest.mark.parametrize('overs,want', [
+    (5, (0, 1, 4, 4)), (8, (0, 1, 6, 7)), (12, (0, 3, 10, 11))])
+def test_boost_windows_scale_default(overs, want):
+    assert scale_boost_windows((0, 5), (16, 19), overs, 20) == want
+
+
+@pytest.mark.parametrize('overs', range(2, 20))
+@pytest.mark.parametrize('pp,death', [((0, 5), (16, 19)), ((0, 9), (10, 19)), ((0, 1), (18, 19)), ((0, 12), (12, 19))])
+def test_boost_windows_valid_for_custom(overs, pp, death):
+    pp_s, pp_e, d_s, d_e = scale_boost_windows(pp, death, overs, 20)
+    assert d_s <= d_e <= overs - 1 and d_s > pp_e and pp_s <= pp_e + 1
+
+
+def test_custom_window_applies_scaled_in_cut_innings():
+    cfg_pp, cfg_death = (0, 9), (14, 19)
+    # 10 of 20 overs -> powerplay 0-4, death 7-9
+    assert scale_boost_windows(cfg_pp, cfg_death, 10, 20) == (0, 4, 7, 9)
