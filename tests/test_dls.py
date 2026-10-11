@@ -161,6 +161,66 @@ class TestParScore:
         target = compute_target(274, 100.0, r2)
         assert par_score(274, 100.0, r2, 0, 6) == target - 1
 
+    # ── R2 > R1 branch (Team 1 cut short) ────────────────────────────────────
+
+    def test_par_r2_gt_r1_at_full_use_equals_target_minus_one(self):
+        # Regression for the bug: par_score always used proportional scaling
+        # even when R2 > R1, disagreeing with compute_target's additive G50
+        # branch.  At full resource consumption par must equal target - 1.
+        #
+        # Scenario: ListA, Team 1 cut off at 30 overs (R1 = 75.1), Team 2
+        # gets full 50 overs (R2 = 100.0).  Team 1 scored 109, G50 = 245.
+        #   target = floor(109 + 245 * (100 - 75.1) / 100) + 1
+        #          = floor(109 + 61.005) + 1 = floor(170.005) + 1 = 171
+        #   par at exhaustion must be 170.
+        r1 = resources_remaining(30, 0)   # 75.1
+        r2 = 100.0
+        g50 = 245.0
+        s1 = 109
+        target = compute_target(s1, r1, r2, g50)
+        assert target == 171
+        # All-out / end of innings: remaining = 0, used = R2 = 100.0 > R1
+        par = par_score(s1, r1, r2, 0, 10, g50)
+        assert par == target - 1, (
+            f"par={par} but target-1={target - 1}: par and target disagree"
+        )
+
+    def test_par_r2_gt_r1_mid_innings_transitions_at_r1_boundary(self):
+        # While used <= R1 the proportional branch still applies; only once
+        # used exceeds R1 does the additive branch kick in.
+        r1 = resources_remaining(30, 0)   # 75.1
+        r2 = 100.0
+        g50 = 245.0
+        s1 = 109
+
+        # At 20 overs remaining, 0 wickets lost: used = 100 - R(20,0) = 100 - 56.6 = 43.4
+        # 43.4 < 75.1 => proportional branch
+        used_early = r2 - resources_remaining(20, 0)
+        assert used_early < r1
+        par_early = par_score(s1, r1, r2, 20, 0, g50)
+        assert par_early == int(s1 * used_early // r1)
+
+        # At 5 overs remaining, 0 wickets: used = 100 - R(5,0) = 100 - 17.2 = 82.8
+        # 82.8 > 75.1 => additive G50 branch
+        used_late = r2 - resources_remaining(5, 0)
+        assert used_late > r1
+        par_late = par_score(s1, r1, r2, 5, 0, g50)
+        assert par_late == int(math.floor(s1 + g50 * (used_late - r1) / 100.0))
+
+    def test_par_r2_gt_r1_without_g50_falls_back_to_proportional(self):
+        # Omitting g50 must degrade (proportional scaling), not raise mid-innings.
+        r1 = resources_remaining(30, 0)   # 75.1
+        r2 = 100.0
+        assert par_score(109, r1, r2, 0, 10) == int(109 * r2 // r1)
+
+    def test_par_r2_gt_r1_g50_optional_while_used_le_r1(self):
+        # g50 may be omitted while used is still in the proportional range.
+        r1 = resources_remaining(30, 0)   # 75.1
+        r2 = 100.0
+        # 20 overs remaining, 0 wickets: used = 43.4 < r1 — no g50 needed.
+        par = par_score(109, r1, r2, 20, 0)   # no g50
+        assert par >= 0   # just must not raise
+
 
 # ── Ledger persistence ────────────────────────────────────────────────────────
 

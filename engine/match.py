@@ -731,6 +731,16 @@ class Match(CaptaincyMixin, HundredPresentation):
         extras_str = f" ({', '.join(extras_parts)})" if extras_parts else ""
         return f"{bowler_name}\t\t{overs:.1f}-{stats.get('maidens', 0)}-{stats.get('runs', 0)}-{stats.get('wickets', 0)}{extras_str}"
 
+    def _fc_delivery_completes_maiden(self, delivery):
+        """Pre-commit mirror of the over-end rule (`completed_over_is_maiden`):
+        the over is a maiden if this is its last legal ball and nothing has
+        invalidated it. FC accounting excludes byes/leg-byes, so only the
+        bowler's runs on this ball matter. Keep in step with that rule."""
+        return (delivery['legal']
+                and self.current_ball == self.balls_per_over - 1
+                and not self.current_over_maiden_invalid
+                and delivery['bowler_runs'] == 0)
+
     def _tally_limited_overs_extra(self, outcome, runs):
         """Credit a limited-overs extra to the bowler's ledger; returns its type.
 
@@ -4003,8 +4013,13 @@ class Match(CaptaincyMixin, HundredPresentation):
         should_use = False
         reason = ""
         
-        # Strategy 1: Save premium bowlers for death overs (overs 11-16)
-        if 11 <= self.current_over < 16:
+        # Strategy 1: Save premium bowlers for death overs. Full-length matches
+        # keep the calibrated overs 11-16 window; a rain-reduced innings uses
+        # the five overs before its rebuilt death phase.
+        _reduced = bool(self.fmt.scheduled_overs and self.fmt.overs != self.fmt.scheduled_overs)
+        _save_from, _save_to = ((self.fmt.death_phase.start - 5, self.fmt.death_phase.start)
+                                if _reduced else (11, 16))
+        if _save_from <= self.current_over < _save_to:
             star_remaining_overs = sum(
                 quota_analysis[star['name']]['overs_remaining'] 
                 for star in bowler_tiers['star']
@@ -4537,8 +4552,11 @@ class Match(CaptaincyMixin, HundredPresentation):
         if getattr(self.fmt, "strict_short_bowling", False):
             self.fmt.revise_short_innings(revised_overs)
         else:
+            self.fmt.revise_reduced_innings(revised_overs)
             self.fmt.max_bowler_overs = weather_engine.revised_max_bowler_overs(revised_overs)
         self.lista_bowler_plan = {}
+        self.death_overs_plan = []
+        self.death_overs_plan_start = None
 
     def _dls_suffix(self):
         return (" (D/L approximation)" if self.is_hundred else " (DLS method)") if getattr(self, "rain_affected", False) else ""
@@ -4598,6 +4616,7 @@ class Match(CaptaincyMixin, HundredPresentation):
             self.dls_ledger_innings2.available(),
             dls.overs_from_balls(self._balls_left_in_innings()),
             self.wickets,
+            self._dls_g50(),
         )
 
     def _rain_commentary(self, kind, **ctx):
@@ -4660,14 +4679,18 @@ class Match(CaptaincyMixin, HundredPresentation):
           {"final": <match-over payload>}          — rain ended the match
           {"lines": [...], "info": {...}}          — play continues, revised
         """
-        if self.innings not in (1, 2):
+        if self.is_fc or self.innings not in (1, 2):
             return None
         events = (self.weather_script or {}).get("events") or []
         lines, info = [], None
         while self.weather_next_event < len(events):
-            # Innings 1 is complete but the transition hasn't run yet: defer
-            # so the event lands on the chase as a pre-start reduction.
-            if self.innings == 1 and self.current_over >= self.overs:
+            # Delivery/innings completion takes precedence over later weather.
+            # Leave the event unconsumed: after innings 1 it can reduce the
+            # chase; after innings 2 the normal result/tiebreaker path owns it.
+            # Recheck each iteration because rain can itself end innings 1.
+            if (self._innings_should_end()
+                    or (self.innings == 2 and self.target is not None
+                        and self.score >= self.target)):
                 break
             ev = events[self.weather_next_event]
             if ev["at_global_over"] > self._global_overs_completed():
@@ -7171,8 +7194,7 @@ class Match(CaptaincyMixin, HundredPresentation):
 
         # Rain check at the start of a fresh over — this is where deferred
         # innings-break events land (a chase reduced before it begins).
-        # Inert for FC (weather_script has an empty events list — no
-        # weather modeling in Phase 1), so no is_fc guard is needed here.
+        # _check_rain_events ignores FC, which has its own weather clock.
         if self.current_ball == 0:
             _rain_outcome = self._check_rain_events()
             if _rain_outcome:
@@ -7691,6 +7713,12 @@ class Match(CaptaincyMixin, HundredPresentation):
             is_last_ball = is_legal and self.current_ball == 5
             this_ball_dot = outcome.get('runs', 0) == 0 or (outcome.get('is_extra') and outcome.get('extra_type', '') in ('Byes', 'Leg Bye') and outcome.get('runs', 0) == 0)
             comm_state['is_maiden_over'] = is_last_ball and self.current_over_runs == 0 and not self.current_over_maiden_invalid and this_ball_dot
+
+            if self.is_fc:
+                comm_state['is_maiden_over'] = self._fc_delivery_completes_maiden(outcome['delivery'])
+                if comm_state['is_maiden_over']:
+                    # Commentary runs before this delivery is committed.
+                    comm_state['fc_consecutive_maidens'] = self.fc_consecutive_maidens + 1
 
             # Generate new commentary
             new_text = self.commentary_engine.get_commentary(outcome, comm_state)
@@ -8410,7 +8438,8 @@ class Match(CaptaincyMixin, HundredPresentation):
         over_complete = self.current_ball == self.balls_per_over
 
         if over_complete:
-            if not self.current_over_maiden_invalid:
+            completed_over_is_maiden = not self.current_over_maiden_invalid
+            if completed_over_is_maiden:
                 self.bowler_stats[self.current_bowler["name"]]["maidens"] += 1
             self.bowler_stats[self.current_bowler["name"]]["overs"] += 1
             # BowlerManager records quota + last_bowler + prev-over-runs atomically
@@ -8449,7 +8478,7 @@ class Match(CaptaincyMixin, HundredPresentation):
                 # Maidens are commonplace in first-class cricket (~1 over in
                 # 8), so a single one is not worth remarking on — a RUN of
                 # them is. Track the streak for the commentary engine.
-                if self.current_over_runs == 0 and not self.current_over_maiden_invalid:
+                if completed_over_is_maiden:
                     self.fc_consecutive_maidens += 1
                 else:
                     self.fc_consecutive_maidens = 0
@@ -9794,7 +9823,7 @@ class Match(CaptaincyMixin, HundredPresentation):
             },
         }
 
-        if getattr(self.fmt, "strict_short_bowling", False):
+        if getattr(self.fmt, "strict_short_bowling", False) or getattr(self, "rain_affected", False):
             snap["main_match"]["short_innings"] = {
                 "overs": self.overs,
                 "current_over": self.current_over,
@@ -9864,7 +9893,7 @@ class Match(CaptaincyMixin, HundredPresentation):
         self.first_bowling_team_name = main.get("first_bowling_team_name", "")
         self.rain_affected = main.get("rain_affected", False)
         short = main.get("short_innings")
-        if getattr(self.fmt, "strict_short_bowling", False) and short:
+        if short:
             self._set_innings_overs(short["overs"])
             self.current_over = short["current_over"]
             self.current_ball = short["current_ball"]

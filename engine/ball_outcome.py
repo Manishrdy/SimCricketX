@@ -1166,11 +1166,18 @@ def calculate_outcome(
             _pp_cfg = _phase.get("powerplay", {})
             _death_cfg = _phase.get("death_overs", {})
             _inn2_cfg = _phase.get("second_innings_death", {})
+            # The configured over windows describe a full-length innings; a
+            # rain-reduced one follows the format's rebuilt phases instead.
+            _fmt_phases = _short or bool(
+                format_config is not None
+                and format_config.scheduled_overs
+                and format_config.overs != format_config.scheduled_overs
+            )
 
             # Powerplay boosts
             pp_start = _pp_cfg.get("overs_start", 0)
             pp_end = _pp_cfg.get("overs_end", 5)
-            if ((_v3_phase == 'powerplay') if _v3 and _fmt_name == 'Hundred' else (format_config.is_powerplay(over_number) if _short else pp_start <= over_number <= pp_end)):
+            if ((_v3_phase == 'powerplay') if _v3 and _fmt_name == 'Hundred' else (format_config.is_powerplay(over_number) if _fmt_phases else pp_start <= over_number <= pp_end)):
                 if outcome in ("Four", "Six"):
                     pp_boost = _pp_cfg.get("boundary_multiplier", 1.25)
                     logger.debug(f"  [Powerplay] Boosting {outcome} by {pp_boost}x")
@@ -1179,7 +1186,7 @@ def calculate_outcome(
             # Death-over boosts (last 4 overs: 17-20)
             death_start = _death_cfg.get("overs_start", 16)
             death_end = _death_cfg.get("overs_end", 19)
-            in_death = (_v3_phase == 'death') if _v3 and _fmt_name == 'Hundred' else (format_config.is_death(over_number) if _short else death_start <= over_number <= death_end)
+            in_death = (_v3_phase == 'death') if _v3 and _fmt_name == 'Hundred' else (format_config.is_death(over_number) if _fmt_phases else death_start <= over_number <= death_end)
 
             if in_death:
                 if outcome in ("Four", "Six"):

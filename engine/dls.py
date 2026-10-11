@@ -184,7 +184,8 @@ def compute_target(team1_score: int, r1: float, r2: float,
 
 
 def par_score(team1_score: int, r1: float, team2_resources_available: float,
-              overs_remaining_now: float, wickets_lost_now: int) -> int:
+              overs_remaining_now: float, wickets_lost_now: int,
+              g50: Optional[float] = None) -> int:
     """
     DLS par score for Team 2 at the current point of its innings: the score
     at which the match would be tied were it abandoned right now.
@@ -192,9 +193,26 @@ def par_score(team1_score: int, r1: float, team2_resources_available: float,
     team2_resources_available : Team 2's total resources for the innings
                                 (its ledger's available()), i.e. already net
                                 of any completed interruptions.
+    g50                       : expected 100%-resource innings total (same
+                                value passed to compute_target). Required
+                                when team2_resources_available > r1 so that
+                                this function applies the same additive branch
+                                as compute_target(), guaranteeing
+                                par == target - 1 when all resources are used.
+                                If omitted, par falls back to proportional
+                                scaling rather than failing mid-innings.
+
+    Branch logic mirrors compute_target():
+      used <= r1  ->  floor(S * used / r1)            (proportional)
+      used >  r1  ->  floor(S + g50 * (used - r1) / 100)  (additive G50)
     """
     if r1 <= 0:
         return 0
     remaining_now = resources_remaining(overs_remaining_now, wickets_lost_now)
     used = max(0.0, team2_resources_available - remaining_now)
+    if used > r1 and g50 is not None:
+        # R2 > R1: Team 2 has a resource advantage.  Apply the same additive
+        # G50 formula used by compute_target() so that live par tracks the
+        # revised target correctly (par == target - 1 at full resource use).
+        return int(math.floor(team1_score + g50 * (used - r1) / 100.0))
     return int(math.floor(team1_score * used / r1))

@@ -230,3 +230,104 @@ def test_rain_revision_never_mutates_shared_format_registry(app):
     assert m.fmt.overs == 14
     assert FORMAT_REGISTRY["T20"].overs == before_overs
     assert FORMAT_REGISTRY["T20"].max_bowler_overs == before_quota
+
+
+@pytest.fixture
+def scripted_match(monkeypatch):
+    """Play real deliveries so wickets, batter availability and stats agree."""
+    m = _match()
+    monkeypatch.setattr(m, '_create_match_archive', lambda: True)
+    delivery = {}
+
+    def bowl(runs=0, wicket=False):
+        delivery.clear()
+        delivery.update(type='wicket' if wicket else 'run', runs=runs,
+                        is_extra=False, batter_out=wicket,
+                        wicket_type='Bowled' if wicket else None,
+                        description='Scripted delivery')
+        return m.next_ball()
+
+    monkeypatch.setattr(match_module, 'calculate_outcome',
+                        lambda **kwargs: copy.deepcopy(delivery))
+    bowl(4)
+    for _ in range(10):
+        bowl(wicket=True)
+    assert m.innings == 2 and m.target == 5
+    assert m.wickets == 0 and len(m.remaining_batter_indices) == 9
+    return m, bowl
+
+
+def _rain_state(m):
+    return copy.deepcopy((m.target, m.rain_affected, m.weather_next_event,
+                          m.rain_events_log, m.dls_ledger_innings1.to_dict(),
+                          m.dls_ledger_innings2.to_dict()
+                          if m.dls_ledger_innings2 else None))
+
+
+@pytest.mark.parametrize('shortened', [False, True])
+@pytest.mark.parametrize('tie', [False, True])
+def test_completed_chase_precedes_boundary_rain(scripted_match, shortened, tie):
+    m, bowl = scripted_match
+    base = m._innings1_overs_bowled
+    events = ([{'at_global_over': base + 5, 'overs_lost': 10}]
+              if shortened else [])
+    length = 10 if shortened else 20
+    events.append({'at_global_over': base + length, 'overs_lost': 20})
+    m.weather_script = _script(*events)
+    for _ in range(length * 6 - 1):
+        assert not bowl().get("match_over")
+    before = _rain_state(m)
+    balls_before = sum(s['balls_bowled'] for s in m.bowler_stats.values())
+    bowl(m.target - 1 if tie else 0)
+    result = m.next_ball()
+    assert _rain_state(m) == before
+    assert sum(s['balls_bowled'] for s in m.bowler_stats.values()) == balls_before + 1
+    if tie:
+        assert m.innings == 4  # Preserve the normal super-over path.
+    else:
+        assert result['match_over']
+        assert m.match_status == 'completed' and m.margin_value == m.target - 1
+        assert m.winner_is_home is True
+    saved_result = m.result
+    m.next_ball()
+    assert m.result == saved_result and _rain_state(m) == before
+
+
+@pytest.mark.parametrize('winning', [False, True])
+def test_decisive_delivery_before_minimum_precedes_rain(scripted_match, winning):
+    m, bowl = scripted_match
+    m.weather_script = _script({'at_global_over': m._innings1_overs_bowled + 4,
+                               'overs_lost': 20})
+    # End the chase on its 24th delivery, before the five-over minimum.
+    for _ in range(14 if not winning else 23):
+        bowl()
+    if not winning:
+        for _ in range(9):
+            bowl(wicket=True)
+        assert m.wickets == 9 and not m.remaining_batter_indices
+    before = _rain_state(m)
+    result = bowl(6) if winning else bowl(wicket=True)
+    assert result['match_over'] and m.match_status == 'completed'
+    assert m.winner_is_home is (not winning)
+    assert _rain_state(m) == before
+    m.next_ball()
+    assert _rain_state(m) == before
+
+
+def test_first_innings_rain_termination_defers_next_due_event(monkeypatch):
+    m = _match(_script({'at_global_over': 5, 'overs_lost': 15},
+                       {'at_global_over': 5, 'overs_lost': 1}))
+    monkeypatch.setattr(m, '_create_match_archive', lambda: True)
+    monkeypatch.setattr(match_module, 'calculate_outcome', lambda **kw: dict(
+        type='run', runs=0, is_extra=False, batter_out=False,
+        wicket_type=None, description='Dot'))
+    for _ in range(30):
+        m.next_ball()
+    assert m.weather_next_event == 1
+    assert m.innings == 1 and m.overs == 5
+    assert m.next_ball()['innings_end']
+    assert m.innings == 2 and m.weather_next_event == 1
+    result = m.next_ball()
+    assert result['match_over'] and m.match_status == 'no_result'
+    assert m.weather_next_event == 2
+    assert [e['innings'] for e in m.rain_events_log] == [1, 2]

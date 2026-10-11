@@ -155,9 +155,9 @@ def _par_score_at(over: int, ball: int, pitch: str = "Hard", fmt=None) -> float:
         pitch_table  = fmt.pitch_par_factors
         _max_over    = fmt.overs
     else:
-        par_table    = _PAR_SCORES
+        par_table    = fmt.par_scores if fmt is not None else _PAR_SCORES
         pitch_table  = _PITCH_PAR_FACTOR
-        _max_over    = 20
+        _max_over    = fmt.overs if fmt is not None else 20
 
     base_at    = par_table.get(over,         par_table[_max_over])
     base_next  = par_table.get(over + 1,     par_table[_max_over])
