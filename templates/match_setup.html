@@ -1153,17 +1153,20 @@
                             <span class="ms-setting-hint">Auto-filled from the selected home team.</span>
                         </div>
                         <input type="text" id="venue-display" readonly class="ms-setting-control ms-readonly">
+                        <select id="stadium-select" class="ms-setting-control" aria-label="Stadium">
+                          <option value="">Use home ground</option>
+                          {% for s in stadium_choices(include_legacy=true) %}<option value="{{ s.id }}" data-name="{{ s.name }}">{{ s.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div id="stadium-conditions" hidden>
+                      <p id="stadium-preview" aria-live="polite" class="ms-setting-hint"></p>
                     </div>
 
                     <div class="ms-setting-row">
                         <div class="ms-setting-copy">
                             <label class="ms-setting-label" for="pitch-select">Pitch Condition</label>
                             <span class="ms-setting-hint">Team balance and outcomes adapt to the surface profile.</span>
-                            <a href="/ground-conditions" target="_blank" class="ms-mode-link">
-                                <i class="fa-solid fa-gamepad"></i>
-                                <span id="gameModeLabel">Mode: {{ active_game_mode_label | default('Natural Game') }}</span>
-                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                            </a>
+                            <a href="{{ url_for('stadiums') }}" class="ms-mode-link"><span>Configure stadium conditions</span></a>
                         </div>
                         <select id="pitch-select" class="ms-setting-control"></select>
                     </div>
@@ -1478,6 +1481,10 @@
 
 <script>
     let TEAMS = [];
+    const captaincySummary = config => {
+        const c = config || {};
+        return `Captaincy · batting aggression ${c.batting_aggression ?? 50} · bowling aggression ${c.bowling_aggression ?? 50}`;
+    };
     let currentStep = 1;
     let selectedTeamIndices = [];
     // v2: lineups are keyed per-format — T20 lineups never bleed into ListA slots.
@@ -1733,6 +1740,10 @@
             if (!team) return;
 
             const squads = team.profile_squads || {};
+            let captainSummary = card.querySelector('.captaincy-summary');
+            if (!captainSummary) { captainSummary = document.createElement('p'); captainSummary.className = 'captaincy-summary'; card.append(captainSummary); }
+            captainSummary.hidden = !format;
+            captainSummary.textContent = captaincySummary((team.profile_captaincy || {})[format === 'Hundred' ? 'T20' : format]);
             // Step 1 (format === null) gates on "does this team have a squad
             // in ANY format" — the actual match format isn't chosen until
             // Step 2, so blocking selection against one hardcoded default
@@ -1831,18 +1842,69 @@
             : keys;
 
         pSel.innerHTML = "";
+        const usingStadium = Boolean(document.getElementById('stadium-select')?.value);
+
         sorted.forEach(key => {
             const profile = options.find(o => o.key === key);
             const opt = document.createElement('option');
             opt.value = key;
-            opt.textContent = key === pref ? `${key} Pitch (Home Preference)` : `${key} Pitch`;
+            opt.textContent = key === pref && !usingStadium ? `${key} Pitch (Home Preference)` : `${key} Pitch`;
             if (profile && profile.description) opt.title = profile.description;
             pSel.appendChild(opt);
         });
 
-        if (previousValue && keys.includes(previousValue)) {
+        if (usingStadium) {
+            const stadium = STADIUM_DATA.find(s => s.id === document.getElementById('stadium-select').value);
+            if (stadium) pSel.value = stadium.pitch_defaults[format];
+            updateStadiumPreview();
+        }
+        if (!usingStadium && previousValue && keys.includes(previousValue)) {
             pSel.value = previousValue;
         }
+    }
+
+    const STADIUM_FIXTURE_ID = {{ fixture_stadium_id|default(none)|tojson }};
+    const STADIUM_DATA = {{ stadium_choices(include_legacy=true)|tojson }};
+    function stadiumOverrides() {
+        if (!document.getElementById('stadium-select').value) return {};
+        const result = {};
+        const pitch = document.getElementById('pitch-select').value;
+        if (pitch) result.pitch = pitch;
+        return result;
+    }
+    function initializeStadium(home) {
+        const select = document.getElementById('stadium-select');
+        for (const option of select.options) {
+            const record = STADIUM_DATA.find(s => s.id === option.value);
+            option.hidden = Boolean(record && record.schema_version !== 3 && record.id !== STADIUM_FIXTURE_ID && record.id !== home.stadium_id);
+            option.disabled = option.hidden;
+        }
+        select.value = STADIUM_FIXTURE_ID || home.stadium_id || '';
+        select.disabled = Boolean(STADIUM_FIXTURE_ID);
+        select.options[0].disabled = home.venue_mode === 'stadium';
+        const update = () => {
+            const stadium = STADIUM_DATA.find(s => s.id === select.value);
+            document.getElementById('stadium-conditions').hidden = !stadium;
+            document.getElementById('venue-display').value = stadium ? stadium.name : home.home_ground;
+            populatePitchOptions(document.getElementById('match-format-value')?.value || 'T20');
+            updateStadiumPreview();
+        };
+        select.onchange = () => { update(); updateConditionsSummary(); };
+        update();
+    }
+    function updateStadiumPreview() {
+        const stadium = STADIUM_DATA.find(s => s.id === document.getElementById('stadium-select').value);
+        if (!stadium) return;
+        const fmt = document.getElementById('match-format-value')?.value || 'T20';
+        const d = stadium.dimensions_m;
+        document.getElementById('stadium-preview').textContent = `Default pitch: ${stadium.pitch_defaults[fmt]}. Boundaries: ${d.straight_a}/${d.straight_b} m straight, ${d.square_a}/${d.square_b} m square. Outfield ${stadium.outfield_speed}×; average ${stadium.average_temperature_c}°C (controls pitch wear).`;
+        if (stadium.schema_version === 3) {
+            const settings = stadium.format_settings[fmt];
+            const pitch = document.getElementById('pitch-select').value || stadium.pitch_defaults[fmt];
+            const adjustments = settings.pitches[pitch];
+            document.getElementById('stadium-preview').textContent += ` Pitch/skill: ${(settings.blending.pitch_weight * 100).toFixed(0)}%/${(settings.blending.skill_weight * 100).toFixed(0)}%. ${pitch} adjustments: scoring ${adjustments.scoring}×, wickets ${adjustments.wicket}×, pace ${adjustments.pace}×, spin ${adjustments.spin}×.`;
+        }
+
     }
 
     // --- STEP 2: CONDITIONS ---
@@ -1851,6 +1913,7 @@
         const away = TEAMS[selectedTeamIndices[1]];
 
         document.getElementById('venue-display').value = home.home_ground;
+        initializeStadium(home);
         document.getElementById('toss-context').textContent = `${away.team_name} Calls the Toss`;
         document.getElementById('summary-home-team').textContent = home.team_name;
         document.getElementById('summary-away-team').textContent = away.team_name;
@@ -2185,7 +2248,7 @@
         const isDayNight = document.getElementById('day-night-value')?.value === 'true';
 
         setText('summary-venue', venue);
-        setText('summary-pitch', `${pitch} Pitch`);
+        setText('summary-pitch', pitch === '-' && document.getElementById('stadium-select')?.value ? 'Stadium default' : `${pitch} Pitch`);
         setText('summary-toss', toss);
         setText('summary-mode', mode === 'manual' ? 'Manual' : 'Auto');
         const storySelect = document.getElementById('story-select');
@@ -2748,6 +2811,8 @@
                 team_home: h.id,
                 team_away: a.id,
                 stadium: h.home_ground,
+                stadium_id: document.getElementById('stadium-select').value || null,
+                condition_overrides: stadiumOverrides(),
                 pitch: document.getElementById('pitch-select').value,
                 toss: document.querySelector('input[name="toss"]:checked').value,
                 simulation_mode: document.getElementById('simulation-mode-select').value,

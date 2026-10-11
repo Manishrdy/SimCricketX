@@ -1,0 +1,55 @@
+{% extends "layout.html" %}
+{% from 'partials/stadium_ground.html' import ground %}
+{% block title %}Stadiums · SimCricketX{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/stadiums.css') }}">{% endblock %}
+{% block content %}
+{% set active_kind = request.args.get('kind', '') %}
+<div class="stadium-page stadium-explorer">
+<nav class="stadium-breadcrumb" aria-label="Breadcrumb"><a href="{{ url_for('home') }}">Dashboard</a><span aria-hidden="true">/</span><span aria-current="page">Stadiums</span></nav>
+<header class="grounds-hero">
+  <div class="grounds-hero-copy"><span class="grounds-eyebrow"><span aria-hidden="true">◉</span> THE GROUND COLLECTION</span><h1>Every ground.<br>A different game.</h1><p>Find your home advantage. Explore iconic venues or build a ground with a character of its own.</p><a class="button" href="{{ url_for('stadium_detail') }}"><span aria-hidden="true">＋</span> Create stadium</a></div>
+  <div class="grounds-hero-art">{{ ground() }}<span class="grounds-art-label">THE STAGE IS YOURS</span></div>
+  <div class="grounds-hero-stats"><span><strong>{{ total_stadiums }}</strong> available grounds</span><span><strong>{{ collection_counts.custom }}</strong> your creations</span></div>
+</header>
+<section id="ground-collection" class="grounds-collection" aria-labelledby="collection-title">
+  <div class="grounds-section-heading"><div><span class="grounds-eyebrow">EXPLORE THE VENUES</span><h2 id="collection-title">Choose your next home ground</h2></div><a class="grounds-team-link" href="{{ url_for('manage_teams') }}">Manage teams <span aria-hidden="true">↗</span></a></div>
+  <nav class="grounds-tabs" aria-label="Stadium collections">
+  {% for kind, label, count in [('', 'All stadiums', total_stadiums), ('official', 'Official catalogue', collection_counts.official), ('custom', 'My stadiums', collection_counts.custom)] %}
+  <a href="{{ url_for('stadiums', kind=kind, q=request.args.get('q','')) }}" class="{{ 'is-active' if active_kind == kind else '' }}" {% if active_kind == kind %}aria-current="page"{% endif %}>{{ label }} <span>{{ count }}</span></a>
+  {% endfor %}
+  </nav>
+  <form class="grounds-search" method="get" role="search">
+    <input type="hidden" name="kind" value="{{ active_kind }}">
+    <div class="grounds-search-field"><label class="sr-only" for="ground-query">Search by stadium name</label><span aria-hidden="true">⌕</span><input id="ground-query" name="q" value="{{ request.args.get('q','') }}" placeholder="Search stadiums…" type="search"></div>
+    <button type="submit">Search</button>
+    {% if request.args.get('q') %}<a class="grounds-reset" href="{{ url_for('stadiums', kind=active_kind) }}">Clear filters</a>{% endif %}
+  </form>
+  <p class="grounds-update-status sr-only" role="status" aria-live="polite"></p>
+  <div class="grounds-results"><p><strong>{{ stadiums|length }}</strong> {{ 'stadium' if stadiums|length == 1 else 'stadiums' }} {{ 'found' if request.args.get('q') else 'to explore' }}</p><span>Find a venue. Make it yours.</span></div>
+  <div class="grounds-grid">
+  {% for s in stadiums %}
+  <article class="ground-card" style="--ground-hue: {{ [158, 192, 36, 218][loop.index0 % 4] }}">
+    <div class="ground-card-art"><span class="ground-collection-badge">{{ 'Private ground' if s.kind == 'custom' else 'Official catalogue' }}</span>{{ ground() }}</div>
+    <div class="ground-card-body"><h3>{{ s.name }}</h3>
+      <dl class="ground-facts"><div><dt>T20 pitch</dt><dd>{{ s.pitch_defaults.T20 }}</dd></div><div><dt>Boundaries (m)</dt><dd>{{ s.dimensions_m.straight_a }} / {{ s.dimensions_m.straight_b }} straight<br>{{ s.dimensions_m.square_a }} / {{ s.dimensions_m.square_b }} square</dd></div><div><dt>Outfield speed</dt><dd>{{ s.outfield_speed }}×</dd></div><div><dt>Average temperature</dt><dd>{{ s.average_temperature_c }}°C</dd></div></dl>
+      <p class="ground-confidence">Simulation preset · revision {{ s.revision }}</p>
+      <div class="ground-card-actions"><a class="ground-view-link" href="{{ url_for('stadium_detail',stadium_id=s.id) }}">Explore stadium <span aria-hidden="true">↗</span></a>{% if s.kind == 'custom' or current_user.is_admin %}<a class="ground-edit-link" href="{{ url_for('stadium_detail',stadium_id=s.id) }}#stadium-editor" aria-label="Edit {{ s.name }}">Edit stadium</a>{% endif %}</div>
+      {% if s.kind == 'official' or s.schema_version != 3 %}
+      <form class="ground-add-form" method="post" action="{{ url_for('add_stadium', stadium_id=s.id) }}" data-adopt-url="{{ url_for('adopt_stadium_api', stadium_id=s.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="revision" value="{{ s.revision }}">
+        <button class="ground-use-link" type="submit" {% if s.in_my_stadiums %}disabled{% endif %}>{{ 'Added to My stadiums' if s.in_my_stadiums else 'Add to My stadiums' if s.kind == 'official' else 'Adopt stadium conditions' }}</button>
+        <p class="ground-add-status sr-only" role="status"></p>
+      </form>
+      {% else %}<a class="ground-use-link" href="{{ url_for('create_team',stadium_id=s.id) }}">Use for new team</a>{% endif %}
+    </div>
+  </article>
+  {% else %}
+  <section class="grounds-empty">{{ ground() }}<h3>{{ 'Your home ground starts here' if active_kind == 'custom' and not request.args.get('q') else 'No grounds match your search' }}</h3><p>{{ 'Create a private stadium with your own surface and boundary dimensions.' if active_kind == 'custom' and not request.args.get('q') else 'Try a different name, or clear your filters to explore again.' }}</p><a class="button" href="{{ url_for('stadium_detail') }}">Create stadium</a>{% if request.args.get('q') %}<a class="grounds-reset" href="{{ url_for('stadiums',kind=active_kind) }}">Clear filters</a>{% endif %}</section>
+  {% endfor %}
+  </div>
+  <aside class="grounds-note"><span aria-hidden="true">ⓘ</span><p>Every ground has its own character. Conditions are simulation profiles, not live forecasts. Add an official ground to My stadiums to use it. Admin updates apply until you save your own changes; your custom settings stay private.</p></aside>
+</section>
+</div>
+{% endblock %}
+
+{% block extra_js %}<script src="{{ url_for('static', filename='js/stadium_catalogue.js') }}" defer></script>{% endblock %}

@@ -1,0 +1,95 @@
+/* Keep each franchise compact, regardless of its number of squads. */
+.page-header { padding: 1.5rem; margin-bottom: 1.5rem; }
+.stats-grid { gap: 1rem; margin-bottom: 1.5rem; }
+.stat-card { padding: 1.1rem 1.3rem; }
+.stat-value { font-size: 2rem; }
+.search-wrap { margin-bottom: 1.25rem; }
+.teams-grid { gap: 1.25rem; align-items: start; }
+.glass-card::before { pointer-events: none; }
+.glass-card:hover { transform: translateY(-3px); }
+.card-header { padding: 1.1rem 1.2rem; align-items: center; }
+.team-name { font-size: 1.1rem; margin: 0; }
+.card-body { padding: 1rem 1.2rem; }
+.format-tabs {
+    display: flex;
+    gap: .2rem;
+    padding: .25rem;
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    background: var(--bg-body);
+    margin-bottom: .9rem;
+    flex-wrap: wrap;
+}
+.format-tab {
+    flex: 1 0 auto;
+    padding: .5rem .35rem;
+    min-height: 40px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-muted);
+    font: 600 .76rem var(--font-sans);
+    cursor: pointer;
+}
+.format-tab:hover { color: var(--brand-primary); }
+.format-tab[aria-selected="true"] {
+    background: var(--bg-raised);
+    color: var(--brand-primary);
+    border-color: var(--border-light);
+    box-shadow: var(--shadow-xs);
+}
+.format-panel[hidden] { display: none; }
+.squad-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .5rem;
+    color: var(--text-muted);
+    font-size: .82rem;
+    margin-bottom: .75rem;
+}
+.squad-summary strong { color: var(--text-main); font-size: 1.15rem; }
+.squad-link {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    min-height: 36px;
+    font-weight: 600;
+    color: var(--brand-primary);
+    text-decoration: none;
+}
+.squad-link:hover { text-decoration: underline; }
+.squad-details { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .75rem; }
+.squad-details .info-value {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: .88rem;
+}
+.team-venue {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    margin-top: 1rem;
+    padding-top: .85rem;
+    border-top: 1px solid var(--border-light);
+    color: var(--text-muted);
+    font-size: .78rem;
+    min-width: 0;
+}
+.team-venue > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pitch-label { margin-left: auto; flex-shrink: 0; font-size: .7rem; border-radius: 5px; background: var(--bg-body); padding: .2rem .4rem; }
+.no-formats { padding: .65rem 0; color: var(--text-muted); font-size: .88rem; }
+.no-formats a { color: var(--brand-primary); }
+.card-footer { padding: .75rem 1.2rem; gap: .5rem; }
+.card-meta { font-size: .7rem; }
+@media (max-width: 768px) {
+    .stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+    .stat-card { padding: .85rem .7rem; }
+    .stat-value { font-size: 1.6rem; }
+    .stat-label { font-size: .62rem; letter-spacing: .03em; }
+    .stat-icon { font-size: 3rem; }
+    .card-header, .card-body { padding: 1rem; }
+    .card-footer { flex-direction: row; align-items: center; padding: .7rem 1rem; }
+    .format-tab { min-height: 44px; }
+}

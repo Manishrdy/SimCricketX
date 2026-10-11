@@ -71,6 +71,7 @@ def calculate_super_over_outcome(
     fielding_team: list = None,
     pressure_engine=None,
     ground_config_override: dict = None,
+    captain_tactics: dict = None,
 ) -> dict:
     """
     Simulates one delivery in a Super Over.
@@ -160,6 +161,13 @@ def calculate_super_over_outcome(
     if pitch_wear > 0.0:
         raw_weights = _apply_pitch_wear(raw_weights, pitch, pitch_wear)
 
+    if (ground_config_override or {}).get('_stadium'):
+        from engine.stadium_tuning import apply_adjustments
+        raw_weights = apply_adjustments(raw_weights, ground_config_override['_stadium'], bowling_type, tie_breaker=True)
+        from engine.stadium_conditions import apply_venue_weights
+        raw_weights = apply_venue_weights(raw_weights, ground_config_override['_stadium'],
+                                          bowling_type, super_over=True)
+
     # 3) Super Over micro-GSME: momentum from this over's own deliveries,
     #    wicket scarcity (1 of only 2 down), required rate vs the neutral
     #    baseline — see apply_super_over_momentum()'s docstring for why this
@@ -182,6 +190,10 @@ def calculate_super_over_outcome(
 
     # 5) Normalize and choose.
     outcomes = list(raw_weights.keys())
+    if captain_tactics:
+        from engine.captaincy import apply_tactics
+        raw_weights = apply_tactics(raw_weights, captain_tactics)
+        total_weight = sum(raw_weights.values())
     if total_weight <= 0:
         chosen = "Dot"
     else:

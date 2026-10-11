@@ -91,6 +91,60 @@ class User(UserMixin, db.Model):
     matches = relationship('Match', backref='user', lazy=True, cascade="all, delete-orphan")
     tournaments = relationship('Tournament', backref='owner', lazy=True, cascade="all, delete-orphan")
 
+class Stadium(db.Model):
+    """Stable identity; immutable revisions preserve played conditions."""
+    __tablename__ = 'stadiums'
+    id = db.Column(db.String(36), primary_key=True)
+    slug = db.Column(db.String(120), unique=True, nullable=False)
+    owner_user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    kind = db.Column(db.String(16), nullable=False, default='custom')
+    status = db.Column(db.String(16), nullable=False, default='active')
+    current_revision = db.Column(db.Integer, nullable=False, default=1)
+    current_profile_version = db.Column(db.Integer, nullable=False, default=2, server_default='2')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class StadiumRevision(db.Model):
+    """Simple immutable stadium profiles; v1 rows remain in their original table."""
+    __tablename__ = 'stadium_revisions_v2'
+    stadium_id = db.Column(db.String(36), db.ForeignKey('stadiums.id'), primary_key=True)
+    revision = db.Column(db.Integer, primary_key=True)
+    schema_version = db.Column(db.Integer, nullable=False, default=2)
+    name = db.Column(db.String(100), nullable=False)
+    pitch_defaults = db.Column(db.JSON, nullable=False)
+    outfield_speed = db.Column(db.Float, nullable=False)
+    dimensions_m = db.Column(db.JSON, nullable=False)
+    average_temperature_c = db.Column(db.Float, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class StadiumRevisionV3(db.Model):
+    """Private tuning captured once and retained in immutable revisions."""
+    __tablename__ = 'stadium_revisions_v3'
+    stadium_id = db.Column(db.String(36), db.ForeignKey('stadiums.id'), primary_key=True)
+    revision = db.Column(db.Integer, primary_key=True)
+    schema_version = db.Column(db.Integer, nullable=False, default=3)
+    name = db.Column(db.String(100), nullable=False)
+    pitch_defaults = db.Column(db.JSON, nullable=False)
+    outfield_speed = db.Column(db.Float, nullable=False)
+    dimensions_m = db.Column(db.JSON, nullable=False)
+    average_temperature_c = db.Column(db.Float, nullable=False)
+    format_settings = db.Column(db.JSON, nullable=False)
+    baseline_configs = db.Column(db.JSON, nullable=False)
+    baseline_provenance = db.Column(db.JSON, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class StadiumAdoption(db.Model):
+    """One template adoption per owner/source revision; retries return the same copy."""
+    __tablename__ = 'stadium_adoptions'
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    source_stadium_id = db.Column(db.String(36), db.ForeignKey('stadiums.id'), primary_key=True)
+    source_revision = db.Column(db.Integer, primary_key=True)
+    stadium_id = db.Column(db.String(36), db.ForeignKey('stadiums.id'), nullable=False)
+
+
 class Team(db.Model):
     """Cricket Team"""
     __tablename__ = 'teams'
@@ -100,6 +154,8 @@ class Team(db.Model):
     name = db.Column(db.String(100), nullable=False)
     short_code = db.Column(db.String(10), nullable=False)
     home_ground = db.Column(db.String(100))
+    stadium_id = db.Column(db.String(36), db.ForeignKey('stadiums.id'), nullable=True)
+    venue_mode = db.Column(db.String(16), nullable=False, default='stadium', server_default='stadium')
     pitch_preference = db.Column(db.String(50))
     team_color = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -126,6 +182,9 @@ class Team(db.Model):
     away_matches = relationship('Match', foreign_keys='Match.away_team_id', backref='away_team')
 
 
+from engine.captaincy import default_config as default_captaincy_config
+
+
 class TeamProfile(db.Model):
     """Format-specific squad profile for a team (T20, ListA, FC)."""
     __tablename__ = 'team_profiles'
@@ -143,6 +202,8 @@ class TeamProfile(db.Model):
     __table_args__ = (
         db.UniqueConstraint('team_id', 'format_type', name='uq_team_profile_format'),
     )
+
+    captaincy_config = db.Column(db.JSON, default=default_captaincy_config, nullable=True)
 
     team = relationship('Team', back_populates='profiles')
     players = relationship('Player', back_populates='profile', cascade='all, delete-orphan')
@@ -685,6 +746,10 @@ class Match(db.Model):
     
     # Match Details
     venue = db.Column(db.String(100))
+    stadium_id = db.Column(db.String(36), db.ForeignKey('stadiums.id'), nullable=True)
+    stadium_revision = db.Column(db.Integer, nullable=True)
+    conditions_model_version = db.Column(db.String(24), nullable=True)
+    conditions_snapshot = db.Column(db.JSON, nullable=True)
     pitch_type = db.Column(db.String(50))
     date = db.Column(db.DateTime, default=datetime.utcnow)
     result_description = db.Column(db.String(200)) # e.g., "CSK won by 4 wickets"
@@ -1017,6 +1082,7 @@ class TournamentFixture(db.Model):
     tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id'), nullable=False)
     home_team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='CASCADE'), nullable=True)
     away_team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='CASCADE'), nullable=True)
+    stadium_id = db.Column(db.String(36), db.ForeignKey('stadiums.id'), nullable=True)
     round_number = db.Column(db.Integer, default=1, nullable=False)
     status = db.Column(db.String(20), default='Scheduled', nullable=False)
     stage = db.Column(db.String(30), default='league', nullable=False)

@@ -78,3 +78,13 @@
     .home-options-pending > :nth-child(n+4) { grid-column: span 1; }
     .home-options-pending > :last-child { grid-column: span 2; }
 }
+
+/* Four management and review cards share the final row, including Stadiums. */
+@media (min-width: 761px) {
+    .home-options > .home-option:nth-child(n+7),
+    .home-options-pending > .home-option:nth-child(n+8) { grid-column: span 3; }
+}
+@media (min-width: 481px) and (max-width: 760px) {
+    .home-options > .home-option:nth-child(n+7),
+    .home-options-pending > .home-option:last-child { grid-column: span 1; }
+}

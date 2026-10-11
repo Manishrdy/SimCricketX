@@ -45,7 +45,7 @@ def innings_teams(toss_winner, toss_decision, home_code, home_xi, away_xi, innin
 CORRECT_DECISION_RATE = 0.8
 
 
-def correct_decision(fmt, pitch, is_day_night=False):
+def correct_decision(fmt, pitch, is_day_night=False, venue_forecast=None):
     """The toss decision the conditions favour here, as "Bat" or "Bowl".
 
     Reads FormatConfig/MultiDayFormatConfig's correct_toss_choice, preferring
@@ -55,6 +55,11 @@ def correct_decision(fmt, pitch, is_day_night=False):
     toss-advantage flag so the choice the captain makes and the choice the
     engine grades him against can never disagree.
     """
+    if venue_forecast:
+        if is_day_night and venue_forecast.get('expected_dew', 0) >= .15:
+            return 'Bowl'
+        if venue_forecast.get('wear_rate_multiplier', 1) > 1.1 and pitch in ('Dry', 'Hard'):
+            return 'Bat'
     if is_day_night:
         dn_choices = getattr(fmt, "correct_toss_choice_dn", None)
         if dn_choices:
@@ -63,11 +68,15 @@ def correct_decision(fmt, pitch, is_day_night=False):
     return "Bowl" if choices.get(pitch, "bat") == "bowl" else "Bat"
 
 
-def decide_toss(fmt, pitch, is_day_night=False, rng=None):
+def decide_toss(fmt, pitch, is_day_night=False, rng=None, venue_forecast=None, captaincy_config=None):
     """An AI captain's call after winning the toss, as "Bat" or "Bowl"."""
     rng = rng or _random
-    decision = correct_decision(fmt, pitch, is_day_night=is_day_night)
+    decision = correct_decision(fmt, pitch, is_day_night=is_day_night, venue_forecast=venue_forecast)
     rate = 0.65 if getattr(fmt, "name", None) == "Hundred" and is_day_night else CORRECT_DECISION_RATE
+    if captaincy_config is not None:
+        from engine.captaincy import parse_config
+        awareness = parse_config(captaincy_config)['match_awareness'] / 100
+        rate = (.50 if getattr(fmt, 'name', None) == 'Hundred' and is_day_night else .65) + .30 * awareness
     if rng.random() >= rate:
         decision = "Bowl" if decision == "Bat" else "Bat"
     return decision

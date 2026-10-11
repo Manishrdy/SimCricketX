@@ -1,4 +1,7 @@
+import copy
 """Match and archive route registration."""
+
+from engine.stadium_conditions import public_match_data
 
 import json
 import os
@@ -206,6 +209,12 @@ def register_match_routes(
                 return jsonify({"error": "Invalid team selection"}), 400
             if home_db.user_id != current_user.id or away_db.user_id != current_user.id:
                 return jsonify({"error": "Unauthorized team selection"}), 403
+            from services.stadiums import team_venue_error
+            for selected_team in (home_db, away_db):
+                venue_error = team_venue_error(selected_team, current_user.id)
+                if venue_error:
+                    return jsonify(error=f"{selected_team.name}: {venue_error}"), 400
+
             if home_db.id == away_db.id:
                 return jsonify({"error": "Please select two different teams"}), 400
 
@@ -298,6 +307,11 @@ def register_match_routes(
 
             home_profile = next((p for p in home_db.profiles if p.format_type == squad_format(_fmt)), None)
             away_profile = next((p for p in away_db.profiles if p.format_type == squad_format(_fmt)), None)
+
+            from engine.captaincy import parse_config, MODEL_VERSION
+            data['captaincy_model_version'] = MODEL_VERSION
+            data['captaincy'] = {side: {'config': parse_config(profile.captaincy_config if profile else None)}
+                                for side, profile in [('home', home_profile), ('away', away_profile)]}
 
             def _resolve_players_for_format(team_obj, profile_obj):
                 # Backward compatibility for legacy teams with players that are not
@@ -431,6 +445,10 @@ def register_match_routes(
             # for the selected format.  If any player was sent from a wrong format
             # squad they will have been silently dropped by enrich_player_list().
             # Reject the request here so a stale/tampered payload never starts a match.
+            for side in ('home', 'away'):
+                xi = data['playing_xi'][side]
+                captain = next((p for p in xi if p.get('is_captain')), xi[0] if xi else {})
+                data['captaincy'][side]['captain'] = {k: captain.get(k) for k in ('id', 'name')}
             home_xi_count = len(data["playing_xi"]["home"])
             away_xi_count = len(data["playing_xi"]["away"])
             if home_xi_count != 11:
@@ -509,7 +527,53 @@ def register_match_routes(
                 "ground_config": _get_gc(current_user.id, _fmt_cfg.name),
                 "weather_forecast": _forecast,
             })
-            if _fmt_cfg.format_family == "multi_day":
+            # Resolve the venue on the server. A client cannot downgrade a
+            # linked team or inject a ready-made engine snapshot.
+            from services.stadiums import current_profile
+            from services.stadium_tuning import playable_stadium, revision_record
+            from engine.stadium_conditions import resolve_conditions
+            import secrets
+            for key in ('conditions_snapshot', 'conditions_model_version', 'stadium_revision'):
+                data.pop(key, None)
+            data['ground_config'].pop('_stadium', None)
+            assigned_stadium = fixture.stadium_id if req_fixture_id else None
+            selected_stadium = assigned_stadium or data.get('stadium_id') or home_db.stadium_id
+            if selected_stadium:
+                if not app.config.get('STADIUM_MATCHES_ENABLED', True):
+                    return jsonify(error='New stadium matches are temporarily disabled.'), 503
+                try:
+                    venue = playable_stadium(selected_stadium, current_user.id, assigned_stadium or home_db.stadium_id)
+                    if venue.current_profile_version == 3 and not app.config.get('STADIUM_V3_ENABLED', True):
+                        return jsonify(error='New stadium tuning is temporarily disabled.'), 503
+                    tuning = revision_record(venue) if venue.current_profile_version == 3 else None
+                    overrides = data.get('condition_overrides') or {}
+                    if not isinstance(overrides, dict):
+                        raise ValueError('Invalid condition overrides.')
+                    snapshot = resolve_conditions(current_profile(venue), venue.id, venue.current_revision,
+                        _fmt_cfg, data['ground_config'],
+                        bool(data.get('is_day_night', False)), overrides, secrets.randbits(64),
+                        forecast=_forecast,
+                        baseline_configs=tuning.baseline_configs if tuning else None,
+                        baseline_provenance=tuning.baseline_provenance if tuning else None)
+                except ValueError as exc:
+                    return jsonify(error=str(exc)), 400
+                data.update(stadium_id=venue.id, stadium_revision=venue.current_revision,
+                    stadium=snapshot['name'], pitch=snapshot['pitch'],
+                    conditions_model_version=snapshot['conditions_model_version'], conditions_snapshot=snapshot,
+                    weather_forecast=snapshot['forecast'])
+                data['ground_config'] = copy.deepcopy(snapshot['ground_config'])
+                data['ground_config']['_stadium'] = snapshot
+                if 'weather_script' in snapshot:
+                    data['weather_script'] = snapshot['weather_script']
+                if 'fc_weather_script' in snapshot:
+                    data['fc_weather_script'] = snapshot['fc_weather_script']
+            else:
+                data['stadium_id'] = None
+                data['conditions_model_version'] = 'legacy'
+                data['stadium'] = home_db.home_ground
+            if selected_stadium:
+                pass  # Both scripts were resolved once with the saved venue seed.
+            elif _fmt_cfg.format_family == "multi_day":
                 # FC's own day-scoped rain model — rolled once here (like
                 # T20/ListA's weather_script below) so a resumed match
                 # replays identically instead of re-rolling on every
@@ -550,6 +614,9 @@ def register_match_routes(
                     }), 409
 
             try:
+                if req_fixture_id and selected_stadium and not assigned_stadium and venue.current_profile_version == 3:
+                    fixture.stadium_id = data['stadium_id']
+                    db.session.commit()
                 with open(path, "w") as f:
                     json.dump(data, f, indent=2)
             except Exception:
@@ -601,6 +668,7 @@ def register_match_routes(
 
         return render_template("match_setup.html",
                                teams=teams,
+                               fixture_stadium_id=fixture.stadium_id if fixture_id else None,
                                preselect_home=preselect_home,
                                preselect_away=preselect_away,
                                tournament_id=tournament_id,
@@ -732,7 +800,7 @@ def register_match_routes(
                 match_data, _path, _err = _load_match_file_for_user(match_id)
                 if match_data:
                     return render_template(
-                        "match_detail.html", match=match_data, resume_mode=True,
+                        "match_detail.html", match=public_match_data(match_data), resume_mode=True,
                         show_support_note=_support_note_due(),
                         **_match_header_meta(match_data))
 
@@ -750,7 +818,7 @@ def register_match_routes(
             return redirect(url_for("view_scoreboard", match_id=match_id))
 
         return render_template(
-            "match_detail.html", match=match_data,
+            "match_detail.html", match=public_match_data(match_data),
             show_support_note=_support_note_due(), **_match_header_meta(match_data))
 
     @app.route("/match/<match_id>/live-state", methods=["GET"])
@@ -815,6 +883,7 @@ def register_match_routes(
                 "super_over": so_state,
                 "match_format": match.data.get("match_format", "T20"),
                 "commentary_log": getattr(match, "commentary_replay_log", []),
+                "captaincy": match.captaincy_status(),
             })
 
         striker = match.current_striker or {}
@@ -871,6 +940,7 @@ def register_match_routes(
             "crr": crr,
             "match_format": match.data.get("match_format", "T20"),
             "commentary_log": getattr(match, "commentary_replay_log", []),
+            "captaincy": match.captaincy_status(),
             # An interval / stumps / innings-end card the client never
             # confirmed seeing — normally because the socket died during the
             # long call that built it. The client replays it before resuming
@@ -1174,6 +1244,9 @@ def register_match_routes(
                 _toss_fmt,
                 match_data.get("pitch"),
                 is_day_night=bool(match_data.get("is_day_night", False)),
+                venue_forecast=(match_data.get("conditions_snapshot") or {}).get("public_forecast"),
+                captaincy_config=(match_data.get("captaincy", {}).get("home" if toss_winner == team_home else "away", {}).get("config")
+                                  if match_data.get("captaincy_model_version") == 1 else None),
             )
 
             match_data["toss_winner"] = toss_winner
@@ -1271,7 +1344,7 @@ def register_match_routes(
             return jsonify({
                 "success": True,
                 "match_id": match_id,
-                "updated_match_data": match_data,
+                "updated_match_data": public_match_data(match_data),
                 "swaps_made": impact_swaps
             }), 200
 

@@ -18,6 +18,8 @@ from tests.test_tours import add_ready_profiles
 @pytest.fixture
 def teams(test_team, test_team_2):
     for team in (test_team, test_team_2):
+        # These fixtures represent pre-stadium teams with text grounds.
+        team.venue_mode = 'legacy'
         add_ready_profiles(team)
     return test_team, test_team_2
 
@@ -118,7 +120,7 @@ def test_stats_nrr_export_identity(authenticated_client, teams, regular_user):
 def test_pages_and_javascript(authenticated_client, teams, tmp_path):
     seed(authenticated_client, teams)
     urls = ['/match/setup','/team/create','/tournaments/create','/tournaments/tours/create',
-            '/statistics?match_format=T10','/ground-conditions?format=T10',
+            '/statistics?match_format=T10','/stadiums/conditions-guide',
             f'/team/{teams[0].id}/squad/T10']
     for i,url in enumerate(urls):
         page = authenticated_client.get(url)
@@ -126,9 +128,6 @@ def test_pages_and_javascript(authenticated_client, teams, tmp_path):
         text = page.get_data(as_text=True)
         (tmp_path / f'page{i}.html').write_text(text)
         assert 'T10' in text
-        if url.startswith('/ground-conditions'):
-            assert 'id="gcPitchGrid"' in text and 'id="pp-boundary"' in text
-            assert 'id="gcModesRow"' in text and 'id="death-wicket"' in text
         scripts = [body for attrs,body in re.findall(r'<script\b([^>]*)>(.*?)</script>',text,re.S)
                    if 'src=' not in attrs and ('type=' not in attrs or 'javascript' in attrs)]
         path = tmp_path / f'page{i}.js';path.write_text('\n'.join(scripts))

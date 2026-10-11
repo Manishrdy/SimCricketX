@@ -1,0 +1,201 @@
+/* Stadium management follows the application's light and dark themes. */
+.stadium-page { max-width: 1120px; margin: auto; padding: 12px 0 32px; color: var(--text-main); }
+.stadium-page nav, .stadium-actions { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.stadium-page nav { margin-bottom: 28px; }
+.stadium-page a { color: var(--brand-primary); }
+.stadium-page h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; margin: 12px 0; }
+.stadium-page h2 { line-height: 1.25; overflow-wrap: anywhere; }
+.stadium-page p { color: var(--text-muted); margin: 12px 0; }
+.stadium-heading { display: flex; justify-content: space-between; gap: 24px; align-items: center; }
+.stadium-heading > div { max-width: 700px; }
+.stadium-help { font-size: .88rem; }
+.stadium-page .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 20px; }
+.stadium-page .card, .stadium-page fieldset { min-width: 0; background: var(--bg-surface); border: 1px solid var(--border-light); border-radius: 14px; padding: 22px; margin: 20px 0; }
+.stadium-catalogue .card { display: flex; flex-direction: column; margin: 0; }
+.stadium-page .card h2 { margin: 4px 0 12px; }
+.stadium-catalogue .stadium-actions { margin-top: auto; padding-top: 20px; font-size: .85rem; }
+.stadium-page .badge { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--brand-primary); }
+.stadium-page label { display: block; margin: 12px 0; }
+.stadium-page input, .stadium-page select, .stadium-page textarea, .stadium-page button { font: inherit; padding: 10px 12px; border: 1px solid var(--border-light); border-radius: 7px; background: var(--bg); color: var(--text-main); max-width: 100%; }
+.stadium-page input, .stadium-page select, .stadium-page textarea { width: 100%; }
+.stadium-page button, .stadium-page .button { display: inline-block; background: var(--brand-primary); color: #fff; cursor: pointer; font-weight: 600; text-decoration: none; padding: 10px 18px; border-radius: 8px; flex-shrink: 0; }
+.stadium-page .button.secondary { background: var(--accent-light); color: var(--brand-primary); }
+.stadium-page button.danger { background: #a52c36; color: #fff; }
+.stadium-page .filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; padding: 16px; border: 1px solid var(--border-light); border-radius: 14px; margin: 24px 0; }
+.stadium-page .filters label { flex: 1; min-width: 140px; }
+.stadium-page .error { padding: 16px; background: #672e2e; border-radius: 8px; color: white; }
+.stadium-page table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.stadium-page td, .stadium-page th { text-align: left; padding: 9px; border-bottom: 1px solid var(--border-light); }
+.stadium-page .table-wrap { overflow: auto; }
+.stadium-page summary { cursor: pointer; color: var(--brand-primary); }
+.stadium-page textarea { min-height: 150px; }
+.stadium-page small { color: var(--text-muted); }
+.stadium-page :focus-visible { outline: 3px solid var(--brand-primary); outline-offset: 3px; }
+.stadium-page #stadium-editor { scroll-margin-top: 90px; }
+@media (max-width: 600px) { .stadium-heading { align-items: flex-start; flex-direction: column; } .stadium-page .card, .stadium-page fieldset { padding: 16px; } }
+
+/* Catalogue: an illustrated ground collection, scoped away from the editor. */
+.stadium-explorer { --grounds-ink: #165e50; --grounds-soft: #eef6f2; --grounds-muted: #526861; max-width: 1180px; }
+[data-theme="dark"] .stadium-explorer { --grounds-ink: #9cddc8; --grounds-soft: #243b34; --grounds-muted: #a5b8b0; }
+.stadium-explorer .stadium-breadcrumb { margin: 0 0 22px; gap: 12px; color: var(--text-muted, var(--fg-secondary)); font-size: .78rem; }
+.stadium-explorer .stadium-breadcrumb a { color: var(--text-main, var(--fg)); }
+.stadium-explorer .grounds-hero { position: relative; overflow: hidden; display: grid; grid-template-columns: 1.2fr 1fr; border-radius: 20px; background: #102e27; color: #f3faf5; }
+.stadium-explorer .grounds-hero-copy { padding: 42px 0 34px 42px; z-index: 1; }
+.stadium-explorer .grounds-eyebrow { font: 500 .65rem var(--font-mono); letter-spacing: .15em; color: var(--grounds-ink); }
+.stadium-explorer .grounds-hero .grounds-eyebrow { color: #a1d7ba; display: flex; gap: 10px; align-items: center; }
+.stadium-explorer h1 { margin: 16px 0; font-size: clamp(2.2rem, 4.8vw, 3.8rem); letter-spacing: -.055em; line-height: 1.07; color: #f3faf5; }
+.stadium-explorer .grounds-hero-copy p { max-width: 430px; color: #bed0c7; font-size: .93rem; line-height: 1.7; margin: 0 0 24px; }
+.stadium-explorer .grounds-hero .button { display: inline-flex; gap: 9px; align-items: center; color: #153a2d; background: #d4edb3; font-size: .83rem; padding: 12px 18px; border-radius: 7px; }
+.stadium-explorer .grounds-hero-art { display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 16px 20px 16px 0; color: #b5e3a4; background: radial-gradient(ellipse at center, #2f534133, transparent 70%); }
+.grounds-hero-art svg { width: 100%; transform: rotate(-12deg); }
+.grounds-art-label { font: .6rem var(--font-mono); letter-spacing: .22em; color: #95b5a3; margin-top: 10px; }
+.stadium-explorer .grounds-hero-stats { grid-column: 1 / -1; display: flex; gap: 32px; padding: 18px 42px; background: #ffffff05; border-top: 1px solid #ffffff16; font-size: .72rem; color: #b8cec1; }
+.grounds-hero-stats strong { font: 500 1rem var(--font-mono); color: #e5f4e8; margin-right: 6px; }
+.grounds-collection { margin-top: 36px; }
+.grounds-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.stadium-explorer .grounds-section-heading h2 { margin-top: 6px; font-size: clamp(1.2rem, 3vw, 1.65rem); letter-spacing: -.035em; color: var(--text-main, var(--fg)); }
+.stadium-explorer .grounds-team-link { font-size: .78rem; color: var(--grounds-ink); white-space: nowrap; }
+.stadium-explorer .grounds-tabs { gap: 26px; border-bottom: 1px solid var(--border-light, var(--card-border)); margin-bottom: 18px; }
+.stadium-explorer .grounds-tabs a { display: inline-flex; align-items: center; gap: 8px; padding: 0 0 13px; color: var(--text-muted, var(--fg-secondary)); font-size: .82rem; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.stadium-explorer .grounds-tabs a.is-active { color: var(--grounds-ink); border-bottom-color: var(--grounds-ink); font-weight: 600; }
+.grounds-tabs a span { background: var(--bg-secondary); border-radius: 5px; padding: 1px 6px; font: .65rem var(--font-mono); }
+.stadium-explorer .grounds-search { display: flex; gap: 12px; align-items: center; }
+.grounds-search-field { position: relative; flex: 1; min-width: 0; }
+.grounds-search-field > span { position: absolute; left: 15px; top: 6px; font-size: 1.5rem; color: var(--grounds-muted); }
+.stadium-explorer .grounds-search input { padding-left: 43px; }
+.stadium-explorer .grounds-search input, .stadium-explorer .grounds-search select { height: 46px; border-radius: 8px; background: var(--card-bg); border-color: var(--card-border); color: var(--text-main, var(--fg)); font-size: .82rem; }
+.stadium-explorer .grounds-search button { height: 46px; background: var(--grounds-ink); color: var(--card-bg); border: 0; font-size: .82rem; padding: 0 22px; }
+.stadium-explorer .grounds-reset { font-size: .78rem; color: var(--grounds-ink); text-decoration: underline; text-underline-offset: 3px; }
+.grounds-results { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 14px; font-size: .75rem; }
+.stadium-explorer .grounds-results p { margin: 0; }
+.grounds-results > span { color: var(--text-muted, var(--fg-secondary)); font-size: .7rem; }
+.grounds-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.ground-card { min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--card-border); background: var(--card-bg); border-radius: 12px; overflow: hidden; transition: border-color .18s, box-shadow .18s; }
+.ground-card:hover { border-color: var(--grounds-ink); box-shadow: 0 5px 20px var(--shadow); }
+.ground-card-art { position: relative; height: 148px; overflow: hidden; background: hsl(var(--ground-hue) 24% 94%); color: hsl(var(--ground-hue) 30% 36%); }
+[data-theme="dark"] .ground-card-art { background: hsl(var(--ground-hue) 18% 20%); color: hsl(var(--ground-hue) 30% 67%); }
+.ground-card-art svg { width: 235px; position: absolute; right: -14px; top: -1px; transform: rotate(-13deg); }
+.ground-collection-badge { position: absolute; z-index: 1; left: 18px; top: 16px; border: 1px solid currentColor; border-radius: 4px; padding: 3px 7px; font: .62rem var(--font-mono); letter-spacing: .02em; background: var(--card-bg); }
+.ground-card-body { padding: 20px; display: flex; flex-direction: column; flex: 1; }
+.stadium-explorer .ground-location { font-size: .67rem; margin: 0 0 7px; color: var(--grounds-muted); }
+.ground-location > span { margin-right: 3px; }
+.ground-card h3 { font-size: 1.14rem; line-height: 1.35; margin-bottom: 20px; overflow-wrap: anywhere; }
+.stadium-explorer .ground-card h3 a { color: var(--text-main, var(--fg)); }
+.ground-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: auto; padding: 14px 0; border-top: 1px solid var(--card-border); border-bottom: 1px solid var(--card-border); }
+.ground-facts dt { color: var(--text-muted, var(--fg-secondary)); font-size: .68rem; margin-bottom: 5px; }
+.ground-facts dd { color: var(--text-main, var(--fg)); font: 500 .87rem var(--font-mono); }
+.ground-facts dd span { font-size: .7rem; color: var(--text-muted, var(--fg-secondary)); }
+.stadium-explorer .ground-confidence { margin: 10px 0 16px; font-size: .69rem; color: var(--grounds-muted); }
+.ground-confidence span { float: right; }
+.ground-card-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.stadium-explorer .ground-view-link { color: var(--grounds-ink); font-weight: 600; font-size: .79rem; display: flex; justify-content: space-between; gap: 12px; }
+.stadium-explorer .ground-edit-link { font-size: .72rem; color: var(--grounds-muted); text-decoration: underline; }
+.stadium-explorer .ground-use-link { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding: 10px 12px; border-radius: 6px; background: var(--grounds-soft); color: var(--grounds-ink); font-size: .74rem; }
+.stadium-explorer .grounds-note { display: flex; align-items: flex-start; gap: 10px; margin-top: 26px; color: var(--grounds-muted); padding: 16px 0; border-top: 1px solid var(--card-border); }
+.stadium-explorer .grounds-note p { font-size: .73rem; color: var(--grounds-muted); margin: 0; line-height: 1.7; max-width: 800px; }
+.grounds-empty { grid-column: 1 / -1; text-align: center; padding: 28px 24px 40px; border: 1px dashed var(--card-border); border-radius: 12px; background: var(--card-bg); }
+.grounds-empty svg { width: 160px; margin: 0 auto 10px; color: var(--grounds-ink); }
+.stadium-explorer .grounds-empty p { font-size: .85rem; margin: 10px auto 20px; max-width: 440px; }
+.stadium-explorer .grounds-empty .button { background: var(--grounds-ink); color: var(--card-bg); font-size: .8rem; }
+.grounds-empty .grounds-reset { display: inline-block; margin: 12px; }
+@media (max-width: 950px) { .grounds-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stadium-explorer .grounds-hero-copy { padding-left: 28px; } .stadium-explorer .grounds-hero-stats { padding-inline: 28px; } }
+@media (max-width: 600px) {
+  .stadium-explorer .grounds-hero { grid-template-columns: 1fr; border-radius: 14px; }
+  .stadium-explorer .grounds-hero-copy { padding: 28px 24px 24px; }
+  .stadium-explorer h1 { font-size: 2.6rem; }
+  .stadium-explorer .grounds-hero-copy p { font-size: .83rem; }
+  .stadium-explorer .grounds-hero-art { position: absolute; width: 150px; right: -42px; top: -6px; opacity: .18; padding: 0; pointer-events: none; }
+  .grounds-art-label { display: none; }
+  .stadium-explorer .grounds-hero-stats { padding: 15px 24px; gap: 16px; justify-content: space-between; }
+  .grounds-hero-stats span { font-size: .58rem; }
+  .grounds-hero-stats strong { display: block; margin-bottom: 3px; }
+  .grounds-section-heading { align-items: flex-start; }
+  .grounds-section-heading > div { flex: 1; }
+  .stadium-explorer .grounds-team-link { font-size: .66rem; margin-top: 24px; }
+  .stadium-explorer .grounds-tabs { gap: 16px; flex-wrap: nowrap; }
+  .stadium-explorer .grounds-tabs a { font-size: .67rem; gap: 5px; }
+  .grounds-tabs a span { font-size: .56rem; }
+  .stadium-explorer .grounds-search { flex-wrap: wrap; gap: 10px; }
+  .grounds-search-field { flex-basis: 100%; }
+  .grounds-results > span { display: none; }
+  .grounds-grid { grid-template-columns: 1fr; gap: 16px; }
+  .ground-card-art { height: 130px; }
+  .ground-card-body { padding: 18px; }
+  .ground-card h3 { margin-bottom: 16px; }
+}
+.ground-use-link::after { content: '→'; }
+
+/* Stadium profile and creation studio. */
+.stadium-profile .venue-hero h1 { font-size: clamp(2rem, 4vw, 3.2rem); overflow-wrap: anywhere; }
+.stadium-profile .venue-hero .grounds-hero-copy { padding: 36px 0 32px 36px; }
+.stadium-profile .venue-copy { color: #c2dfcd; font-size: .78rem; }
+.stadium-profile .venue-hero .grounds-hero-art svg { max-width: 360px; }
+.venue-overview-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 22px; align-items: start; }
+.stadium-profile .venue-panel { min-width: 0; background: var(--card-bg); border: 1px solid var(--border-light); border-radius: 14px; padding: 26px; margin-bottom: 22px; }
+.venue-preparations { display: grid; gap: 2px; }
+.venue-format { display: grid; grid-template-columns: 95px 1fr; gap: 16px; padding: 15px 0; border-top: 1px solid var(--border-light); }
+.venue-format h3 { font-size: .8rem; padding-top: 2px; }
+.stadium-profile .venue-footnote { font-size: .72rem; margin-bottom: 0; }
+.venue-boundary-art { position: relative; background: var(--grounds-soft); color: var(--grounds-ink); border-radius: 9px; padding: 0 26px 12px; text-align: center; }
+.venue-boundary-art svg { width: 260px; margin: auto; }
+.venue-boundary-art > span { display: block; font: .6rem var(--font-mono); color: var(--grounds-muted); }
+.venue-dimensions { margin-top: 12px; }
+.venue-dimensions > div { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 1px solid var(--border-light); padding: 12px 0; }
+.venue-dimensions dt { font-size: .8rem; }
+.venue-dimensions dd { text-align: right; }
+.venue-dimensions dd strong { display: block; font: 500 .86rem var(--font-mono); }
+.venue-dimensions dd span { font-size: .65rem; color: var(--text-muted); }
+.venue-outfield { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
+.venue-outfield span { display: block; color: var(--text-muted); font-size: .72rem; }
+.venue-outfield strong { font: 500 1rem var(--font-mono); }
+.stadium-profile #stadium-editor { min-width: 0; margin: 28px 0 22px; padding: 28px; border: 1px solid var(--border-light); border-radius: 14px; background: var(--card-bg); }
+.stadium-profile .stadium-editor-heading { margin-bottom: 22px; }
+.stadium-profile .stadium-editor-heading h2 { margin: 0; font-size: 1.3rem; }
+.stadium-profile .stadium-editor-heading p { margin: 6px 0 0; font-size: .8rem; }
+.stadium-profile #stadium-editor label { min-width: 0; margin: 0; font-size: .8rem; font-weight: 500; }
+.stadium-profile #stadium-editor input, .stadium-profile #stadium-editor select { display: block; box-sizing: border-box; width: 100%; min-width: 0; height: 44px; margin-top: 8px; background: var(--bg-surface); }
+.stadium-profile #stadium-editor small { display: block; margin-top: 7px; font-size: .72rem; font-weight: 400; line-height: 1.5; }
+.stadium-profile #stadium-editor .stadium-editor-group { min-inline-size: 0; margin: 24px 0 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.stadium-profile #stadium-editor .stadium-editor-group legend { width: 100%; margin-bottom: 14px; padding: 0; font-size: .9rem; font-weight: 600; color: var(--text-main); }
+.stadium-profile .stadium-editor-grid { display: grid; gap: 18px 20px; }
+.stadium-profile .stadium-pitch-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.stadium-profile .stadium-boundary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.stadium-profile .stadium-environment-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.stadium-profile .stadium-editor-actions { display: flex; margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--border-light); }
+@media (max-width: 900px) {
+  .stadium-profile .stadium-pitch-grid, .stadium-profile .stadium-boundary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.stadium-profile .venue-retire { padding: 22px; border: 1px solid var(--border-light); border-radius: 12px; }
+.stadium-profile .venue-retire p { font-size: .8rem; }
+.stadium-profile .venue-notice { padding: 14px 18px; border-radius: 8px; background: var(--grounds-soft); color: var(--grounds-ink); font-size: .85rem; }
+.stadium-profile section[id], .stadium-profile form[id] { scroll-margin-top: 95px; }
+@media (max-width: 760px) { .venue-overview-grid { grid-template-columns: 1fr; gap: 0; } }
+@media (max-width: 600px) {
+  .stadium-profile .venue-hero .grounds-hero-copy { padding: 28px 24px; }
+  .stadium-profile .venue-hero h1 { font-size: 2.2rem; }
+  .stadium-profile .venue-hero-stats { gap: 12px; }
+  .stadium-profile .venue-panel { padding: 20px; }
+  .venue-format { grid-template-columns: 80px 1fr; gap: 12px; }
+  .stadium-profile #stadium-editor { padding: 20px; }
+  .stadium-profile .stadium-pitch-grid, .stadium-profile .stadium-boundary-grid, .stadium-profile .stadium-environment-grid { grid-template-columns: minmax(0, 1fr); }
+  .stadium-profile .stadium-editor-grid { gap: 16px; }
+  .stadium-profile .stadium-editor-actions button { width: 100%; }
+}
+.stadium-explorer .grounds-update-status:not(.sr-only) { padding: 12px 16px; border: 1px solid var(--border-light); border-radius: 8px; background: var(--grounds-soft); color: var(--grounds-ink); font-size: .8rem; }
+
+.stadium-tuning { margin-top: 1.5rem; }
+.stadium-tuning > label { display:block; max-width:24rem; }
+.stadium-tuning select, .stadium-tuning input[type=number] { width:100%; min-height:44px; box-sizing:border-box; }
+.stadium-tuning input[type=range] { width:100%; min-height:44px; }
+.stadium-tuning output { display:block; font-variant-numeric:tabular-nums; }
+.tuning-phase { padding-block:.75rem; border-top:1px solid var(--border-color, #8885); }
+.tuning-phase h3 small { display:block; font-size:.85rem; font-weight:400; }
+.tuning-phase details { margin-top:.75rem; }
+.tuning-phase summary { cursor:pointer; min-height:32px; }
+.tuning-phase details > div { margin-top:.75rem; }
+.stadium-tuning [hidden] { display:none !important; }
+
+.ground-add-form { margin: 0; }
+.stadium-explorer button.ground-use-link { width: 100%; border: 0; cursor: pointer; font: inherit; font-size: .74rem; text-align: left; }
+.stadium-explorer button.ground-use-link:disabled { cursor: default; opacity: .75; }
+.ground-add-status:not(.sr-only) { font-size: .8rem; margin: 8px 0 0; }

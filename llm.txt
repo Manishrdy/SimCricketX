@@ -7,7 +7,7 @@ Website: https://simcricketx.app/
 ## Public pages
 - [Welcome](https://simcricketx.app/): formats, modes and competitions.
 - [About](https://simcricketx.app/about): detailed capabilities.
-- [Ground conditions guide](https://simcricketx.app/ground-conditions/guide): simulation settings.
+- [Stadium conditions guide](https://simcricketx.app/stadiums/conditions-guide): simulation settings.
 - [Register](https://simcricketx.app/register): create an account.
 - [Login](https://simcricketx.app/login): access an existing account.
 
@@ -35,7 +35,7 @@ League-to-semi-final and IPL-style structures require at least four teams. Custo
 Create custom teams, manage format-specific squads, select playing XIs and batting orders, and build a player pool. Import players with CSV or JSON and customize player ratings. The Hundred uses your T20 squad.
 
 ### Conditions that change the contest
-Configure ground conditions by format. Pitch profiles, scoring probabilities and phase effects shape the simulation. Where supported, choose Auto or pin Natural Game, Aggressive, Defensive, Flat Track Bully or Bowler’s Day.
+Configure conditions inside private stadiums, independently by format. Pitch/skill blending, scoring, pace/spin favour, wicket adjustments and limited-overs phase effects shape future matches. Official venues are templates for private copies; existing setups and saved matches remain preserved.
 
 ### Ball-by-ball simulation
 Follow text commentary and scorecards as deliveries resolve through a probabilistic engine. Player attributes, matchups, pitch and match state influence outcomes. Results are simulations, not predictions of real matches.

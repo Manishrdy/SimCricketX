@@ -1,13 +1,16 @@
 """Accepted zero factors survive storage, merging and rendering in each format."""
-import json
-import re
-
 import pytest
 from engine.ground_config import get_defaults, get_effective_config
 
 
 @pytest.mark.parametrize('fmt', ['T20', 'ListA', 'FC'])
-def test_zero_factors_save_and_reload(authenticated_client, regular_user, fmt):
+def test_zero_factors_preserved_in_stadium_baseline(app, fmt):
+    from scripts.dev_test_accounts import seed, logged_in_client, ACCOUNTS
+    from database import db
+    from database.models import UserGroundConfig, StadiumRevisionV3
+    from services.stadiums import neutral_profile
+    seed(app)
+    client = logged_in_client(app, 'user1')
     config = get_defaults(fmt, mutable=True)
     profile = config['pitch_profiles']['Hard']
     profile['run_factor'] = 0
@@ -41,21 +44,17 @@ def test_zero_factors_save_and_reload(authenticated_client, regular_user, fmt):
         for key in keys[:-1]:
             target = target.setdefault(key, {})
         target[keys[-1]] = 0
-    response = authenticated_client.post('/ground-conditions/save', json={**config, 'match_format': fmt})
-    assert response.status_code == 200, response.get_json()
-    response = authenticated_client.get('/ground-conditions', query_string={'format': fmt})
-    assert response.status_code == 200
-    html = response.get_data(as_text=True)
-    rendered = json.loads(re.search(r'<script[^>]*id="gc-config-data"[^>]*>(.*?)</script>', html, re.S).group(1))
-    for saved in [rendered, get_effective_config(regular_user.id, fmt)]:
+    # Historical configurations stay readable even though the editor has retired.
+    db.session.add(UserGroundConfig(user_id=ACCOUNTS['user1']['email'], match_format=fmt, config_json=config))
+    db.session.commit()
+    response = client.post('/api/stadiums', json=neutral_profile())
+    assert response.status_code == 201
+    baseline = db.session.get(StadiumRevisionV3, (response.json['id'], 1)).baseline_configs[fmt]
+    for saved in [baseline, get_effective_config(ACCOUNTS['user1']['email'], fmt)]:
         for keys in zero_paths:
             value = saved
             for key in keys:
                 value = value[key]
             assert value == 0, keys
-    # The visible run-factor control can represent the accepted value too.
-    control_class = {'T20': 'gc-rf-range', 'FC': 'gc-fc-factor-input'}.get(fmt)
-    if control_class:
-        inputs = re.findall(r'<input[^>]*class="' + control_class + r'"[^>]*>', html)
-        assert inputs
-        assert all('min="0"' in field for field in inputs)
+    assert client.post('/ground-conditions/reset', json={'match_format':fmt}).status_code == 410
+    assert db.session.get(StadiumRevisionV3, (response.json['id'],1)).baseline_configs[fmt] == baseline

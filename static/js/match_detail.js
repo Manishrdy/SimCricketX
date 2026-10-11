@@ -782,6 +782,7 @@ function showDecisionModal(data) {
         const card = document.createElement('button');
         card.type = 'button';
         card.className = 'decision-option';
+        if (opt.recommended) card.setAttribute('aria-label', opt.name + ', captain recommendation');
         if (isFcChoice) {
             card.innerHTML = `<span><strong>${escapeHtml(opt.label)}</strong></span>`;
         } else {
@@ -793,7 +794,7 @@ function showDecisionModal(data) {
                   (opt.overs_remaining !== undefined ? ` | ${opt.overs_remaining * (IS_HUNDRED_MATCH ? 5 : 1)} ${IS_HUNDRED_MATCH ? 'balls' : 'ov'} left` : '')
                 : `${opt.role || ''} | Bat ${opt.batting_rating || 0}`;
             card.innerHTML = `
-                <span><strong>${opt.continue_bowler ? "Continue for five more balls: " : ""}${escapeHtml(opt.name)}</strong></span>
+                <span><strong>${opt.continue_bowler ? "Continue for five more balls: " : ""}${escapeHtml(opt.name) + (opt.recommended ? ' · Captain recommends' : '')}</strong></span>
                 <span class="decision-meta">${escapeHtml(meta)}</span>
             `;
         }

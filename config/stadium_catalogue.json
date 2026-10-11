@@ -1,0 +1,338 @@
+[
+  {
+    "slug": "wankhede",
+    "profile": {
+      "name": "Wankhede Stadium",
+      "pitch_defaults": {
+        "T20": "Flat",
+        "T10": "Flat",
+        "ListA": "Flat",
+        "FC": "Flat",
+        "Hundred": "Flat"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 68,
+        "straight_b": 68,
+        "square_a": 64,
+        "square_b": 64
+      },
+      "average_temperature_c": 27.0
+    }
+  },
+  {
+    "slug": "eden-gardens",
+    "profile": {
+      "name": "Eden Gardens",
+      "pitch_defaults": {
+        "T20": "Hard",
+        "T10": "Hard",
+        "ListA": "Hard",
+        "FC": "Hard",
+        "Hundred": "Hard"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 72,
+        "straight_b": 72,
+        "square_a": 67,
+        "square_b": 67
+      },
+      "average_temperature_c": 26.0
+    }
+  },
+  {
+    "slug": "chepauk",
+    "profile": {
+      "name": "M. A. Chidambaram Stadium",
+      "pitch_defaults": {
+        "T20": "Dry",
+        "T10": "Dry",
+        "ListA": "Dry",
+        "FC": "Dry",
+        "Hundred": "Dry"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 70,
+        "straight_b": 70,
+        "square_a": 66,
+        "square_b": 66
+      },
+      "average_temperature_c": 28.0
+    }
+  },
+  {
+    "slug": "chinnaswamy",
+    "profile": {
+      "name": "M. Chinnaswamy Stadium",
+      "pitch_defaults": {
+        "T20": "Flat",
+        "T10": "Flat",
+        "ListA": "Flat",
+        "FC": "Flat",
+        "Hundred": "Flat"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 65,
+        "straight_b": 65,
+        "square_a": 60,
+        "square_b": 60
+      },
+      "average_temperature_c": 24.0
+    }
+  },
+  {
+    "slug": "lords",
+    "profile": {
+      "name": "Lord's",
+      "pitch_defaults": {
+        "T20": "Green",
+        "T10": "Green",
+        "ListA": "Green",
+        "FC": "Green",
+        "Hundred": "Green"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 73,
+        "straight_b": 73,
+        "square_a": 68,
+        "square_b": 68
+      },
+      "average_temperature_c": 11.0
+    }
+  },
+  {
+    "slug": "oval",
+    "profile": {
+      "name": "The Oval",
+      "pitch_defaults": {
+        "T20": "Hard",
+        "T10": "Hard",
+        "ListA": "Hard",
+        "FC": "Hard",
+        "Hundred": "Hard"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 72,
+        "straight_b": 72,
+        "square_a": 69,
+        "square_b": 69
+      },
+      "average_temperature_c": 11.0
+    }
+  },
+  {
+    "slug": "mcg",
+    "profile": {
+      "name": "Melbourne Cricket Ground",
+      "pitch_defaults": {
+        "T20": "Hard",
+        "T10": "Hard",
+        "ListA": "Hard",
+        "FC": "Hard",
+        "Hundred": "Hard"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 78,
+        "straight_b": 78,
+        "square_a": 72,
+        "square_b": 72
+      },
+      "average_temperature_c": 15.0
+    }
+  },
+  {
+    "slug": "scg",
+    "profile": {
+      "name": "Sydney Cricket Ground",
+      "pitch_defaults": {
+        "T20": "Dry",
+        "T10": "Dry",
+        "ListA": "Dry",
+        "FC": "Dry",
+        "Hundred": "Dry"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 72,
+        "straight_b": 72,
+        "square_a": 66,
+        "square_b": 66
+      },
+      "average_temperature_c": 19.0
+    }
+  },
+  {
+    "slug": "basin-reserve",
+    "profile": {
+      "name": "Basin Reserve",
+      "pitch_defaults": {
+        "T20": "Green",
+        "T10": "Green",
+        "ListA": "Green",
+        "FC": "Green",
+        "Hundred": "Green"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 71,
+        "straight_b": 71,
+        "square_a": 66,
+        "square_b": 66
+      },
+      "average_temperature_c": 13.0
+    }
+  },
+  {
+    "slug": "newlands",
+    "profile": {
+      "name": "Newlands",
+      "pitch_defaults": {
+        "T20": "Green",
+        "T10": "Green",
+        "ListA": "Green",
+        "FC": "Green",
+        "Hundred": "Green"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 70,
+        "straight_b": 70,
+        "square_a": 65,
+        "square_b": 65
+      },
+      "average_temperature_c": 18.0
+    }
+  },
+  {
+    "slug": "wanderers",
+    "profile": {
+      "name": "Wanderers",
+      "pitch_defaults": {
+        "T20": "Hard",
+        "T10": "Hard",
+        "ListA": "Hard",
+        "FC": "Hard",
+        "Hundred": "Hard"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 73,
+        "straight_b": 73,
+        "square_a": 67,
+        "square_b": 67
+      },
+      "average_temperature_c": 17.0
+    }
+  },
+  {
+    "slug": "gaddafi",
+    "profile": {
+      "name": "Gaddafi Stadium",
+      "pitch_defaults": {
+        "T20": "Flat",
+        "T10": "Flat",
+        "ListA": "Flat",
+        "FC": "Flat",
+        "Hundred": "Flat"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 73,
+        "straight_b": 73,
+        "square_a": 67,
+        "square_b": 67
+      },
+      "average_temperature_c": 24.0
+    }
+  },
+  {
+    "slug": "galle",
+    "profile": {
+      "name": "Galle International Stadium",
+      "pitch_defaults": {
+        "T20": "Dry",
+        "T10": "Dry",
+        "ListA": "Dry",
+        "FC": "Dry",
+        "Hundred": "Dry"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 70,
+        "straight_b": 70,
+        "square_a": 64,
+        "square_b": 64
+      },
+      "average_temperature_c": 27.0
+    }
+  },
+  {
+    "slug": "shere-bangla",
+    "profile": {
+      "name": "Shere Bangla National Cricket Stadium",
+      "pitch_defaults": {
+        "T20": "Dry",
+        "T10": "Dry",
+        "ListA": "Dry",
+        "FC": "Dry",
+        "Hundred": "Dry"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 70,
+        "straight_b": 70,
+        "square_a": 65,
+        "square_b": 65
+      },
+      "average_temperature_c": 26.0
+    }
+  },
+  {
+    "slug": "dubai",
+    "profile": {
+      "name": "Dubai International Cricket Stadium",
+      "pitch_defaults": {
+        "T20": "Hard",
+        "T10": "Hard",
+        "ListA": "Hard",
+        "FC": "Hard",
+        "Hundred": "Hard"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 75,
+        "straight_b": 75,
+        "square_a": 68,
+        "square_b": 68
+      },
+      "average_temperature_c": 28.0
+    }
+  },
+  {
+    "slug": "kensington-oval",
+    "profile": {
+      "name": "Kensington Oval",
+      "pitch_defaults": {
+        "T20": "Hard",
+        "T10": "Hard",
+        "ListA": "Hard",
+        "FC": "Hard",
+        "Hundred": "Hard"
+      },
+      "outfield_speed": 1.0,
+      "dimensions_m": {
+        "straight_a": 71,
+        "straight_b": 71,
+        "square_a": 66,
+        "square_b": 66
+      },
+      "average_temperature_c": 27.0
+    }
+  }
+]

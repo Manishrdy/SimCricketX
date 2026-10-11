@@ -2552,17 +2552,22 @@ def create_app():
                     if prof.players:
                         profile_squads[prof.format_type] = [_player_dict(p) for p in prof.players]
 
+                from services.stadiums import team_stadium_name
+                from engine.captaincy import parse_config as parse_captaincy
                 team_dict = {
                     "id": t.id,
                     "team_name": t.name,
                     "short_code": t.short_code,
-                    "home_ground": t.home_ground,
+                    "home_ground": team_stadium_name(t),
+                    "stadium_id": t.stadium_id,
+                    "venue_mode": t.venue_mode,
                     "pitch_preference": t.pitch_preference,
                     "team_color": t.team_color,
                     "created_by_email": t.user_id,
                     # Populated by the frontend from profile_squads[format].
                     "players": [],
                     "profile_squads": profile_squads,
+                    'profile_captaincy': {p.format_type: parse_captaincy(p.captaincy_config) for p in t.profiles},
                     # Convenience list for badge rendering in the template.
                     "available_formats": list(profile_squads.keys()),
                 }
@@ -2572,6 +2577,9 @@ def create_app():
             app.logger.error(f"Error loading teams from DB: {e}", exc_info=True)
         return teams
 
+
+    from routes.stadium_routes import register_stadium_routes
+    register_stadium_routes(app)
 
     # --- Team Routes (Phase 3 extraction) ---
     register_team_routes(

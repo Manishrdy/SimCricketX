@@ -850,6 +850,7 @@
                     </div>
                 </div>
 
+                {% include "_captaincy_editor.html" %}
                 <div class="squad-readiness" id="validationBox" aria-live="polite"></div>
                 <div class="sb-feedback" id="feedback"></div>
                 <div class="sb-draft-ts" id="draftTs"></div>
@@ -888,7 +889,10 @@
     var MIN_PLAYERS = {{ SQUAD_MIN_PLAYERS }}, MAX_PLAYERS = {{ SQUAD_MAX_PLAYERS }}, MIN_BOWL = {{ SQUAD_MIN_BOWLING_OPTIONS }}, MIN_WK = {{ SQUAD_MIN_WICKETKEEPERS }};
 
     // Squad state — source of truth before publish
-    var draft = { players: [], captain_name: '', wk_name: '' };
+    var draft = { players: [], captain_name: '', wk_name: '', captaincy_config: {{ captaincy_config|tojson }} };
+    var captaincyEditor = CaptaincyControls.mount(document.getElementById('captaincy-controls'),
+        function () { return draft.captaincy_config; },
+        function (value) { draft.captaincy_config = value; saveDraftToStorage(); });
 
     // Pool lazy-load state
     var pool = { offset: 0, limit: 30, loading: false, hasMore: true, search: '', role: '' };
@@ -900,20 +904,21 @@
 
     // ── Initial squad from server ──────────────────────────────────────────
     var INITIAL_SQUAD = {{ squad_json|safe }};
+    var pendingRestore = null;
 
     // ── Boot ──────────────────────────────────────────────────────────────
     (function boot() {
+        var saved = loadDraftFromStorage();
         if (INITIAL_SQUAD.length > 0) {
             INITIAL_SQUAD.forEach(function (p) { draft.players.push(p); });
             draft.captain_name = (INITIAL_SQUAD.find(function(p){ return p.is_captain; }) || {}).name || '';
             draft.wk_name      = (INITIAL_SQUAD.find(function(p){ return p.is_wicketkeeper; }) || {}).name || '';
             renderSquad();
+        }
+        if (saved && saved.players && saved.players.length > 0) {
+            showRestoreBanner(saved);
+        } else if (INITIAL_SQUAD.length > 0) {
             saveDraftToStorage();
-        } else {
-            var saved = loadDraftFromStorage();
-            if (saved && saved.players && saved.players.length > 0) {
-                showRestoreBanner(saved);
-            }
         }
         fetchPool(true);
         setupDragDrop();
@@ -1429,6 +1434,7 @@
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
             body: JSON.stringify({
                 players:      draft.players,
+                captaincy_config: draft.captaincy_config,
                 captain_name: draft.captain_name,
                 wk_name:      draft.wk_name,
                 is_draft:     false,
@@ -1464,6 +1470,7 @@
         try {
             localStorage.setItem(DRAFT_KEY, JSON.stringify({
                 players:      draft.players,
+                captaincy_config: draft.captaincy_config,
                 captain_name: draft.captain_name,
                 wk_name:      draft.wk_name,
                 saved_at:     new Date().toISOString(),
@@ -1504,8 +1511,6 @@
     };
 
     // ── Restore banner ─────────────────────────────────────────────────────
-    var pendingRestore = null;
-
     function showRestoreBanner(saved) {
         pendingRestore = saved;
         var d = new Date(saved.saved_at);
@@ -1520,6 +1525,8 @@
         draft.players      = pendingRestore.players || [];
         draft.captain_name = pendingRestore.captain_name || '';
         draft.wk_name      = pendingRestore.wk_name || '';
+        draft.captaincy_config = CaptaincyControls.normalize(pendingRestore.captaincy_config || draft.captaincy_config);
+        captaincyEditor.render();
         pendingRestore = null;
         document.getElementById('restoreBanner').style.display = 'none';
         renderSquad();

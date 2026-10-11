@@ -1,9 +1,10 @@
 {% extends "layout.html" %}
 
-{% block title %}Create Team | SimCricketX{% endblock %}
+{% block title %}{{ 'Edit Team' if edit else 'Create Team' }} | SimCricketX{% endblock %}
 
 {% block extra_css %}
 <style>
+.tc-field[hidden] { display: none !important; }
 /* Classic theme-aligned single-page team builder */
 :root {
     --tc-accent: var(--accent);
@@ -246,14 +247,12 @@
 .tc-builder {
     margin-top: 1rem;
     display: grid;
-    /* Pool leans wider than the roster: its rows are pure identity, so the
-       extra width goes to names, while the roster's narrower column still
-       clears its order number, actions and FC rating strip. */
-    grid-template-columns: 1.18fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1rem;
 }
 @media (max-width: 900px) {
-    .tc-builder { grid-template-columns: 1fr; }
+    .tc-builder { grid-template-columns: 1fr; grid-template-rows: none; row-gap: 1rem; }
+  .tc-builder > .tc-panel { grid-row: auto; grid-template-rows: auto 340px; }
 }
 .tc-panel {
     border: 1px solid var(--tc-panel-border);
@@ -927,20 +926,26 @@
 .tc-next-step { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--tc-panel-border); font-size: .85rem; color: var(--fg); }
 .tc-next-step p { margin: 4px 0 0; color: var(--fg-secondary); font-size: .76rem; }
 .tc-next-step button { flex-shrink: 0; }
-.tc-builder { grid-template-columns: 1fr 1.1fr; align-items: start; }
+/* Share the header and list rows so both panels align even when squad-copy
+   controls are visible, or header text wraps. */
+.tc-builder { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto 440px; align-items: stretch; row-gap: 0; }
+.tc-builder > .tc-panel { display: grid; grid-template-rows: subgrid; grid-row: span 2; }
 .tc-panel { min-height: 0; max-height: none; }
 .tc-panel-head { padding: 16px; }
 .tc-panel-title { font-size: .95rem; }
-.tc-list { flex: none; height: 440px; min-height: 200px; padding: 10px; }
+.tc-list { flex: none; height: 100%; min-height: 0; padding: 10px; box-sizing: border-box; }
 .tc-player { padding: 9px 10px; margin-bottom: 6px; }
 .tc-player-actions button { min-height: 32px; min-width: 32px; }
 .tc-counter { padding: 10px 16px; font-size: .76rem; }
+.tc-roster-head .tc-copy-bar { padding: .7rem 0 0; }
+.tc-roster-head .tc-counter { padding: 10px 0 0; border-bottom: 0; }
 .tc-leaders { background: var(--tc-input-bg); }
 .tc-actions { gap: 16px; }
 @media (max-width: 900px) {
-  .tc-builder { grid-template-columns: 1fr; }
+  .tc-builder { grid-template-columns: 1fr; grid-template-rows: none; row-gap: 1rem; }
+  .tc-builder > .tc-panel { grid-row: auto; grid-template-rows: auto 340px; }
   .tc-workspace-heading { align-items: start; flex-direction: column; gap: 8px; }
-  .tc-list { height: 340px; }
+  .tc-list { height: 100%; }
 }
 @media (max-width: 520px) {
   .tc-readiness { padding: 14px; }
@@ -949,6 +954,14 @@
   .tc-readiness-checks { gap: 8px 12px; }
 }
 
+
+.tc-stadium-card { padding: 22px; border: 1px solid var(--tc-panel-border); border-radius: 14px; background: var(--tc-accent-soft); display: grid; gap: 14px; min-width: 0; }
+.tc-stadium-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.tc-stadium-heading h2 { margin: 4px 0 0; font-size: 20px; }
+.tc-stadium-heading .tc-btn { text-decoration: none; }
+.tc-stadium-card p { margin: 0; }
+.tc-stadium-summary { padding: 14px 16px; border-radius: 10px; background: var(--tc-panel); color: var(--fg); font-size: 14px; line-height: 1.6; }
+@media (max-width: 600px) { .tc-stadium-card { padding: 16px; } .tc-stadium-heading .tc-btn { width: 100%; } }
 </style>
 {% endblock %}
 
@@ -988,6 +1001,7 @@
       "identity": {
         "team_name": team.team_name,
         "short_code": team.short_code,
+        "stadium_id": team.stadium_id,
         "home_ground": team.home_ground,
         "pitch_preference": team.pitch_preference,
         "team_color": team.team_color,
@@ -1022,12 +1036,34 @@
           <span class="tc-hint">2–5 letters or digits</span>
         </div>
         <div class="tc-field">
-          <label for="tc-ground">Home Ground</label>
-          <input id="tc-ground" name="home_ground" class="tc-input" required maxlength="80" placeholder="e.g. Wankhede Stadium">
+          <label>Team Color</label>
+          <label class="tc-color-wrap" for="tc-color">
+            <span id="tc-color-swatch" class="tc-color-swatch"></span>
+            <span>Pick brand color</span>
+            <input id="tc-color" type="color" name="team_color" value="#4f46e5" required>
+          </label>
         </div>
-        <div class="tc-field">
+        {% set legacy_venue = edit and team.venue_mode == 'legacy' %}
+        <div class="tc-stadium-card" style="grid-column:1/-1">
+          <div class="tc-stadium-heading"><div><span class="tc-eyebrow">Home venue</span><h2>Choose your stadium</h2></div><a class="tc-btn" href="{{ url_for('stadiums') }}" target="_blank" rel="noopener">Browse stadiums ↗</a></div>
+          <p class="tc-hint" id="tc-stadium-help">Choose from your stadiums with format-specific pitches and conditions. Need a new venue? Go to Stadiums, create or adopt one, then return to Edit Team to add it.</p>
+          <div class="tc-field">
+            <label for="tc-stadium">Home stadium</label>
+            <select id="tc-stadium" name="stadium_id" class="tc-select" aria-describedby="tc-stadium-help tc-stadium-summary" {% if not legacy_venue %}required{% endif %}>
+              <option value="">{{ 'Keep existing ground: ' ~ team.home_ground if legacy_venue else 'Select from My stadiums' }}</option>
+              {% for stadium in stadium_choices(existing_id=team.stadium_id if edit else none) %}<option value="{{ stadium.id }}" data-name="{{ stadium.name }}" data-pitch="{{ stadium.pitch_defaults.T20 }}" {% if (request.form.get('stadium_id', '') if request.method == 'POST' else (team.stadium_id if edit else request.args.get('stadium_id', ''))) == stadium.id %}selected{% endif %}>{{ stadium.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="tc-stadium-summary" id="tc-stadium-summary" role="status"></div>
+          <span class="tc-hint">Your stadium selection is saved with the team. Existing matches keep their original conditions.</span>
+        </div>
+        <div class="tc-field" hidden>
+          <label for="tc-ground">Home Ground</label>
+          <input id="tc-ground" name="home_ground" class="tc-input" readonly maxlength="100">
+        </div>
+        <div class="tc-field" hidden>
           <label for="tc-pitch">Pitch Preference</label>
-          <select id="tc-pitch" name="pitch_preference" class="tc-select" required>
+          <select id="tc-pitch" name="pitch_preference" class="tc-select" disabled>
             <option value="">Select surface</option>
             <option>Green</option>
             <option>Flat</option>
@@ -1035,14 +1071,6 @@
             <option>Hard</option>
             <option>Dead</option>
           </select>
-        </div>
-        <div class="tc-field">
-          <label>Team Color</label>
-          <label class="tc-color-wrap" for="tc-color">
-            <span id="tc-color-swatch" class="tc-color-swatch"></span>
-            <span>Pick brand color</span>
-            <input id="tc-color" type="color" name="team_color" value="#4f46e5" required>
-          </label>
         </div>
       </div>
     </section>
@@ -1086,9 +1114,6 @@
         <div class="tc-panel-head tc-roster-head">
           <div class="tc-panel-title">Selected players</div>
           <div class="tc-panel-sub">Drag or use the arrows to set the batting order.</div>
-
-
-        </div>
         <div id="tc-copy-bar" class="tc-copy-bar" hidden>
           <button type="button" id="tc-copy-btn" class="tc-copy-btn">
             <i class="fa-solid fa-copy"></i>
@@ -1096,7 +1121,17 @@
           </button>
         </div>
         <div id="tc-roster-counter" class="tc-counter"></div>
+        </div>
         <div id="tc-roster-list" class="tc-list" role="listbox" aria-label="Team roster"></div>
+
+      </section>
+    </div>
+
+    <section class="tc-leadership" aria-label="Leadership and captaincy">
+      <div class="tc-leadership-people">
+        <span class="tc-eyebrow">Lead the squad</span>
+        <h2>Leadership</h2>
+        <p>Choose who leads your players, then shape how the team approaches a match.</p>
         <div class="tc-leaders">
           <div class="tc-field">
             <label for="tc-captain">Captain</label>
@@ -1111,8 +1146,11 @@
             </select>
           </div>
         </div>
-      </section>
-    </div>
+
+        <p class="tc-leadership-note">Captaincy settings belong to this format and stay with the team when you change captains.</p>
+      </div>
+      {% include "_captaincy_editor.html" %}
+    </section>
 
     </section>
 
@@ -1196,6 +1234,7 @@
     identity: {
       team_name: '',
       short_code: '',
+      stadium_id: '',
       home_ground: '',
       pitch_preference: '',
       team_color: '#4f46e5',
@@ -1831,7 +1870,7 @@
 
     // Deep-copy so future edits to either format stay independent.
     state.rosters[tgt] = srcRoster.map(p => ({ ...p }));
-    state.leaders[tgt] = { ...state.leaders[src] };
+    state.leaders[tgt] = JSON.parse(JSON.stringify(state.leaders[src]));
 
     renderPool();
     renderRoster();
@@ -1843,7 +1882,15 @@
   });
 
   // ── Leaders (captain / WK) ───────────────────────────────────────────
+  let captaincyEditor = null;
   function renderLeaders() {
+    if (!captaincyEditor) {
+      captaincyEditor = CaptaincyControls.mount($('captaincy-controls'),
+        () => state.leaders[state.activeFmt].captaincy_config,
+        value => { state.leaders[state.activeFmt].captaincy_config = value; scheduleAutoSave(); },
+        { layout: 'studio', getFormat: () => state.activeFmt === 'ListA' ? 'List A' : state.activeFmt === 'FC' ? 'First Class' : state.activeFmt === 'T20' ? 'T20 / Hundred' : state.activeFmt });
+    }
+    captaincyEditor.render();
     const list = state.rosters[state.activeFmt];
     const leaders = state.leaders[state.activeFmt];
 
@@ -1897,6 +1944,10 @@
 
   // ── Identity inputs ──────────────────────────────────────────────────
   function bindIdentity() {
+    document.getElementById('tc-stadium').addEventListener('change', () => {
+      state.identity.stadium_id = document.getElementById('tc-stadium').value;
+      updateValidation(); scheduleAutoSave();
+    });
     nameInput.addEventListener('input', () => {
       state.identity.team_name = nameInput.value;
       updateValidation();
@@ -2134,7 +2185,8 @@
       VALID_FORMATS.forEach(fmt => {
         const profile = profiles[fmt] || {};
         restored.rosters[fmt] = profile.players || [];
-        restored.leaders[fmt] = { captain: profile.captain || '', wicketkeeper: profile.wicketkeeper || '' };
+        restored.leaders[fmt] = { captain: profile.captain || '', wicketkeeper: profile.wicketkeeper || '',
+          captaincy_config: CaptaincyControls.normalize(profile.captaincy_config) };
       });
       return loadDraft(JSON.stringify(restored));
     } catch (_) { return false; }
@@ -2145,6 +2197,8 @@
     state.identity = {
       team_name: id.team_name || '',
       short_code: id.short_code || '',
+      stadium_id: id.stadium_id || '',
+
       home_ground: id.home_ground || '',
       pitch_preference: id.pitch_preference || '',
       team_color: id.team_color || '#4f46e5',
@@ -2156,6 +2210,7 @@
       const p = profiles[fmt];
       state.rosters[fmt] = Array.isArray(p && p.players) ? p.players.slice() : [];
       state.leaders[fmt] = {
+        captaincy_config: CaptaincyControls.normalize(p && p.captaincy_config),
         captain: (p && p.captain) || '',
         wicketkeeper: (p && p.wicketkeeper) || '',
       };
@@ -2168,8 +2223,11 @@
 
     nameInput.value = state.identity.team_name;
     shortInput.value = state.identity.short_code;
+    document.getElementById('tc-stadium').value = state.identity.stadium_id || document.getElementById('tc-stadium').value;
+
     groundInput.value = state.identity.home_ground;
     pitchSelect.value = state.identity.pitch_preference;
+    document.getElementById('tc-stadium').dispatchEvent(new Event('stadium:refresh'));
     colorInput.value = state.identity.team_color;
     colorSwatch.style.background = state.identity.team_color;
     tabButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-fmt') === state.activeFmt));
@@ -2185,7 +2243,9 @@
       state.identity = {
         team_name: id.team_name || '',
         short_code: id.short_code || '',
-        home_ground: id.home_ground || '',
+        stadium_id: id.stadium_id || '',
+
+      home_ground: id.home_ground || '',
         pitch_preference: id.pitch_preference || '',
         team_color: id.team_color || '#4f46e5',
       };
@@ -2199,8 +2259,11 @@
 
       nameInput.value = state.identity.team_name;
       shortInput.value = state.identity.short_code;
+      document.getElementById('tc-stadium').value = state.identity.stadium_id || document.getElementById('tc-stadium').value;
+
       groundInput.value = state.identity.home_ground;
       pitchSelect.value = state.identity.pitch_preference;
+      document.getElementById('tc-stadium').dispatchEvent(new Event('stadium:refresh'));
       colorInput.value = state.identity.team_color;
       colorSwatch.style.background = state.identity.team_color;
 
@@ -2229,6 +2292,8 @@
     state.activeFmt = 'T20';
     nameInput.value = ''; shortInput.value = ''; groundInput.value = '';
     pitchSelect.value = ''; colorInput.value = '#4f46e5';
+    document.getElementById('tc-stadium').value = '';
+    document.getElementById('tc-stadium').dispatchEvent(new Event('stadium:refresh'));
     colorSwatch.style.background = '#4f46e5';
     tabButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-fmt') === 'T20'));
     renderRoster();
@@ -2275,6 +2340,7 @@
       const list = state.rosters[fmt];
       if (!list.length) return;
       payload[fmt] = {
+        captaincy_config: CaptaincyControls.normalize(state.leaders[fmt].captaincy_config),
         captain: state.leaders[fmt].captain || '',
         wicketkeeper: state.leaders[fmt].wicketkeeper || '',
         players: list,
@@ -2291,7 +2357,7 @@
     saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
     // Persist the final changes even when Submit beats the autosave debounce.
     // Only the successful server redirect may clear this draft.
-    state.identity = { team_name: nameInput.value, short_code: shortInput.value, home_ground: groundInput.value, pitch_preference: pitchSelect.value, team_color: colorInput.value };
+    state.identity = { team_name: nameInput.value, short_code: shortInput.value, stadium_id: document.getElementById('tc-stadium').value, home_ground: groundInput.value, pitch_preference: pitchSelect.value, team_color: colorInput.value };
     $('tc-active-format').value = state.activeFmt;
     saveDraftNow();
   });
@@ -2338,4 +2404,38 @@
   if (!submittedRestored) setSaveStatus(restored ? 'saved' : 'idle');
 })();
 </script>
+
+<script>
+(() => {
+  const select = document.getElementById('tc-stadium');
+  const ground = document.getElementById('tc-ground');
+  const pitch = document.getElementById('tc-pitch');
+  const legacy = {{ (edit and team.venue_mode == 'legacy')|default(false)|tojson }};
+  function sync() {
+    ground.closest('.tc-field').hidden = true;
+    pitch.closest('.tc-field').hidden = true;
+    ground.required = false;
+    pitch.required = false;
+    const option = select.selectedOptions[0];
+    if (select.value && option) {
+      ground.value = option.dataset.name;
+      pitch.value = option.dataset.pitch;
+    } else {
+      ground.value = {{ (team.home_ground if legacy_venue else '')|tojson }};
+      pitch.value = {{ (team.pitch_preference if legacy_venue else '')|tojson }};
+    }
+    document.getElementById('tc-stadium-summary').textContent = select.value && option
+      ? `${option.dataset.name} · T20 default: ${option.dataset.pitch}. Each format uses its own stadium settings.`
+      : legacy ? `Keeping ${ground.value}. Select a stadium above to switch to the new conditions format.`
+      : 'No stadium selected. Create or adopt a venue in Stadiums if your collection is empty.';
+    ground.dispatchEvent(new Event('input', {bubbles:true}));
+    pitch.dispatchEvent(new Event('change', {bubbles:true}));
+  }
+  select.addEventListener('change', sync);
+  select.addEventListener('stadium:refresh', sync);
+  document.getElementById('tc-form').addEventListener('submit', sync, true);
+  sync();
+})();
+</script>
+
 {% endblock %}

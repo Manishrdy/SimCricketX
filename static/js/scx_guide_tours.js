@@ -192,9 +192,9 @@
                 body: `<p>Every player you can pick for your squads. Adjust a player's ratings with your own version, or add custom players of your own.</p>`,
             },
             {
-                target: '[data-guide="ground-conditions"]',
-                title: 'Ground conditions',
-                body: `<p>Fine-tune how each pitch behaves and pick a game mode for each format.</p>
+                target: '[data-guide="stadiums"]',
+                title: 'Stadium conditions',
+                body: `<p>Create a private stadium or add an official template to your collection. Adjust pitch/skill blending, pitch profiles and phases independently for each format.</p>
                        <span class="scxg-tip">Optional. The defaults are already tuned, so you can skip this until you want to experiment.</span>`,
             },
             {
