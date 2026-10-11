@@ -85,7 +85,8 @@ def test_match_snapshot_is_authoritative_and_immutable(app, qa, fmt):
         assert data['captaincy']['home']['captain']['name'] == next(p.name for p in profile.players if p.is_captain)
         page = qa.get(f"/match/{data['match_id']}")
         assert page.status_code == 200
-        assert b'id="captaincy-match"' in page.data
+        # The Captain tactics panel was removed from the match page (UX_TODO, Oct 2026).
+        assert b'id="captaincy-match"' not in page.data
         profile.captaincy_config = default_config()
         db.session.commit()
         assert json.loads(path.read_text())['captaincy']['home']['config'] == config
