@@ -109,6 +109,45 @@ class FormatConfig:
     momentum_window: int = 18
     dot_thresholds: tuple = (2, 4, 6, 8)
     partnership_thresholds: tuple = (25, 50, 75, 100)
+    # (scheduled overs, powerplay overs, death overs, par_scores) captured the
+    # first time a T20/List A innings is reduced, so repeated rain revisions
+    # always scale from the full-length shape rather than from each other.
+    full_length_shape: Optional[tuple] = None
+
+    def revise_reduced_innings(self, overs: int) -> None:
+        """Rebuild T20/List A phases and par for a rain-revised allocation,
+        keeping the full-length proportions; never change the scheduled length."""
+        if self.full_length_shape is None:
+            scheduled_full = self.scheduled_overs or self.overs
+            self.full_length_shape = (
+                scheduled_full,
+                sum(p.end - p.start + 1 for p in self.powerplay_phases),
+                self.death_phase.end - self.death_phase.start + 1,
+                dict(self.par_scores),
+            )
+        scheduled, pp_full, death_full, full_par = self.full_length_shape
+
+        def scaled(full_overs):
+            return (2 * overs * full_overs + scheduled) // (2 * scheduled)
+
+        pp = min(overs, max(1, scaled(pp_full)))
+        death_start = min(overs, max(pp, overs - max(1, scaled(death_full))))
+        self.overs = overs
+        self.powerplay_phases = [Phase(self.powerplay_phases[0].name, 0, pp - 1,
+                                       self.powerplay_phases[0].max_fielders_outside)]
+        self.middle_phase = Phase("Middle", pp, death_start - 1, self.middle_phase.max_fielders_outside)
+        self.death_phase = Phase("Death", death_start, overs - 1, self.death_phase.max_fielders_outside)
+        if overs == scheduled:
+            self.par_scores = dict(full_par)
+            return
+        rr = self.expected_rr
+        pp_key = self.powerplay_phases[0].name
+        full_rr_total = (pp_full * rr[pp_key] + death_full * rr["Death"]
+                         + (scheduled - pp_full - death_full) * rr["Middle"])
+        scale = full_par[scheduled] / full_rr_total
+        self.par_scores = {0: 0.0}
+        for over in range(overs):
+            self.par_scores[over + 1] = self.par_scores[over] + rr[self.phase_key(over)] * scale
 
     def revise_short_innings(self, overs: int) -> None:
         """Rebuild short-format rules; never change the scheduled length."""

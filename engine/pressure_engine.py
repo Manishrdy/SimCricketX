@@ -110,8 +110,9 @@ class PressureEngine:
         _pre_death   = _death_start - 1             # T20: 15, ListA: 39
 
         # ListA: gradual slog-overs window before death (overs 35–39)
-        if self.fmt.name == "ListA" and int(0.7 * (self.fmt.scheduled_overs or 50)) <= current_over < _death_start:
-            slog_boost = 0.05 + (current_over - int(0.7 * (self.fmt.scheduled_overs or 50))) * 0.02  # 0.05 → 0.13
+        _slog_from = int(0.7 * self.fmt.overs)
+        if self.fmt.name == "ListA" and _slog_from <= current_over < _death_start:
+            slog_boost = 0.05 + (current_over - _slog_from) * 0.02  # 0.05 → 0.13
             return min(1.0 + slog_boost, 1.25)
 
         # Only accelerate from the over before death onwards.
