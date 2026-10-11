@@ -4,7 +4,8 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const source=fs.readFileSync(path.join(__dirname,'../../templates/team_create.html'),'utf8');
 function extract(name){const start=source.indexOf(`  function ${name}(`);return source.slice(start,source.indexOf('\n  }',start)+4);}
 function setup(){
- const saved=new Map(),nodes={};const c={IS_EDIT:false,LS_KEY:'team_create_draft_v1',VALID_FORMATS:['T20','ListA','FC'],state:{identity:{team_name:'Latest'},activeFmt:'FC',rosters:{T20:[],ListA:[],FC:[{name:'Keeper',role:'Wicketkeeper'}]},leaders:{FC:{captain:'Keeper',wicketkeeper:'Keeper'}}},saveTimer:1,lastSavedJson:'',clearTimeout(){c.cancelled=true},
+ const CaptaincyControls = require('../../static/js/captaincy.js');
+ const saved=new Map(),nodes={'tc-stadium':{value:'',dispatchEvent(){}}};const c={Event:class Event {constructor(type){this.type=type}},IS_EDIT:false,LS_KEY:'team_create_draft_v1',CaptaincyControls,VALID_FORMATS:['T20','ListA','FC'],state:{identity:{team_name:'Latest'},activeFmt:'FC',rosters:{T20:[],ListA:[],FC:[{name:'Keeper',role:'Wicketkeeper'}]},leaders:{FC:{captain:'Keeper',wicketkeeper:'Keeper'}}},saveTimer:1,lastSavedJson:'',clearTimeout(){c.cancelled=true},
  localStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)},document:{getElementById:id=>nodes[id]},console,
  colorSwatch:{style:{}},tabButtons:[],saveStatus:{},saveStatusLabel:{}};
  for(const key of ['nameInput','shortInput','groundInput','pitchSelect','colorInput'])c[key]={value:''};
@@ -20,9 +21,9 @@ test('final draft snapshot is flushed synchronously before leaving, including la
 });
 test('server-rejected form restores all formats and identity even when storage is denied',()=>{
  const s=setup();s.c.localStorage.getItem=()=>{throw Error('denied')};
- const profiles={T20:{players:[{name:'T20'}],captain:'T20',wicketkeeper:'T20'},FC:{players:[{name:'Second'},{name:'First'}],captain:'First',wicketkeeper:'Second'}};
+ const profiles={T20:{players:[{name:'T20'}],captain:'T20',wicketkeeper:'T20'},FC:{players:[{name:'Second'},{name:'First'}],captain:'First',wicketkeeper:'Second',captaincy_config:{composure:0,batting_aggression:75}}};
  s.nodes['tc-submitted-data']={textContent:JSON.stringify({team_name:"O'Brien XI",short_code:'TEST',home_ground:'Home',pitch_preference:'Flat',team_color:'#123456',active_format:'FC',profiles_payload:JSON.stringify(profiles)})};
- assert.equal(s.c.loadSubmittedDraft(),true);assert.equal(s.c.nameInput.value,"O'Brien XI");assert.equal(s.c.state.activeFmt,'FC');assert.deepEqual(Array.from(s.c.state.rosters.FC,p=>p.name),['Second','First']);assert.equal(s.c.state.leaders.FC.captain,'First');assert.equal(s.c.state.rosters.ListA.length,0);
+ assert.equal(s.c.loadSubmittedDraft(),true);assert.equal(s.c.state.leaders.FC.captaincy_config.composure,0);assert.equal(s.c.state.leaders.FC.captaincy_config.batting_aggression,75);assert.equal(s.c.nameInput.value,"O'Brien XI");assert.equal(s.c.state.activeFmt,'FC');assert.deepEqual(Array.from(s.c.state.rosters.FC,p=>p.name),['Second','First']);assert.equal(s.c.state.leaders.FC.captain,'First');assert.equal(s.c.state.rosters.ListA.length,0);
 });
 test('failed storage writes never report a saved draft',()=>{
  const s=setup();s.c.localStorage.setItem=()=>{throw Error('quota')};s.c.saveDraftNow();assert.notEqual(s.c.status,'saved');assert.match(s.c.saveStatusLabel.textContent,/not saved/);

@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+{% from 'partials/stadium_ground.html' import ground %}
+{% block title %}{{ profile.name }} · Stadiums · SimCricketX{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/stadiums.css') }}">{% endblock %}
+{% block content %}
+<div class="stadium-page stadium-explorer stadium-profile">
+<nav class="stadium-breadcrumb" aria-label="Breadcrumb"><a href="{{ url_for('home') }}">Dashboard</a><span>/</span><a href="{{ url_for('stadiums') }}">All stadiums</a><span>/</span><span aria-current="page">{{ profile.name }}</span></nav>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% for message in get_flashed_messages() %}<p class="venue-notice" role="status">{{ message }}</p>{% endfor %}
+<header class="grounds-hero venue-hero">
+<div class="grounds-hero-copy"><span class="grounds-eyebrow">{{ 'PRIVATE GROUND' if stadium and stadium.kind == 'custom' else 'OFFICIAL CATALOGUE' if stadium else 'YOUR NEXT HOME GROUND' }}</span><h1>{{ profile.name if stadium else 'Build your home advantage.' }}</h1><p>Choose the pitches, boundaries, outfield and temperature that shape play.</p>
+{% if stadium and stadium.status == 'active' %}<div class="stadium-actions">
+{% if stadium.kind == 'custom' and stadium.current_profile_version == 3 %}<a class="button" href="{{ url_for('create_team',stadium_id=stadium.id) }}">Use for new team</a>{% else %}
+<button type="button" id="adopt-stadium" data-url="{{ url_for('adopt_stadium_api',stadium_id=stadium.id) }}" data-revision="{{ stadium.current_revision }}">{{ 'Add to my stadiums' if stadium.kind == 'official' else 'Adopt stadium conditions' }}</button>
+{% endif %}</div>{% endif %}</div>
+<div class="grounds-hero-art">{{ ground() }}<span class="grounds-art-label">A GROUND WITH CHARACTER</span></div>
+<div class="grounds-hero-stats"><span><strong>{{ profile.dimensions_m.straight_a }} m</strong> straight boundary A</span><span><strong>{{ profile.outfield_speed }}×</strong> outfield speed</span><span><strong>{{ profile.average_temperature_c }}°C</strong> average temperature</span></div>
+</header>
+{% if stadium and (stadium.kind == 'official' or stadium.current_profile_version != 3) and stadium.status == 'active' %}<p class="venue-notice">{{ 'Add this stadium to My stadiums. Admin updates apply until you save your own changes to your private copy.' if stadium.kind == 'official' else 'Adoption captures your current tuning for all formats. Future matches for every team using this stadium will use its new settings; saved matches keep their conditions.' }}</p><p id="adopt-status" role="status"></p>{% endif %}
+{% if stadium and stadium.status == 'retired' %}<p class="venue-notice">This stadium is retired and cannot be selected for new teams or matches.</p>{% endif %}
+<div class="venue-overview-grid">
+<section class="venue-panel"><h2>Pitch defaults</h2><p>One default for each format. You can change the pitch during match setup.</p><div class="venue-preparations">{% for fmt,pitch in profile.pitch_defaults.items() %}<div class="venue-format"><h3>{{ {'ListA':'List A','FC':'First class','Hundred':'The Hundred'}.get(fmt,fmt) }}</h3><strong>{{ pitch }}</strong></div>{% endfor %}</div></section>
+<section class="venue-panel"><h2>Dimensions and conditions</h2><dl class="venue-dimensions">{% for key,value in profile.dimensions_m.items() %}<div><dt>{{ key|replace('_',' ')|title }}</dt><dd><strong>{{ value }} m</strong></dd></div>{% endfor %}</dl><p>Outfield: {{ profile.outfield_speed }}× — {{ 'slower' if profile.outfield_speed < 1 else 'faster' if profile.outfield_speed > 1 else 'normal' }}.</p><p>Average temperature: {{ profile.average_temperature_c }}°C. Hotter grounds wear faster; cooler grounds wear slower. 22°C gives normal pitch wear.</p></section>
+</div>
+<p class="venue-footnote">Numerical defaults are simulation presets. Rain and day/night remain match settings.</p>
+{% if not editable and profile.format_settings is defined %}{% include 'partials/stadium_tuning.html' %}{% endif %}
+{% if editable %}
+<form method="post" id="stadium-editor" data-draft-key="stadium-tuning:{{ current_user.id }}:{{ stadium.id if stadium else 'new' }}:{{ stadium.current_revision if stadium else 0 }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="revision" value="{{ request.form.get('revision', stadium.current_revision if stadium else 0) }}">
+<header class="stadium-editor-heading"><h2>{{ 'Edit stadium' if stadium else 'Create your stadium' }}</h2><p>{{ 'Changes apply to the official catalogue and personal copies without user overrides. Saved matches keep their conditions.' if stadium and stadium.kind == 'official' else 'Saving your changes makes this stadium your personal override. Future official updates will not replace your settings.' if stadium else 'Set the conditions for future matches.' }}</p></header>
+<label class="stadium-name-field">Stadium name<input name="name" required maxlength="100" value="{{ request.form.get('name', profile.name) }}"></label>
+<fieldset class="stadium-editor-group"><legend>Pitch defaults</legend>
+<div class="stadium-editor-grid stadium-pitch-grid">{% for fmt,options in pitch_options.items() %}<label>{{ {'ListA':'List A','FC':'First class','Hundred':'The Hundred'}.get(fmt,fmt) }}<select name="pitch_{{ fmt }}" required>{% for option in options %}<option value="{{ option.key }}" {% if request.form.get('pitch_' ~ fmt, profile.pitch_defaults[fmt]) == option.key %}selected{% endif %}>{{ option.key }}</option>{% endfor %}</select></label>{% endfor %}</div>
+</fieldset>
+<fieldset class="stadium-editor-group"><legend>Boundary dimensions</legend>
+<div class="stadium-editor-grid stadium-boundary-grid">{% for key in ['straight_a','straight_b','square_a','square_b'] %}<label>{{ key|replace('_',' ')|title }} (m)<input type="number" name="{{ key }}" min="40" max="100" step="0.1" value="{{ request.form.get(key, profile.dimensions_m[key]) }}" required></label>{% endfor %}</div>
+</fieldset>
+<fieldset class="stadium-editor-group"><legend>Outfield and temperature</legend>
+<div class="stadium-editor-grid stadium-environment-grid">
+<label>Outfield speed<input name="outfield_speed" type="number" min="0.9" max="1.1" step="0.01" value="{{ request.form.get('outfield_speed', profile.outfield_speed) }}" required aria-describedby="stadium-speed-help"><small id="stadium-speed-help">0.90 slower · 1.00 normal · 1.10 faster</small></label>
+<label>Average temperature (°C)<input name="average_temperature_c" type="number" min="-20" max="55" step="0.1" value="{{ request.form.get('average_temperature_c', profile.average_temperature_c) }}" required aria-describedby="stadium-temperature-help"><small id="stadium-temperature-help">Controls pitch wear; 22°C is neutral.</small></label></div>
+</fieldset>
+{% if profile.format_settings is defined %}{% include 'partials/stadium_tuning.html' %}{% endif %}
+<footer class="stadium-editor-actions"><button type="submit">Save stadium</button></footer>
+</form>{% endif %}
+{% if stadium and editable and stadium.kind == 'custom' %}<form id="retire-form" class="venue-retire"><button type="submit" class="danger">Retire stadium</button><p>Remove this stadium from available choices. Teams using it will need a replacement; past matches keep their saved conditions.</p><p id="retire-status" role="status"></p></form><script>document.getElementById('retire-form').addEventListener('submit',async e=>{e.preventDefault();if(!confirm('Retire this stadium? Teams will need another stadium for future matches. Existing matches are preserved.'))return;const r=await fetch({{ url_for('retire_stadium_api',stadium_id=stadium.id)|tojson }},{method:'POST',headers:{'X-CSRFToken':{{ csrf_token()|tojson }}}});const d=await r.json();if(r.ok)location.reload();else document.getElementById('retire-status').textContent=d.error;});</script>{% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if saved_draft_key %}<script>try {localStorage.removeItem({{ saved_draft_key|tojson }});} catch (_) {}</script>{% endif %}
+<script src="{{ url_for('static',filename='js/stadium_tuning.js') }}" defer></script>
+{% if stadium and (stadium.kind == 'official' or stadium.current_profile_version != 3) %}<script>
+document.getElementById('adopt-stadium')?.addEventListener('click', async function () {
+    this.disabled = true;
+    const status = document.getElementById('adopt-status');
+    status.textContent = 'Capturing your stadium conditions…';
+    try {
+        const response = await fetch(this.dataset.url, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':{{ csrf_token()|tojson }}}, body:JSON.stringify({revision:Number(this.dataset.revision)})});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Unable to adopt this stadium.');
+        location.href = '/stadiums/' + encodeURIComponent(data.id);
+    } catch (error) { status.textContent = error.message; this.disabled = false; }
+});
+</script>{% endif %}
+{% endblock %}

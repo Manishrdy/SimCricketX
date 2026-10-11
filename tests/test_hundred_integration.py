@@ -17,7 +17,9 @@ def hundred_qa(app):
     owner=ACCOUNTS['user1']['email']
     teams=[]
     for side in ('HQA','HQB'):
-        team=Team(name='[QA] '+side,short_code=side,user_id=owner,is_draft=False,is_placeholder=False)
+        # These fixtures exercise existing text-ground matches, not new stadium adoption.
+        team=Team(name='[QA] '+side,short_code=side,user_id=owner,is_draft=False,is_placeholder=False,
+                  venue_mode='legacy', home_ground='QA ground', pitch_preference='Hard')
         db.session.add(team);db.session.flush()
         profile=TeamProfile(team_id=team.id,format_type='T20');db.session.add(profile);db.session.flush()
         for i in range(11):

@@ -1,0 +1,10 @@
+{% extends 'layout.html' %}
+{% block title %}Stadium conditions guide · SimCricketX{% endblock %}
+{% block content %}<article class="container"><h1>Stadium conditions</h1>
+<p><a href="{{ url_for('stadiums') }}">Open your stadiums</a></p>
+<p>Add an official stadium to your collection or create a private stadium. Your copies and settings belong only to you. Existing stadiums keep their current behavior until you adopt stadium conditions.</p>
+<h2>Preserved tuning</h2><p>Creation or adoption captures your existing tuning for every format. Later edits to other stadiums or templates do not change it. Adjustments start at 1×: the preserved baseline. Multipliers change outcome weights, not guaranteed runs or wickets.</p>
+<h2>Pitch and skill</h2><p>T20, T10, List A, The Hundred and FC have independent settings. Choose the balance separately for each format. Pitch and skill percentages always add to 100%. Each pitch has scoring, overall wicket, pace wicket and spin wicket adjustments. Scoring affects 1, 2, 3, 4 and 6 outcomes; dots and extras are unchanged. Overall and bowling-style wicket adjustments compound.</p>
+<h2>Phases</h2><p>Limited-overs formats have powerplay, middle and death adjustments for scoring, boundaries and wickets. Chasing adjustments apply in the second innings. Boundaries also receive the scoring adjustment. FC has no phase adjustments.</p>
+<p>The Hundred uses legal deliveries: balls 1–25 are powerplay, 26–80 middle and 81–100 death in a full innings. Wides and no-balls do not advance the phase. Rain reductions use the effective format rules. Stadium settings never change fielding restrictions or phase lengths.</p>
+<h2>Saved matches</h2><p>Every match freezes its venue and conditions at creation. Editing, adopting or retiring a stadium cannot change saved matches. Tie breakers use pitch and skill settings and pitch adjustments, without regular-innings phase boosts. Weather and day/night remain match settings.</p></article>{% endblock %}

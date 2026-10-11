@@ -3,7 +3,7 @@
 import os
 from datetime import datetime, timedelta
 
-from flask import jsonify, render_template, request, send_from_directory, session
+from flask import jsonify, render_template, request, send_from_directory, session, redirect, url_for, flash
 from flask_login import current_user, login_required
 from utils.exception_tracker import log_exception
 from database.models import User, Match, SupportPromptEvent
@@ -227,65 +227,19 @@ def register_core_routes(
     @app.route("/ground-conditions")
     @login_required
     def ground_conditions():
-        from engine.ground_config import (
-            VALID_FORMATS, get_effective_config,
-        )
-        match_format = _requested_format()
-        config = get_effective_config(current_user.id, match_format)
-        return render_template("ground_conditions.html",
-                               config=config,
-                               match_format=match_format,
-                               valid_formats=VALID_FORMATS)
+        flash('Ground conditions now live in your private stadiums. Existing setups are preserved.', 'info')
+        return redirect(url_for('stadiums'))
 
-    @app.route("/ground-conditions/save", methods=["POST"])
+    @app.post('/ground-conditions/save')
+    @app.post('/ground-conditions/mode')
+    @app.post('/ground-conditions/reset')
     @login_required
-    def ground_conditions_save():
-        from engine.ground_config import save_user_config
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-        match_format = _requested_format(data)
-        # The format marker is routing metadata, not part of the config block.
-        config = {k: v for k, v in data.items() if k != "match_format"}
-        ok, err = save_user_config(current_user.id, config, match_format)
-        if ok:
-            return jsonify({"message": f"{match_format} ground conditions saved successfully"}), 200
-        return jsonify({"error": err}), 400
+    def ground_conditions_retired():
+        return jsonify(error='Ground Conditions has retired. Configure your private stadium instead.'), 410
 
-    @app.route("/ground-conditions/mode", methods=["POST"])
-    @login_required
-    def ground_conditions_set_mode():
-        from engine.ground_config import (
-            AUTO_GAME_MODE, get_effective_config, get_game_modes, save_user_config,
-        )
-        payload = request.get_json(silent=True) or {}
-        match_format = _requested_format(payload)
-        mode = payload.get("mode", AUTO_GAME_MODE)
-
-        cfg = get_effective_config(current_user.id, match_format)
-        if mode != AUTO_GAME_MODE and mode not in get_game_modes(config=cfg):
-            return jsonify({"error": f"Unknown game mode '{mode}'"}), 400
-
-        cfg["active_game_mode"] = mode
-        ok, err = save_user_config(current_user.id, cfg, match_format)
-        if ok:
-            return jsonify({"message": f"Game mode set to {mode}"}), 200
-        return jsonify({"error": err}), 500
-
-    @app.route("/ground-conditions/reset", methods=["POST"])
-    @login_required
-    def ground_conditions_reset():
-        from engine.ground_config import reset_user_config
-        payload = request.get_json(silent=True) or {}
-        match_format = _requested_format(payload)
-        ok, err = reset_user_config(current_user.id, match_format)
-        if ok:
-            return jsonify({"message": f"{match_format} conditions reset to defaults"}), 200
-        return jsonify({"error": err}), 500
-
-    @app.route("/ground-conditions/guide")
+    @app.get('/ground-conditions/guide')
     def ground_conditions_guide():
-        return render_template("ground_conditions_guide.html")
+        return redirect(url_for('stadium_conditions_guide'))
 
     @app.route("/about")
     def about():

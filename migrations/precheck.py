@@ -56,8 +56,13 @@ def _loader(module_path: str, entry: str = "run_migration"):
 
 
 MIGRATIONS: List[Tuple[str, Callable]] = [
+    ("add_stadiums", _loader("migrations.add_stadiums")),
+    ("simplify_stadiums", _loader("migrations.simplify_stadiums")),
+    ("add_stadium_tuning", _loader("migrations.add_stadium_tuning")),
     ("fix_db_schema",            _load_ensure_schema),
+    ("seed_stadium_catalogue", _loader("migrations.add_stadiums")),
     ("add_team_profiles",        _loader("migrations.add_team_profiles")),
+    ("add_captaincy", _loader("migrations.add_captaincy")),
     ("add_tournament_format",    _loader("migrations.add_tournament_format")),
     ("add_tournament_creation_token",
      _loader("migrations.add_tournament_creation_token")),

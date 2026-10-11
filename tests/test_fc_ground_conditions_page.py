@@ -1,57 +1,31 @@
-"""End-to-end check that the FC Ground Conditions page renders and saves."""
-import json
-from engine.format_catalog import FORMAT_LABELS
+"""FC editor retirement and preservation of detailed historical tuning."""
+from copy import deepcopy
+from database import db
+from database.models import UserGroundConfig, StadiumRevisionV3
+from scripts.dev_test_accounts import seed, logged_in_client, ACCOUNTS
+from services.stadiums import neutral_profile
+from engine.ground_config import get_defaults
 
 
-def test_fc_ground_conditions_page_renders(authenticated_client):
-    resp = authenticated_client.get("/ground-conditions?format=FC")
-    assert resp.status_code == 200
-    html = resp.get_data(as_text=True)
-    # Previously the FC tab rendered a body with nothing in it.
-    assert 'gc-fc-pitch-card' in html, "FC editor body missing"
-    for pitch in ("Green", "Dry", "Hard", "Flat", "Dead"):
-        assert f'data-pitch="{pitch}"' in html, f"{pitch} card missing"
-    assert 'data-table="wicket_factors_start"' in html
-    assert 'data-table="wicket_factors_end"' in html
-    assert 'data-field="new_ball_swing_overs"' in html
-    assert 'id="fc-pink-ball-config"' in html
-    assert 'data-table="under_lights_wicket_factors"' in html
-    assert 'data-table="under_lights_scoring_factors"' in html
-    assert FORMAT_LABELS['FC'] in html
-    # ...and it must not be mislabelled as List A any more.
-    assert f"Editing the <strong>{FORMAT_LABELS['FC']}</strong>" in html
+def test_fc_editor_moves_to_stadiums(app):
+    seed(app)
+    client = logged_in_client(app, 'user1')
+    response = client.get('/ground-conditions?format=FC')
+    assert response.status_code == 302 and response.location.endswith('/stadiums')
+    assert client.post('/ground-conditions/save', json={'match_format':'FC'}).status_code == 410
 
 
-def test_fc_ground_conditions_round_trips_a_save(authenticated_client):
-    payload = {
-        "match_format": "FC",
-        "pitch_profiles": {
-            "Flat": {"scoring_matrix": {
-                "Dot": 0.60, "Single": 0.24, "Double": 0.05, "Three": 0.01,
-                "Four": 0.06, "Six": 0.005, "Wicket": 0.015, "Extras": 0.02},
-                "run_factor": 1.0}
-        },
-        "ball_condition": {
-            "pink_ball": {
-                "swing_overs": 17,
-                "under_lights_wicket_factors": {"Fast": 1.19, "default": 1.0},
-                "under_lights_scoring_factors": {"Dot": 1.07, "Four": 0.93},
-            }
-        },
-    }
-    resp = authenticated_client.post("/ground-conditions/save",
-                                     data=json.dumps(payload),
-                                     content_type="application/json")
-    assert resp.status_code == 200, resp.get_data(as_text=True)
-
-    # It must come back on the FC page, and must NOT have leaked into T20.
-    page = authenticated_client.get("/ground-conditions?format=FC").get_data(as_text=True)
-    assert "0.6" in page
-    assert 'value="17" data-field="swing_overs"' in page
-    assert 'value="1.19" data-table="under_lights_wicket_factors" data-style="Fast"' in page
-    # The FC editor markup must stay gated to the FC tab. (The buildFCConfig
-    # JS is shared across formats, so assert on markup, not the class name.)
-    t20 = authenticated_client.get("/ground-conditions?format=T20").get_data(as_text=True)
-    assert 'data-table="wicket_factors_start"' not in t20
-    assert 'id="fc-pink-ball-config"' not in t20
-    assert "Editing the <strong>T20</strong>" in t20
+def test_fc_advanced_tuning_preserved_without_phase_controls(app):
+    seed(app)
+    client = logged_in_client(app, 'user1')
+    config = get_defaults('FC', mutable=True)
+    config['ball_condition']['pink_ball']['swing_overs'] = 17
+    config['ball_condition']['pink_ball']['under_lights_wicket_factors']['Fast'] = 1.19
+    db.session.add(UserGroundConfig(user_id=ACCOUNTS['user1']['email'], match_format='FC', config_json=config))
+    db.session.commit()
+    response = client.post('/api/stadiums', json=neutral_profile())
+    assert response.status_code == 201
+    revision = db.session.get(StadiumRevisionV3, (response.json['id'],1))
+    assert revision.baseline_configs['FC'] == config
+    assert 'phases' not in response.json['format_settings']['FC']
+    assert revision.baseline_configs['T20'] == get_defaults('T20')
