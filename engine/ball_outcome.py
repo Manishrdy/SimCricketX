@@ -483,6 +483,26 @@ _POS_BATTING_MULT: dict = {
 # -----------------------------------------------------------------------------
 # 4) Compute blended probability weight for a single outcome
 # -----------------------------------------------------------------------------
+def scale_boost_windows(powerplay, death, overs, scheduled):
+    """Scale admin-edited (inclusive, 0-based) powerplay and death boost windows
+    from a `scheduled`-over innings to a rain-reduced `overs`-over one. Keeps
+    at least one death over and never lets the two windows overlap."""
+    def scale(window):
+        start = int(window[0] * overs / scheduled + 0.5)
+        end = int((window[1] + 1) * overs / scheduled + 0.5) - 1
+        return start, max(start, end)
+
+    pp_start, pp_end = scale(powerplay)
+    d_start, d_end = scale(death)
+    last = overs - 1
+    d_start, d_end = min(d_start, last), min(d_end, last)
+    if d_start <= pp_end:
+        d_start = min(pp_end + 1, last)
+        d_end = max(d_start, d_end)
+        pp_end = min(pp_end, d_start - 1)
+    return pp_start, pp_end, d_start, d_end
+
+
 def compute_weighted_prob(
     outcome_type: str,
     base_prob: float,
@@ -1166,10 +1186,12 @@ def calculate_outcome(
             _pp_cfg = _phase.get("powerplay", {})
             _death_cfg = _phase.get("death_overs", {})
             _inn2_cfg = _phase.get("second_innings_death", {})
-            # The configured over windows describe a full-length innings; a
-            # rain-reduced one follows the format's rebuilt phases instead.
-            _fmt_phases = _short or bool(
-                format_config is not None
+            # The configured over windows describe a full-length innings. A
+            # rain-reduced innings scales them in proportion (the admin's
+            # intent survives the cut); short formats follow their own phases.
+            _fmt_phases = _short
+            _cut = bool(
+                not _short and format_config is not None
                 and format_config.scheduled_overs
                 and format_config.overs != format_config.scheduled_overs
             )
@@ -1186,6 +1208,10 @@ def calculate_outcome(
             # Death-over boosts (last 4 overs: 17-20)
             death_start = _death_cfg.get("overs_start", 16)
             death_end = _death_cfg.get("overs_end", 19)
+            if _cut:
+                pp_start, pp_end, death_start, death_end = scale_boost_windows(
+                    (pp_start, pp_end), (death_start, death_end),
+                    format_config.overs, format_config.scheduled_overs)
             in_death = (_v3_phase == 'death') if _v3 and _fmt_name == 'Hundred' else (format_config.is_death(over_number) if _fmt_phases else death_start <= over_number <= death_end)
 
             if in_death:
