@@ -731,6 +731,37 @@ class Match(CaptaincyMixin, HundredPresentation):
         extras_str = f" ({', '.join(extras_parts)})" if extras_parts else ""
         return f"{bowler_name}\t\t{overs:.1f}-{stats.get('maidens', 0)}-{stats.get('runs', 0)}-{stats.get('wickets', 0)}{extras_str}"
 
+    def _tally_limited_overs_extra(self, outcome, runs):
+        """Credit a limited-overs extra to the bowler's ledger; returns its type.
+
+        Wides and no-balls count deliveries; byes and leg byes count runs
+        (a 4-bye delivery is 4 byes, not 1). Hundred keeps its own ledger.
+        """
+        extra_type = outcome.get("extra_type", "")
+        if not extra_type:
+            # Fallback to description-based detection for older code paths
+            desc = outcome.get("description", "")
+            for kind in ("Wide", "No Ball", "Leg Bye", "Byes"):
+                if kind in desc:
+                    extra_type = kind
+                    break
+        stats = self.bowler_stats[self.current_bowler["name"]]
+        if self.is_hundred:
+            pass
+        elif extra_type == "Wide":
+            stats["wides"] += 1
+            self.current_over_maiden_invalid = True  # A2: wides invalidate maiden
+        elif extra_type == "No Ball":
+            stats["noballs"] += 1
+            self.current_over_maiden_invalid = True  # A2: no-balls invalidate maiden
+        elif extra_type == "Leg Bye":
+            stats["legbyes"] += runs  # A2: does NOT invalidate maiden
+        elif extra_type == "Byes":
+            stats["byes"] += runs  # A2: does NOT invalidate maiden
+        if self.is_hundred and extra_type in ("Wide", "No Ball"):
+            self.current_over_maiden_invalid = True
+        return extra_type
+
     def _count_legal_delivery(self):
         """One legal delivery has been bowled.
 
@@ -8233,14 +8264,7 @@ class Match(CaptaincyMixin, HundredPresentation):
 
                 # Handle extras for bowler stats
                 if extra and not self.is_hundred:
-                    if "Wide" in outcome['description']:
-                        self.bowler_stats[self.current_bowler["name"]]["wides"] += 1
-                    elif "No Ball" in outcome['description']:
-                        self.bowler_stats[self.current_bowler["name"]]["noballs"] += 1
-                    elif "Leg Bye" in outcome['description']:
-                        self.bowler_stats[self.current_bowler["name"]]["legbyes"] += 1
-                    elif "Byes" in outcome['description']:
-                        self.bowler_stats[self.current_bowler["name"]]["byes"] += 1
+                    self._tally_limited_overs_extra(outcome, runs)
 
                 self._hundred_finalize_delivery()
                 scorecard_data = self._generate_detailed_scorecard()
@@ -8346,30 +8370,7 @@ class Match(CaptaincyMixin, HundredPresentation):
             self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
 
         if extra and not self.is_fc:
-            extra_type = outcome.get("extra_type", "")
-            if not extra_type:
-                # Fallback to description-based detection for older code paths
-                if "Wide" in outcome['description']:
-                    extra_type = "Wide"
-                elif "No Ball" in outcome['description']:
-                    extra_type = "No Ball"
-                elif "Leg Bye" in outcome['description']:
-                    extra_type = "Leg Bye"
-                elif "Byes" in outcome['description']:
-                    extra_type = "Byes"
-
-            if extra_type == "Wide":
-                self.bowler_stats[self.current_bowler["name"]]["wides"] += 0 if self.is_hundred else 1
-                self.current_over_maiden_invalid = True  # A2: wides invalidate maiden
-            elif extra_type == "No Ball":
-                self.bowler_stats[self.current_bowler["name"]]["noballs"] += 0 if self.is_hundred else 1
-                self.current_over_maiden_invalid = True  # A2: no-balls invalidate maiden
-            elif extra_type == "Leg Bye":
-                self.bowler_stats[self.current_bowler["name"]]["legbyes"] += 0 if self.is_hundred else 1
-                # A2: Leg byes do NOT invalidate maiden
-            elif extra_type == "Byes":
-                self.bowler_stats[self.current_bowler["name"]]["byes"] += 0 if self.is_hundred else 1
-                # A2: Byes do NOT invalidate maiden
+            extra_type = self._tally_limited_overs_extra(outcome, runs)
 
             # A5: Free hit state management for extras
             if extra_type == "No Ball":
