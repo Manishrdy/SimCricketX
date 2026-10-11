@@ -237,7 +237,8 @@ def test_full_stadium_match_setup_and_engine(app, qa, fmt):
         assert match._compute_pitch_wear() == 0
         response = qa.get('/match/' + data['match_id'])
         assert response.status_code == 200
-        assert b'Stadium conditions' in response.data
+        # The Stadium conditions summary was removed from the match page (UX_TODO, Oct 2026).
+        assert b'Stadium conditions' not in response.data
         assert b'conditions_seed' not in response.data
     finally:
         path.unlink(missing_ok=True)
