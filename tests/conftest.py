@@ -48,6 +48,24 @@ from database.models import (
 )
 
 
+_RANDOM_SOURCE_OWN = {"ContextVar", "contextmanager", "_random", "_stream", "use_state"}
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_teardown(item):
+    """engine.random_source forwards names to the per-match stream through a
+    module __getattr__. A test that setattr()s one of them leaves monkeypatch
+    "restoring" the stdlib bound method as a real attribute, pinning every later
+    match to the global RNG (this made Hundred resume tests order-dependent).
+    Checked after all fixtures are torn down, so a still-active patch isn't flagged."""
+    yield
+    import engine.random_source as rs
+    leaked = sorted(k for k in vars(rs) if not k.startswith("__") and k not in _RANDOM_SOURCE_OWN)
+    for name in leaked:
+        delattr(rs, name)
+    assert not leaked, f"{item.nodeid} leaked attributes onto engine.random_source: {leaked}"
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _session_artifact_cleanup():
     """Clean only artifacts created during this test session."""

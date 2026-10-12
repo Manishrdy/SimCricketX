@@ -2925,7 +2925,10 @@ def test_fc_scoring_reduction_preserves_wicket_and_extras_probability(monkeypatc
         captured.append(dict(zip(population, weights)))
         return ["Dot"]
 
-    monkeypatch.setattr(outcomes.random, "choices", choose)
+    # random_source supplies `choices` only through a module __getattr__. Patching
+    # it with setattr makes monkeypatch "restore" the stdlib bound method as a
+    # real attribute, which silently pins every later match to the global RNG.
+    monkeypatch.setitem(vars(outcomes.random), "choices", choose)
     for factor in (1.0, 0.95):
         monkeypatch.setattr(outcomes, "FC_SCORING_RATE_FACTOR", factor)
         outcomes.calculate_outcome(
