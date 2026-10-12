@@ -133,7 +133,10 @@ def test_squad_saves_supplied_config_without_changing_other_formats(app, qa):
 def test_create_and_edit_profile_configs_use_shared_validation(app, qa):
     from tests.test_team_routes import _valid_team_form
     form = _valid_team_form(short_code='NWCAP')
-    form.update(stadium_id='__custom__', custom_stadium_name='Captaincy QA ground')
+    from tests.conftest import make_stadium
+    from scripts.dev_test_accounts import ACCOUNTS
+    form['stadium_id'] = make_stadium(ACCOUNTS['user1']['email'], 'Captaincy QA ground').id
+    db.session.commit()
     template = populated_team('TEMPLATE')
     config = default_config(); config['match_awareness'] = 0; config['batting_aggression'] = 75
     profiles = {p.format_type: profile_payload(p, config if p.format_type == 'T20' else default_config()) for p in template.profiles}
@@ -147,7 +150,7 @@ def test_create_and_edit_profile_configs_use_shared_validation(app, qa):
     profiles['T20']['captaincy_config'] = config
     profiles['T20']['captain'] = profiles['T20']['players'][-1]['name']
     form['profiles_payload'] = json.dumps(profiles)
-    form.pop('stadium_id'); form.pop('custom_stadium_name')
+    form.pop('stadium_id')
     response = qa.post('/team/NWCAP/edit', data=form)
     assert response.status_code == 302, response.status_code
     db.session.refresh(profile)

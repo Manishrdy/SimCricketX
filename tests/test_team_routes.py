@@ -8,6 +8,8 @@ import uuid
 from datetime import datetime
 
 import pytest
+
+from tests.conftest import attach_stadium
 from app import db
 from database.models import (
     Team as DBTeam,
@@ -22,6 +24,17 @@ from database.models import (
 
 
 # ==================== Helpers ====================
+
+_FORM_STADIUM = {"id": None}
+
+
+@pytest.fixture(autouse=True)
+def _stadium_for_team_forms(team_stadium_id):
+    """Publishing needs a stadium the user owns; forms built below carry it."""
+    _FORM_STADIUM["id"] = team_stadium_id
+    yield
+    _FORM_STADIUM["id"] = None
+
 
 def _valid_team_form(name="New Test Team", short_code="NTT", num_players=12):
     """Return a multidict-compatible dict representing a valid team creation form.
@@ -43,6 +56,7 @@ def _valid_team_form(name="New Test Team", short_code="NTT", num_players=12):
         "team_name": name,
         "short_code": short_code,
         "home_ground": "Test Ground",
+        "stadium_id": _FORM_STADIUM["id"],
         "pitch_preference": "flat",
         "team_color": "#ff0000",
         "captain": "Player 1",
@@ -475,6 +489,7 @@ class TestSquadValidationConsistency:
         )
         db.session.add(team)
         db.session.flush()
+        attach_stadium(team, regular_user.id)
         profile = DBTeamProfile(team_id=team.id, format_type="T20")
         db.session.add(profile)
         db.session.flush()
@@ -535,6 +550,8 @@ class TestSquadValidationConsistency:
             is_draft=True, is_placeholder=False,
         )
         db.session.add(team3)
+        db.session.flush()
+        attach_stadium(team3, regular_user.id)
         db.session.commit()
         resp3 = authenticated_client.post(
             f"/api/team/{team3.id}/squad/T20/bulk-publish",
@@ -568,6 +585,8 @@ class TestSquadValidationConsistency:
             is_draft=True, is_placeholder=False,
         )
         db.session.add(team3)
+        db.session.flush()
+        attach_stadium(team3, regular_user.id)
         db.session.commit()
         resp3 = authenticated_client.post(
             f"/api/team/{team3.id}/squad/T20/bulk-publish",
@@ -869,6 +888,7 @@ class TestTeamDraftRecovery:
             "team_name": "O'Brien </script> XI",
             "short_code": test_team.short_code,
             "home_ground": "Draft Ground",
+            "stadium_id": _FORM_STADIUM["id"],
             "pitch_preference": "Flat",
             "team_color": "#123456",
             "active_format": "FC",
@@ -892,6 +912,7 @@ class TestTeamDraftRecovery:
             "team_name": "Saved Draft XI",
             "short_code": "SDXI",
             "home_ground": "Draft Ground",
+            "stadium_id": _FORM_STADIUM["id"],
             "pitch_preference": "Flat",
             "team_color": "#123456",
             "active_format": "FC",
