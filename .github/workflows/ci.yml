@@ -8,6 +8,58 @@ on:
   workflow_dispatch:
 
 jobs:
+  tests:
+    name: Full test suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: pip
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # Run every test and report every failure: pytest.ini's addopts stop after
+    # 5 failures and add coverage, so they are replaced here.
+    - name: Run all tests
+      run: |
+        mkdir -p test-results
+        set +e
+        python -m pytest -o addopts="" --disable-warnings -p no:cacheprovider \
+          -q -rfE --tb=short --durations=15 \
+          --junitxml=test-results/junit.xml 2>&1 | tee test-results/pytest.log
+        status=${PIPESTATUS[0]}
+        # One line per failing test, with the first line of its error.
+        grep -E "^(FAILED|ERROR) " test-results/pytest.log | sort -u > test-results/failed-tests.txt || true
+        {
+          echo "## Test results"
+          echo
+          tail -n 1 test-results/pytest.log
+          echo
+          echo "Failing tests: $(wc -l < test-results/failed-tests.txt)"
+          echo
+          echo '```'
+          cut -c1-220 test-results/failed-tests.txt
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+        exit $status
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: test-results/
+
   lint:
     name: Code Quality
     runs-on: ubuntu-latest
