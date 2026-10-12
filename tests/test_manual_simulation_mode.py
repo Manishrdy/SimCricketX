@@ -61,6 +61,11 @@ def app_client():
     app.config["TESTING"] = True
     app.config["WTF_CSRF_ENABLED"] = False
     app.config["LOGIN_DISABLED"] = False
+    # A bare create_app() points at an empty bootstrap DB; next_ball now reads
+    # the fixture-replay tombstone table, so the schema has to exist.
+    with app.app_context():
+        from database import db
+        db.create_all()
     client = app.test_client()
 
     user_id = f"manual_mode_{uuid.uuid4().hex}@example.com"
