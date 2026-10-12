@@ -30,7 +30,11 @@ class TestDraftFeature(unittest.TestCase):
             user.password_hash = "dummy"
             db.session.add(user)
             db.session.commit()
-            
+            # Publishing a team requires a stadium the user owns.
+            from tests.conftest import make_stadium
+            self.stadium_id = make_stadium("test@example.com").id
+            db.session.commit()
+
     def tearDown(self):
         with self.app.app_context():
             db.session.remove()
@@ -48,6 +52,7 @@ class TestDraftFeature(unittest.TestCase):
                 "team_name": "Draft Kings",
                 "short_code": "DK",
                 "home_ground": "Test Ground",
+                "stadium_id": self.stadium_id,
                 "pitch_preference": "Flat",
                 "team_color": "#000000",
                 "action": "save_draft",
@@ -88,6 +93,7 @@ class TestDraftFeature(unittest.TestCase):
                 "team_name": "Fail Team",
                 "short_code": "FT",
                 "home_ground": "Test Ground",
+                "stadium_id": self.stadium_id,
                 "pitch_preference": "Flat",
                 "team_color": "#000000",
                 "action": "publish",
@@ -118,6 +124,7 @@ class TestDraftFeature(unittest.TestCase):
                 "team_name": "Valid Team",
                 "short_code": "VT",
                 "home_ground": "Test Ground",
+                "stadium_id": self.stadium_id,
                 "pitch_preference": "Flat",
                 "team_color": "#000000",
                 "action": "publish",
