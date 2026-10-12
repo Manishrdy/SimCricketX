@@ -38,6 +38,8 @@ def _make_fc_team(user_id, name, code):
     team = Team(user_id=user_id, name=name, short_code=code)
     db.session.add(team)
     db.session.flush()
+    from tests.conftest import attach_stadium
+    attach_stadium(team, user_id)
     profile = TeamProfile(team_id=team.id, format_type="FC")
     db.session.add(profile)
     db.session.flush()

@@ -315,6 +315,30 @@ def sample_team_data():
     }
 
 
+def make_stadium(user_id, name="Test Ground"):
+    """A playable personal stadium. Publishing a team and starting a match both
+    require one (services/stadiums.py), so shared team fixtures carry one."""
+    from services.stadiums import neutral_profile
+    from services.stadium_tuning import create_personal
+    row = create_personal(user_id, neutral_profile(name))
+    db.session.flush()
+    return row
+
+
+def attach_stadium(team, user_id):
+    row = make_stadium(user_id, f"{team.name} Ground")
+    team.stadium_id, team.venue_mode, team.home_ground = row.id, "stadium", f"{team.name} Ground"
+    return row
+
+
+@pytest.fixture(scope="function")
+def team_stadium_id(app, regular_user):
+    """Id to post as `stadium_id` when publishing a team through the routes."""
+    row = make_stadium(regular_user.id)
+    db.session.commit()
+    return row.id
+
+
 @pytest.fixture(scope="function")
 def test_team(app, regular_user, sample_team_data):
     """Create a test team directly in the database (bypasses route validation)."""
@@ -340,6 +364,7 @@ def test_team(app, regular_user, sample_team_data):
         )
         db.session.add(db_player)
 
+    attach_stadium(db_team, regular_user.id)
     db.session.commit()
     return db_team
 
@@ -396,6 +421,7 @@ def test_team_2(app, regular_user):
         )
         db.session.add(db_player)
 
+    attach_stadium(db_team, regular_user.id)
     db.session.commit()
     return db_team
 
