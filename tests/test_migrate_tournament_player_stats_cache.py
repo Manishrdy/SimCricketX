@@ -403,6 +403,10 @@ class TestResimulateAgainstLegacyCache:
             app_db.engine.dispose()
             assert migrate_main(["--db", db_path, "--apply"]) == 0
             app_db.session.remove()
+            # Flask-Login caches the loaded user on `g`, and the test client reuses
+            # this fixture's app context, so that cached User is now detached.
+            from flask import g
+            g.pop("_login_user", None)
 
             response = authenticated_client.post(
                 f"/fixture/{fixture_id}/resimulate", json={"token": token}
