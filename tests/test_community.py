@@ -603,7 +603,10 @@ def test_community_board_migration_dry_run_apply_and_boot(app, capsys):
     assert "support_message" in names() and "--apply" in out
 
     run_migration(db, app, apply=True)
-    assert not {n for n in names() if n.startswith("support_")}
+    # Only the old chat tables go; later `support_*` tables (e.g. the
+    # support-prompt events) are unrelated and must survive.
+    from migrations.community_board import SUPPORT_TABLES
+    assert not set(SUPPORT_TABLES) & set(names())
     capsys.readouterr()
     run_migration(db, app, apply=True)  # idempotent
     assert "Nothing to do" in capsys.readouterr().out

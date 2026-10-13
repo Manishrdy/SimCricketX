@@ -319,7 +319,11 @@ def test_tour_id_selectors_exist_in_templates():
 def test_home_card_guide_keys_match_home_links():
     js = TOURS_JS.read_text(encoding="utf-8")
     home = (ROOT / "templates" / "home.html").read_text(encoding="utf-8")
-    hrefs = re.findall(r"\('(/[^']+)', '[^']+', '[^']+', '[^']+', '[^']+'\)", home)
+    # A card's href is either a literal path or url_for('endpoint'); the stadiums
+    # endpoint is served at /stadiums, so its endpoint name is its path.
+    cards = re.findall(
+        r"\((?:'(/[^']+)'|url_for\('([a-z_]+)'\)), '[^']+', '[^']+', '[^']+', '[^']+'\)", home)
+    hrefs = [path or "/" + endpoint for path, endpoint in cards]
     keys = {h.strip("/").replace("/", "-") for h in hrefs}
     used = set(re.findall(r'data-guide="([^"]+)"', js))
     assert used and used <= keys, f"unknown home cards: {sorted(used - keys)}"

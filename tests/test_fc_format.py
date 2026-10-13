@@ -2425,6 +2425,10 @@ def test_limited_overs_no_ball_still_arms_a_free_hit(monkeypatch):
 def test_fc_no_ball_over_a_whole_match_never_arms_a_free_hit(app):
     """End-to-end: no ball in a full FC match may be flagged as a free hit,
     and the commentary must never announce one."""
+    import random
+    # Seeded: an unseeded match has no no-ball in roughly 1 run in 10, which made
+    # this fail by chance in CI. Seed 2 plays several no-balls.
+    random.seed(2)
     m = _fc_match(days=4)
     seen_no_ball = False
     for _ in range(20000):

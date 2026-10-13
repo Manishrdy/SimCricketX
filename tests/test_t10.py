@@ -429,7 +429,7 @@ def _wicket_probability(fmt_name, monkeypatch, **extra):
             captured['p'] = dict(zip(population, weights))['Wicket']
         return real(population, weights=weights, **kw)
 
-    monkeypatch.setattr(ball_outcome.random, 'choices', spy)
+    monkeypatch.setitem(vars(ball_outcome.random), 'choices', spy)  # setattr would leak onto random_source's __getattr__ passthrough
     fmt = get_format(fmt_name)
     ball_outcome.calculate_outcome(
         batter={'name': 'B', 'batting_rating': 20, 'batting_hand': 'Right'},
