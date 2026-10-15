@@ -1899,7 +1899,8 @@ function showScorecard(data, completeData) {
 
     // Summary
     document.getElementById('scorecard-summary').textContent =
-        `Total: ${data.total_score}/${data.wickets} | ${IS_HUNDRED_MATCH ? 'Balls' : 'Overs'}: ${data.overs} | ${IS_HUNDRED_MATCH ? 'CRR (runs/ball)' : 'Run Rate'}: ${data.run_rate} | Extras: ${data.extras}`;
+        `Total: ${data.total_score}/${data.wickets} | ${IS_HUNDRED_MATCH ? 'Balls' : 'Overs'}: ${data.overs} | ${IS_HUNDRED_MATCH ? 'CRR (runs/ball)' : 'Run Rate'}: ${data.run_rate} | Extras: ${data.extras}`
+        + (matchData.pitch ? ` | Pitch: ${matchData.pitch}` : '');
 
     // Target Info
     const targetInfo = document.getElementById('target-info');
