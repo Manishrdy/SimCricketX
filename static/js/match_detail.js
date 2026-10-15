@@ -23,12 +23,14 @@ let currentInningsNumber = null;
 // A first-class match is several thousand deliveries. At half a second a
 // ball that is well over an hour of real time per innings, so FC runs the
 // ball loop as fast as the browser will schedule it (setTimeout still yields
-// between balls, so the log keeps painting). The limited-overs formats keep
-// their half-second beat — 120 balls is meant to be watched.
+// between balls, so the log keeps painting). T20, List A and Hundred run
+// 25% faster than the original half-second beat: 500 / 1.25 = 400 ms.
 const IS_FC_MATCH = (typeof matchData !== 'undefined')
     && String(matchData.match_format || '').trim().toUpperCase() === 'FC';
-let delay = IS_FC_MATCH ? 0 : 500; // gap between each ball
-const MIN_BALL_DELAY_MS = IS_FC_MATCH ? 0 : 500; // floor on that gap
+const FASTER_BALL_PACING = (typeof matchData !== 'undefined')
+    && ['T20', 'LISTA', 'HUNDRED'].includes(String(matchData.match_format || '').trim().toUpperCase());
+const MIN_BALL_DELAY_MS = IS_FC_MATCH ? 0 : (FASTER_BALL_PACING ? 400 : 500);
+let delay = MIN_BALL_DELAY_MS; // gap between each ball
 let logLineCount = 1; // Track line numbers for commentary display
 let isFinalScoreboard = false;
 let simTimerId = null; // F4: track simulation timer to prevent overlapping loops
