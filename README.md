@@ -191,6 +191,8 @@ For local testing that requires authenticated accounts, follow [AGENTS.md](AGENT
 
 The generated credentials are local and gitignored.
 
+Before starting interface improvements, check the [UX backlog](docs/UX_TODO.md) for completed work and remaining ideas.
+
 ## Verification and calibration
 
 The test suite covers more than route responses: legal bowling allocations, free hits, rain interruptions, innings transitions, snapshot restoration, cross-format statistics, fixture reversal, delivery transport parity, and authentication boundaries all have regression coverage.
