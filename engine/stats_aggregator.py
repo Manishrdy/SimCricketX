@@ -100,6 +100,62 @@ class StatsAggregator:
     def _calculate_bowling_stats(self):
         return self._by_format('bowling')
 
+    def _attribute_opposing_team(self, rows, actor_col, discipline='batting'):
+        """Resolve the fielding/bowling team for each dismissal row using match context."""
+        if rows.empty or actor_col not in rows.columns:
+            return pd.DataFrame()
+
+        subset = rows[rows[actor_col].notna()].copy()
+        if subset.empty:
+            return pd.DataFrame()
+        subset[actor_col] = subset[actor_col].astype(str).str.strip()
+        subset = subset[subset[actor_col] != '']
+        if subset.empty:
+            return pd.DataFrame()
+
+        bat_match_player_teams = {}
+        bowl_match_player_teams = {}
+        all_match_player_teams = {}
+        match_teams = {}
+
+        if not self.batting_df.empty:
+            for _, r in self.batting_df[['match_id', 'Player Name', 'Team Name']].dropna().iterrows():
+                m_id = r['match_id']
+                p_name = str(r['Player Name']).strip()
+                t_name = r['Team Name']
+                bat_match_player_teams.setdefault((m_id, p_name), set()).add(t_name)
+                all_match_player_teams.setdefault((m_id, p_name), set()).add(t_name)
+                match_teams.setdefault(m_id, set()).add(t_name)
+
+        if not self.bowling_df.empty:
+            for _, r in self.bowling_df[['match_id', 'Bowler Name', 'Team Name']].dropna().iterrows():
+                m_id = r['match_id']
+                p_name = str(r['Bowler Name']).strip()
+                t_name = r['Team Name']
+                bowl_match_player_teams.setdefault((m_id, p_name), set()).add(t_name)
+                all_match_player_teams.setdefault((m_id, p_name), set()).add(t_name)
+                match_teams.setdefault(m_id, set()).add(t_name)
+
+        primary_match_player = (
+            bowl_match_player_teams if discipline == 'bowling' else bat_match_player_teams
+        )
+
+        def _resolve(row):
+            m_id = row.get('match_id')
+            bat_team = row.get('Team Name')
+            actor = row[actor_col]
+            for candidates in (
+                primary_match_player.get((m_id, actor), set()) - {bat_team},
+                all_match_player_teams.get((m_id, actor), set()) - {bat_team},
+                match_teams.get(m_id, set()) - {bat_team},
+            ):
+                if len(candidates) == 1:
+                    return next(iter(candidates))
+            return None
+
+        subset['Opposing Team'] = subset.apply(_resolve, axis=1)
+        return subset[subset['Opposing Team'].notna()]
+
     def _legacy_batting_stats(self):
         if self.batting_df.empty:
             return pd.DataFrame()
@@ -151,15 +207,42 @@ class StatsAggregator:
 
         # Not-outs are already counted per player/team above; they are not dismissals.
         dismissals = pd.crosstab(
-            self.batting_df['Player Name'], self.batting_df['Status']
+            [self.batting_df['Player Name'], self.batting_df['Team Name']],
+            self.batting_df['Status'],
         ).drop(columns=['not out'], errors='ignore')
-        player_stats = pd.merge(player_stats, dismissals, on='Player Name', how='left')
-        
-        catches = self.batting_df[self.batting_df['Status'] == 'Caught'].groupby('Fielder Out').size().reset_index(name='Catches')
-        run_outs = self.batting_df[self.batting_df['Status'] == 'Run out'].groupby('Fielder Out').size().reset_index(name='RunOuts_Made')
+        if not dismissals.empty:
+            player_stats = pd.merge(
+                player_stats, dismissals.reset_index(),
+                on=['Player Name', 'Team Name'], how='left',
+            )
 
-        player_stats = pd.merge(player_stats, catches, left_on='Player Name', right_on='Fielder Out', how='left').drop(columns=['Fielder Out'])
-        player_stats = pd.merge(player_stats, run_outs, left_on='Player Name', right_on='Fielder Out', how='left').drop(columns=['Fielder Out'])
+        caught_df = self._attribute_opposing_team(
+            self.batting_df[self.batting_df['Status'] == 'Caught'],
+            'Fielder Out',
+            discipline='batting',
+        )
+        if not caught_df.empty:
+            catches = (
+                caught_df.groupby(['Fielder Out', 'Opposing Team'])
+                .size()
+                .reset_index(name='Catches')
+                .rename(columns={'Fielder Out': 'Player Name', 'Opposing Team': 'Team Name'})
+            )
+            player_stats = pd.merge(player_stats, catches, on=['Player Name', 'Team Name'], how='left')
+
+        run_out_df = self._attribute_opposing_team(
+            self.batting_df[self.batting_df['Status'] == 'Run out'],
+            'Fielder Out',
+            discipline='batting',
+        )
+        if not run_out_df.empty:
+            run_outs = (
+                run_out_df.groupby(['Fielder Out', 'Opposing Team'])
+                .size()
+                .reset_index(name='RunOuts_Made')
+                .rename(columns={'Fielder Out': 'Player Name', 'Opposing Team': 'Team Name'})
+            )
+            player_stats = pd.merge(player_stats, run_outs, on=['Player Name', 'Team Name'], how='left')
         
         player_stats.fillna(0, inplace=True)
         player_stats.rename(columns={'Player Name': 'Player', 'Team Name': 'Team', 'Fours': '4s', 'Sixes': '6s', 'Run out': 'RunOut'}, inplace=True)
@@ -223,17 +306,30 @@ class StatsAggregator:
         )
 
         if not self.batting_df.empty:
-            wicket_df = self.batting_df[self.batting_df['Bowler Out'].notna() & (self.batting_df['Status'].isin(['Caught', 'Bowled', 'LBW']))]
+            wicket_df = self._attribute_opposing_team(
+                self.batting_df[
+                    self.batting_df['Bowler Out'].notna()
+                    & (self.batting_df['Status'].isin(['Caught', 'Bowled', 'LBW']))
+                ],
+                'Bowler Out',
+                discipline='bowling',
+            )
             if not wicket_df.empty:
-                # Team Name in batting_df is the batting team, not the bowling team,
-                # so we must NOT join on Team Name (they are opposite teams)
-                wicket_types = wicket_df.groupby(['Bowler Out', 'Status']).size().unstack(fill_value=0).reset_index()
-                wicket_types.rename(columns={'Bowler Out': 'Bowler Name'}, inplace=True)
+                wicket_types = (
+                    wicket_df.groupby(['Bowler Out', 'Opposing Team', 'Status'])
+                    .size()
+                    .unstack(fill_value=0)
+                    .reset_index()
+                    .rename(columns={'Bowler Out': 'Bowler Name', 'Opposing Team': 'Team Name'})
+                )
                 # Rename status columns to prefixed names
                 for col in ['Caught', 'Bowled', 'LBW']:
                     if col in wicket_types.columns:
                         wicket_types.rename(columns={col: f'D_{col}'}, inplace=True)
-                bowling_stats = pd.merge(bowling_stats, wicket_types, on=['Bowler Name'], how='left')
+                bowling_stats = pd.merge(
+                    bowling_stats, wicket_types,
+                    on=['Bowler Name', 'Team Name'], how='left',
+                )
 
         bowling_stats.fillna(0, inplace=True)
         bowling_stats.rename(columns={'Bowler Name':'Player','Team Name':'Team','No Balls':'no balls','Maidens':'maidens'}, inplace=True)
