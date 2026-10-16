@@ -12,6 +12,7 @@ from engine import weather as weather_engine
 from engine.ball_outcome import calculate_outcome
 from engine.super_over_outcome import calculate_super_over_outcome
 from engine.cricket_math import balls_to_overs_str
+from engine.batting_activity import stats_have_batting_activity
 from match_archiver import MatchArchiver, find_original_json_file
 from engine.pressure_engine import PressureEngine, FCPressureEngine
 from engine.game_state_engine import (
@@ -592,6 +593,7 @@ class Match(CaptaincyMixin, HundredPresentation):
             "runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0,
             "threes": 0, "dots": 0, "wicket_type": "", "bowler_out": "", "fielder_out": "",
             "form": 1.0, "id": player.get("id") if player else None,
+            "did_bat": False,
         }
 
     @staticmethod
@@ -1073,6 +1075,12 @@ class Match(CaptaincyMixin, HundredPresentation):
     def _bring_new_batter(self, dismissed_end, selected_index):
         selected_player = self.batting_team[selected_index]
         self._ensure_batsman_stats_entry(selected_player["name"])
+        # The delivery loop can select a provisional batter after a final-ball
+        # wicket. That player never enters a continuing innings.
+        if not self._innings_should_end() and not (
+            self.target is not None and self.score >= self.target
+        ):
+            self.batsman_stats[selected_player["name"]]["did_bat"] = True
 
         if dismissed_end == "non_striker":
             self.batter_idx[1] = selected_index
@@ -1123,10 +1131,16 @@ class Match(CaptaincyMixin, HundredPresentation):
 
             if selected_index != provisional_index:
                 # Put provisional batter back in the queue and consume selected batter.
+                provisional = self.batting_team[provisional_index]
+                self.batsman_stats[provisional["name"]]["did_bat"] = False
                 self.remaining_batter_indices.add(provisional_index)
                 self.remaining_batter_indices.discard(selected_index)
                 selected_player = self.batting_team[selected_index]
                 self._ensure_batsman_stats_entry(selected_player["name"])
+                if not self._innings_should_end() and not (
+                    self.target is not None and self.score >= self.target
+                ):
+                    self.batsman_stats[selected_player["name"]]["did_bat"] = True
                 if incoming_slot == "striker":
                     self.current_striker = selected_player
                     self.batter_idx[0] = selected_index
@@ -7804,6 +7818,13 @@ class Match(CaptaincyMixin, HundredPresentation):
         if self.is_fc:
             self._fc_last_delivery = outcome["delivery"]
 
+        # Both batters participated, including on a wide that ends a chase.
+        # Do this only once an actual delivery has been resolved, so an
+        # unstarted/abandoned innings does not count the initialized openers.
+        for batter in (self.current_striker, self.current_non_striker):
+            self._ensure_batsman_stats_entry(batter["name"])
+            self.batsman_stats[batter["name"]]["did_bat"] = True
+
         # Update pressure engine with outcome
         self.pressure_engine.update_recent_events(outcome)
         
@@ -8636,9 +8657,7 @@ class Match(CaptaincyMixin, HundredPresentation):
             if player_name in self.batsman_stats:
                 stats = self.batsman_stats[player_name]
                 
-                # PRODUCTION FIX: Display full stats if the player has a dismissal type OR has faced balls.
-                # This ensures 0-ball ducks are shown correctly.
-                if stats.get("wicket_type") or stats.get("balls", 0) > 0:
+                if stats_have_batting_activity(stats):
                     strike_rate = (stats["runs"] * 100) / stats["balls"] if stats["balls"] > 0 else 0
                     status_raw = stats.get("wicket_type") if stats.get("wicket_type") else "not out"
                     status = status_raw
@@ -8665,7 +8684,7 @@ class Match(CaptaincyMixin, HundredPresentation):
                         "balls": stats["balls"],
                         "fours": stats["fours"],
                         "sixes": stats["sixes"],
-                        "strike_rate": "—" if self.is_hundred and not stats["balls"] else f"{strike_rate:.1f}",
+                        "strike_rate": "—" if not stats["balls"] else f"{strike_rate:.1f}",
                         "bowler_out": stats["bowler_out"],
                         "fielder_out": stats["fielder_out"]
                     })

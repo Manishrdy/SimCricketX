@@ -328,6 +328,7 @@ def register_stats_routes(
                     .filter(DBMatch.match_format == match_format)
                     .filter(length_predicate(DBMatch, _length_arg()))
                     .filter(MatchScorecard.is_super_over.isnot(True))
+                    .filter(DBMatch.tournament_id == tournament_id if tournament_id else True)
                     .group_by(DBPlayer.id, DBPlayer.name, DBTeam.name)
                     .all()
                 )
@@ -605,6 +606,13 @@ def register_stats_routes(
             if "error" in profile:
                 flash(profile["error"], "danger")
                 return redirect(url_for("statistics"))
+            # Each format has its own Player row; follow the link to the row
+            # that actually serves the requested format.
+            target_id = profile["format_links"].get(match_format)
+            if target_id and target_id != player_id:
+                args = request.args.to_dict()
+                args["match_format"] = match_format
+                return redirect(url_for("player_profile_page", player_id=target_id, **args))
             return render_template("player_profile.html", profile=profile, match_format=match_format)
         except Exception as e:
             log_exception(e)

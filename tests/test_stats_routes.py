@@ -469,6 +469,50 @@ class TestStumpingsFieldingStats:
             f"25-wicket milestone should not re-fire when prev>=25; got {ms!r}"
         )
 
+    def test_milestone_detection_preserves_explicit_zero_deltas(self, regular_user):
+        """A player sitting on an exact milestone (e.g. 500 runs, 25 wickets,
+        10 catches) who contributes 0 in a subsequent match must not re-trigger
+        those milestones. Fallback delta=1 applies only when a delta is absent.
+        """
+        team = DBTeam(user_id=regular_user.id, name="ZeroDelta XI", short_code="ZDX")
+        db.session.add(team)
+        db.session.flush()
+        profile = DBTeamProfile(team_id=team.id, format_type="T20")
+        db.session.add(profile)
+        db.session.flush()
+        player = DBPlayer(
+            team_id=team.id, profile_id=profile.id, name="Steady Veteran",
+            role="All-rounder", total_runs=500, total_wickets=25,
+        )
+        db.session.add(player)
+        db.session.flush()
+
+        match_id = str(uuid.uuid4())
+        match = DBMatch(
+            id=match_id, user_id=regular_user.id,
+            home_team_id=team.id, away_team_id=team.id,
+            match_format="T20", date=datetime.utcnow(),
+        )
+        db.session.add(match)
+        db.session.add(MatchScorecard(
+            match_id=match_id, player_id=player.id, team_id=team.id,
+            innings_number=1, record_type="batting",
+            runs=0, balls=1, is_out=True, catches=10,
+        ))
+        db.session.commit()
+
+        # Explicit zero deltas must not re-fire any milestone
+        ms_zero = StatsService.detect_milestones(
+            player.id, deltas={"runs": 0, "wickets": 0, "catches": 0}
+        )
+        assert ms_zero == [], f"Expected no milestones on 0 deltas, got {ms_zero!r}"
+
+        # Omitted deltas (None or missing keys) fall back to 1 and do fire
+        ms_fallback = StatsService.detect_milestones(player.id)
+        assert any("500 career runs" in m for m in ms_fallback)
+        assert any("25 career wickets" in m for m in ms_fallback)
+        assert any("10 career catches" in m for m in ms_fallback)
+
     def test_undefined_batting_strike_rate_is_none_not_zero(self, regular_user):
         """A batter who faced 0 balls (e.g., non-striker when match ended)
         must report strike_rate=None, not 0. Mirrors the average convention.
@@ -669,6 +713,52 @@ class TestStumpingsFieldingStats:
 
 class TestStatisticsRegressionFixes:
     """Regression tests for statistics module bug fixes."""
+
+    def test_player_profile_copies_dot_counts(self, regular_user, authenticated_client):
+        """Profile metrics must use stored dot balls, not the calculator default of 0."""
+        team = DBTeam(user_id=regular_user.id, name="Dot XI", short_code="DOT")
+        db.session.add(team)
+        db.session.flush()
+        profile = DBTeamProfile(team_id=team.id, format_type="T20")
+        db.session.add(profile)
+        db.session.flush()
+        player = DBPlayer(
+            team_id=team.id, profile_id=profile.id, name="Dot Player", role="All-rounder",
+        )
+        db.session.add(player)
+        db.session.flush()
+
+        match_id = str(uuid.uuid4())
+        db.session.add(DBMatch(
+            id=match_id, user_id=regular_user.id,
+            home_team_id=team.id, away_team_id=team.id,
+            match_format="Hundred", date=datetime.utcnow(),
+        ))
+        db.session.add(MatchScorecard(
+            match_id=match_id, player_id=player.id, team_id=team.id,
+            innings_number=1, record_type="batting",
+            runs=12, balls=10, fours=1, sixes=0, dot_balls=6, is_out=True,
+        ))
+        db.session.add(MatchScorecard(
+            match_id=match_id, player_id=player.id, team_id=team.id,
+            innings_number=2, record_type="bowling",
+            balls_bowled=20, runs_conceded=25, wickets=1, dot_balls_bowled=8,
+        ))
+        db.session.commit()
+
+        svc = StatsService(logging.getLogger(__name__))
+        result = svc.get_player_profile(player.id, regular_user.id, "Hundred")
+        assert result["batting"]["dots"] == 6
+        assert result["bowling"]["dots"] == 8
+        assert result["bowling"]["dot_percentage"] == 40.0
+
+        response = authenticated_client.get(f"/player/{player.id}?match_format=Hundred")
+        assert response.status_code == 200
+        body = response.get_data(as_text=True)
+        assert "Dots / Ducks" in body
+        assert ">6 / 0<" in body
+        assert "Dots / Dot %" in body
+        assert ">8 / 40.0<" in body
 
     def test_export_to_csv_ignores_extra_row_keys(self):
         """CSV export should tolerate internal-only keys in stats rows."""

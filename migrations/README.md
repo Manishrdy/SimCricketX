@@ -1,5 +1,30 @@
 # Checking database migration status
 
+## Batting participation (0-not-out innings)
+
+Before deploying code that reads `match_scorecards.did_bat`, inspect the target
+SQLite database with the standalone script (default is read-only):
+
+```bash
+python3 -m migrations.add_batting_participation --db /path/to/cricket_sim.db --dry-run
+python3 -m migrations.add_batting_participation --db /path/to/cricket_sim.db --apply
+```
+
+`--apply` adds a nullable boolean column in a transaction and is safe to rerun.
+The same schema step is registered in the existing startup migration chain.
+The CLI does not start the application or run any other migrations. It refuses
+to create a database if the specified path does not exist.
+
+New scorecards use `True` for batting participation (including 0* off 0 balls),
+`False` for DNB, and `NULL` for legacy unknown participation. Existing rows,
+career totals, and caches are left unchanged. The report counts ambiguous
+legacy all-zero batting rows; these need independent evidence such as archived
+delivery logs to recover. A cache rebuild alone cannot recover that information.
+Legacy rows with runs, balls or a dismissal continue to count through the
+existing fallback. No speculative backfill is performed.
+
+## General verification
+
 After applying your planned migrations, run:
 
 ```bash

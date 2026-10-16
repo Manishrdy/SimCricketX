@@ -1489,6 +1489,12 @@
 <script src="{{ url_for('static', filename='js/image_export.js') }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
 <script>
+// Server-resolved format/tournament – authoritative source for all JS below.
+// The server runs _tournament_format() which looks up the tournament's actual
+// format_type, so these are always correct even when the URL omits match_format.
+const RESOLVED_FORMAT      = {{ match_format | tojson }};
+const RESOLVED_TOURNAMENT  = {{ tournament_id | tojson }};
+
 // Escape saved names (players, teams, tournaments) before they go into innerHTML.
 function escHtml(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1594,11 +1600,28 @@ function handleSort(tableId, colIdx) {
             if (a) a.textContent = dir === 'asc' ? '↑' : '↓';
         }
     });
+    const parseBowlingFigure = val => {
+        const m = /^(\d+)\s*\/\s*(\d+)$/.exec(val);
+        if (!m) return null;
+        return { wickets: parseInt(m[1], 10), runs: parseInt(m[2], 10) };
+    };
+    const isMissingCell = val => val === '' || val === '-' || val === '—';
     const tbody = table.querySelector('tbody');
     Array.from(tbody.querySelectorAll('tr'))
         .sort((a, b) => {
             const at = (a.querySelectorAll('td')[colIdx]?.textContent || '').trim();
             const bt = (b.querySelectorAll('td')[colIdx]?.textContent || '').trim();
+            const af = parseBowlingFigure(at), bf = parseBowlingFigure(bt);
+            if (af || bf) {
+                const aFig = af || (isMissingCell(at) ? { wickets: -1, runs: Infinity } : null);
+                const bFig = bf || (isMissingCell(bt) ? { wickets: -1, runs: Infinity } : null);
+                if (aFig && bFig) {
+                    const cmp = aFig.wickets !== bFig.wickets
+                        ? aFig.wickets - bFig.wickets
+                        : bFig.runs - aFig.runs;
+                    return dir === 'asc' ? cmp : -cmp;
+                }
+            }
             const an = parseFloat(at), bn = parseFloat(bt);
             if (!isNaN(an) && !isNaN(bn)) return dir === 'asc' ? an - bn : bn - an;
             return dir === 'asc' ? at.localeCompare(bt) : bt.localeCompare(at);
@@ -1686,7 +1709,7 @@ function exportFiltered(type, format) {
     if (format === 'csv') {
         let csv = headers.map(h => '"' + h.replace(/"/g, '""') + '"').join(',') + '\n';
         rows.forEach(r => { csv += r.map(c => '"' + c.replace(/"/g, '""') + '"').join(',') + '\n'; });
-        const mf = new URLSearchParams(window.location.search).get('match_format') || 'T20';
+        const mf = RESOLVED_FORMAT || 'T20';
         dlBlob(csv, mf + (mf === 'ListA' ? '_' + (new URLSearchParams(location.search).get('scheduled_overs') || 'all') : '') + '_' + type + '_stats.csv', 'text/csv');
     } else {
         const w = headers.map((h, i) => Math.max(h.length, ...rows.map(r => (r[i] || '').length)) + 2);
@@ -1696,7 +1719,7 @@ function exportFiltered(type, format) {
         txt += sep + '\n' + fmt(headers) + '\n' + sep + '\n';
         rows.forEach(r => { txt += fmt(r) + '\n'; });
         txt += sep + '\n';
-        const mf = new URLSearchParams(window.location.search).get('match_format') || 'T20';
+        const mf = RESOLVED_FORMAT || 'T20';
         dlBlob(txt, mf + (mf === 'ListA' ? '_' + (new URLSearchParams(location.search).get('scheduled_overs') || 'all') : '') + '_' + type + '_stats.txt', 'text/plain');
     }
 }
@@ -1722,7 +1745,7 @@ async function exportImage(type, format, btn) {
         const blob = await window.scxImageExport.capturePng(wrap, {
             backgroundColor: isDark ? '#21252b' : '#ffffff', scale: 2
         });
-        const mf = new URLSearchParams(window.location.search).get('match_format') || 'T20';
+        const mf = RESOLVED_FORMAT || 'T20';
         window.scxImageExport.downloadBlob(blob, mf + (mf === 'ListA' ? '_' + (new URLSearchParams(location.search).get('scheduled_overs') || 'all') : '') + '_' + type + '_stats_' + new Date().toISOString().slice(0, 10) + '.png');
     } catch (error) {
         alert('Image export failed. Reload to retry, or use CSV or TXT for all filtered rows.');
@@ -1868,8 +1891,10 @@ function formatOrdinal(n) {
 let allPlayers = [], currentRole = 'batsman';
 
 function loadPlayersForComparison() {
-    const mf = new URLSearchParams(window.location.search).get('match_format') || 'T20';
-    fetch(withListALength('/api/compare-players?player_ids=&match_format=' + encodeURIComponent(mf))).then(r => r.json()).then(data => {
+    const mf = RESOLVED_FORMAT || 'T20';
+    let url = '/api/compare-players?player_ids=&match_format=' + encodeURIComponent(mf);
+    if (RESOLVED_TOURNAMENT) url += '&tournament_id=' + RESOLVED_TOURNAMENT;
+    fetch(withListALength(url)).then(r => r.json()).then(data => {
         if (data.success) { allPlayers = data.available_players || []; filterPlayersByRole(currentRole); }
     }).catch(() => {});
 }
@@ -1964,7 +1989,7 @@ function displayComparison(players) {
     if (p1.batting || p2.batting) {
         html += '<div class="comp-section-label"><i class="fas fa-baseball-ball"></i> Batting</div>';
         const battingKeys = [['innings','Inn',false],['runs','Runs',false],['average','Avg',false],['strike_rate','SR',false],['fifties','50s',false],['hundreds','100s',false]];
-        if ((new URLSearchParams(window.location.search).get('match_format') || 'T20') === 'FC') battingKeys.push(['double_centuries','200s',false],['triple_centuries','300s',false]);
+        if ((RESOLVED_FORMAT || 'T20') === 'FC') battingKeys.push(['double_centuries','200s',false],['triple_centuries','300s',false]);
         battingKeys.forEach(([k, lbl, lb]) => {
             html += buildRow(k, lbl, p1.batting?.[k], p2.batting?.[k], lb);
         });
@@ -1972,7 +1997,7 @@ function displayComparison(players) {
     if (p1.bowling || p2.bowling) {
         html += '<div class="comp-section-label"><i class="fas fa-bowling-ball"></i> Bowling</div>';
         const bowlingKeys = [['wickets','Wkts',false],['average','Avg',true],['economy','Eco',true]];
-        if ((new URLSearchParams(window.location.search).get('match_format') || 'T20') === 'FC') bowlingKeys.push(['five_wicket_hauls','5WI',false],['ten_wicket_matches','10WM',false]);
+        if ((RESOLVED_FORMAT || 'T20') === 'FC') bowlingKeys.push(['five_wicket_hauls','5WI',false],['ten_wicket_matches','10WM',false]);
         bowlingKeys.forEach(([k, lbl, lb]) => {
             html += buildRow(k, lbl, p1.bowling?.[k], p2.bowling?.[k], lb);
         });

@@ -39,6 +39,7 @@ from database import db
 from database.models import Match as DBMatch, MatchScorecard, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, MatchPartnership
 from utils.exception_tracker import log_exception, log_data_anomaly
 from engine.cricket_math import balls_to_overs_str
+from engine.batting_activity import stats_have_batting_activity
 from engine.format_catalog import squad_format, balls_per_over
 from engine import fc_weather
 
@@ -49,6 +50,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 class MatchArchiverError(Exception):
     """Custom exception for MatchArchiver-specific errors"""
     pass
+
+
+def _counts_career_not_out(card):
+    # Legacy rows contributed not-outs only when they faced a ball. Keep
+    # reversal symmetric for those rows; new archives carry explicit markers.
+    return not card.is_out and (
+        card.did_bat is True or (card.did_bat is None and (card.balls or 0) > 0)
+    )
 
 
 def reverse_player_aggregates(scorecards, logger=None):
@@ -95,7 +104,7 @@ def reverse_player_aggregates(scorecards, logger=None):
                 elif card.runs and card.runs >= 100:
                     player.total_centuries = max(0, player.total_centuries - 1)
 
-                if not card.is_out and card.balls and card.balls > 0:
+                if _counts_career_not_out(card):
                     player.not_outs = max(0, player.not_outs - 1)
 
         # Reverse bowling stats
@@ -1027,6 +1036,12 @@ class MatchArchiver:
                     card.position = position
                     
                     if record_type == "batting":
+                        # Preserve unknown legacy all-zero rows rather than
+                        # guessing that every initialized player batted.
+                        participated = stats_have_batting_activity(s)
+                        card.did_bat = participated if (
+                            s.get("did_bat") is not None or participated
+                        ) else None
                         card.runs = s.get('runs', 0)
                         card.balls = s.get('balls', 0)
                         card.fours = s.get('fours', 0)
@@ -1180,7 +1195,7 @@ class MatchArchiver:
                             p.total_centuries += 1
                         if card.runs > p.highest_score:
                             p.highest_score = card.runs
-                        if not card.is_out and card.balls > 0:
+                        if _counts_career_not_out(card):
                             p.not_outs += 1
                     d["runs"] += card.runs or 0
 
@@ -1552,8 +1567,8 @@ class MatchArchiver:
         rows = []
         
         for player_name, stats in batting_stats.items():
-            if stats.get('balls', 0) > 0 or stats.get('wicket_type'):
-                strike_rate = f"{(stats['runs'] * 100 / stats['balls']):.1f}" if stats['balls'] > 0 else "0.0"
+            if stats_have_batting_activity(stats):
+                strike_rate = f"{(stats['runs'] * 100 / stats['balls']):.1f}" if stats['balls'] > 0 else "-"
                 status = stats.get('wicket_type', '') or "not out"
                 
                 rows.append([
@@ -1766,13 +1781,11 @@ class MatchArchiver:
                 for player in full_lineup:
                     player_name = player.get('name', 'Unknown')
                     
-                    # Check if player actually batted (has balls faced > 0 OR has a wicket type)
-                    if (player_name in stats and 
-                        (stats[player_name].get('balls', 0) > 0 or stats[player_name].get('wicket_type'))):
+                    if player_name in stats and stats_have_batting_activity(stats[player_name]):
                         
                         # Player has stats (actually batted)
                         player_stats = stats[player_name]
-                        strike_rate = f"{(player_stats['runs'] * 100 / player_stats['balls']):.2f}" if player_stats['balls'] > 0 else "0.00"
+                        strike_rate = f"{(player_stats['runs'] * 100 / player_stats['balls']):.2f}" if player_stats['balls'] > 0 else "-"
                         status = player_stats.get('wicket_type', '') or "not out"
                         
                         writer.writerow([

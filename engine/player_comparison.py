@@ -7,6 +7,7 @@ from database import db
 from database.models import Player, Team, UserPlayer, Match, MatchScorecard, Tournament
 
 from engine.bowling_activity import has_bowling_activity
+from engine.batting_activity import has_batting_activity
 from engine.format_catalog import SUPPORTED_FORMATS
 FORMATS = SUPPORTED_FORMATS
 
@@ -119,7 +120,7 @@ def compare(service, user_id, identity_ids, tournament_id=None, scheduled_overs=
                 incomplete = incomplete or bool(match.stats_incomplete)
                 meta = {'match_id': match.id, 'date': match.date.isoformat() if match.date else None,
                         'innings_number': card.innings_number}
-                if card.record_type == 'batting' and ((card.balls or 0) > 0 or (card.runs or 0) > 0 or card.is_out):
+                if card.record_type == 'batting' and has_batting_activity(card):
                     batting.append(dict(meta, runs=card.runs or 0, balls=card.balls or 0,
                                         is_out=bool(card.is_out), fours=card.fours or 0, sixes=card.sixes or 0))
                 if card.record_type == 'bowling' and has_bowling_activity(card):
