@@ -60,6 +60,9 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     ("simplify_stadiums", _loader("migrations.simplify_stadiums")),
     ("add_stadium_tuning", _loader("migrations.add_stadium_tuning")),
     ("fix_db_schema",            _load_ensure_schema),
+    # Add before any ORM scorecard reads in later migration steps.
+    ("add_batting_participation",
+     _loader("migrations.add_batting_participation", "ensure_schema")),
     ("seed_stadium_catalogue", _loader("migrations.add_stadiums")),
     ("add_team_profiles",        _loader("migrations.add_team_profiles")),
     ("add_captaincy", _loader("migrations.add_captaincy")),

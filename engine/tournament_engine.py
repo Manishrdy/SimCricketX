@@ -1,11 +1,12 @@
 from engine.bowling_activity import bowling_activity_predicate
+from engine.batting_activity import batting_activity_predicate
 from database import db
 from database.models import (
     Tournament, TournamentTeam, TournamentFixture, Match, Team,
     MatchScorecard, MatchPartnership, TournamentPlayerStatsCache,
     Player,
 )
-from sqlalchemy import func as sa_func, or_ as sa_or
+from sqlalchemy import func as sa_func
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 from fractions import Fraction
@@ -1840,17 +1841,8 @@ class TournamentEngine:
             if not cache:
                 continue
 
-            # Batting aggregation. The "valid innings" filter (balls > 0 OR
-            # runs > 0 OR is_out) matches what `get_player_profile` uses, so
-            # cache and per-player views agree on innings_batted. Without it,
-            # a non-striker scorecard (balls=0, runs>0, not out) inflates the
-            # innings count but is excluded from `not_outs` below, so
-            # `dismissals = innings_batted - not_outs` over-counts.
-            valid_innings = sa_or(
-                MatchScorecard.balls > 0,
-                MatchScorecard.runs > 0,
-                MatchScorecard.is_out == True,
-            )
+            # Count explicit appearances (including 0*) and legacy activity.
+            valid_innings = batting_activity_predicate(MatchScorecard)
             bat = db.session.query(
                 sa_func.count(MatchScorecard.id),
                 sa_func.coalesce(sa_func.sum(MatchScorecard.runs), 0),
@@ -1892,7 +1884,7 @@ class TournamentEngine:
                 MatchScorecard.match_id.in_(tournament_match_ids),
                 MatchScorecard.is_out == False,
                 MatchScorecard.is_super_over.isnot(True),
-                sa_or(MatchScorecard.balls > 0, MatchScorecard.runs > 0),
+                valid_innings,
             ).scalar() or 0
             cache.not_outs = not_outs
 
