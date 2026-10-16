@@ -63,11 +63,11 @@
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
             <div class="pp-format-filter">
                 <select id="pp-fmt">
-                    <option value="Hundred" {% if match_format == 'Hundred' %}selected{% endif %}>The Hundred</option>
-                    <option value="T20" {% if match_format == 'T20' %}selected{% endif %}>T20</option>
-                    <option value="T10" {% if match_format == 'T10' %}selected{% endif %}>T10</option>
-                    <option value="ListA" {% if match_format == 'ListA' %}selected{% endif %}>List A</option>
-                    <option value="FC" {% if match_format == 'FC' %}selected{% endif %}>First-Class</option>
+                    {% for fmt, label in [('Hundred','The Hundred'),('T20','T20'),('T10','T10'),('ListA','List A'),('FC','First-Class')] %}
+                    {% if fmt in profile.format_links or fmt == match_format %}
+                    <option value="{{ fmt }}" data-player-id="{{ profile.format_links.get(fmt, profile.player_id) }}" {% if match_format == fmt %}selected{% endif %}>{{ label }}</option>
+                    {% endif %}
+                    {% endfor %}
                 </select>
             </div>
             <a href="{{ url_for('statistics') }}" class="back-btn"><i class="fas fa-arrow-left"></i> Statistics</a>
@@ -204,7 +204,8 @@
 {% block extra_js %}
 <script>
 document.getElementById('pp-fmt')?.addEventListener('change', function() {
-    const url = '/player/{{ profile.player_id }}?match_format=' + encodeURIComponent(this.value || 'T20');
+    const opt = this.selectedOptions[0];
+    const url = '/player/' + (opt.dataset.playerId || '{{ profile.player_id }}') + '?match_format=' + encodeURIComponent(this.value || 'T20');
     window.location.href = withListALength(url);
 });
 </script>

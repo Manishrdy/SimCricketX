@@ -823,6 +823,8 @@ class MatchScorecard(db.Model):
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False, index=True)
     innings_number = db.Column(db.Integer, default=1, nullable=False)
     record_type = db.Column(db.String(20), default="batting", nullable=False)
+    # NULL: legacy participation unknown; False: DNB; True includes 0* (0).
+    did_bat = db.Column(db.Boolean, nullable=True)
     position = db.Column(db.Integer, nullable=True)
     # True for super-over career-stat rows (written at innings_number=3).
     # These are NOT real innings: they exist only so career run/wicket TOTALS
@@ -1001,8 +1003,8 @@ class TournamentPlayerStatsCache(db.Model):
     thirties = db.Column(db.Integer, default=0)
     double_centuries = db.Column(db.Integer, default=0)
     triple_centuries = db.Column(db.Integer, default=0)
-    batting_average = db.Column(db.Float, default=0.0)
-    batting_strike_rate = db.Column(db.Float, default=0.0)
+    batting_average = db.Column(db.Float().evaluates_none(), default=0.0)
+    batting_strike_rate = db.Column(db.Float().evaluates_none(), default=0.0)
 
     # Bowling Stats
     innings_bowled = db.Column(db.Integer, default=0)

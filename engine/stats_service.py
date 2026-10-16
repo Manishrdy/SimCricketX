@@ -6,6 +6,7 @@ Handles all statistics calculations and queries for the SimCricketX application.
 
 from sqlalchemy import func
 from engine.bowling_activity import has_bowling_activity
+from engine.batting_activity import has_batting_activity
 from engine.length_filter import parse_length_filter, length_predicate
 from sqlalchemy.orm import aliased
 from datetime import datetime
@@ -19,8 +20,42 @@ from tabulate import tabulate
 from utils.exception_tracker import log_exception
 from engine.cricket_math import balls_to_overs_float
 
-from engine.format_catalog import SUPPORTED_FORMATS, default_scheduled_overs
+from engine.format_catalog import SUPPORTED_FORMATS, default_scheduled_overs, squad_format
 SUPPORTED_STATS_FORMATS = frozenset(SUPPORTED_FORMATS)
+
+
+
+def linked_format_players(player):
+    """Map each display format to the sibling Player row that serves it.
+
+    Player rows are per-profile (one format), so the same person has separate
+    rows in T20/T10/ListA/FC. Siblings are matched within the same team by
+    pool identity (master/user player id), else case-insensitive name. Hundred
+    has no squad of its own and reuses the T20 row via squad_format().
+    """
+    rows = Player.query.filter(Player.team_id == player.team_id).all()
+    by_profile_fmt = {}
+    own_fmt = player.profile.format_type if player.profile_id and player.profile else None
+    own_name = (player.name or "").strip().lower()
+    for row in rows:
+        if row.id == player.id:
+            fmt = own_fmt
+        else:
+            if not row.profile_id or not row.profile:
+                continue
+            same_master = player.master_player_id and row.master_player_id == player.master_player_id
+            same_user = player.user_player_id and row.user_player_id == player.user_player_id
+            same_name = (row.name or "").strip().lower() == own_name
+            if not (same_master or same_user or same_name):
+                continue
+            fmt = row.profile.format_type
+        if fmt:
+            by_profile_fmt.setdefault(fmt, row.id)
+    if own_fmt is None:
+        # Legacy row without a profile: serves every format it was archived under.
+        return {f: player.id for f in SUPPORTED_FORMATS}
+    return {f: by_profile_fmt[squad_format(f)] for f in SUPPORTED_FORMATS
+            if squad_format(f) in by_profile_fmt}
 
 
 class StatsService:
@@ -362,7 +397,7 @@ class StatsService:
             entry["run_outs"] += card.run_outs or 0
 
             if card.record_type == "batting":
-                faced = (card.balls or 0) > 0 or (card.runs or 0) > 0 or bool(card.is_out)
+                faced = has_batting_activity(card)
                 if faced:
                     entry["runs"] += card.runs or 0
                     batting_forms.setdefault(pid, {
@@ -581,8 +616,8 @@ class StatsService:
             
             # Batting stats
             if card.record_type == 'batting':
-                # Check if player actually faced balls
-                faced = (card.balls or 0) > 0 or (card.runs or 0) > 0 or bool(card.is_out)
+                # Include explicit appearances even when no delivery was faced
+                faced = has_batting_activity(card)
                 
                 if faced:
                     # Store individual innings data for milestone calculations
@@ -1037,7 +1072,7 @@ class StatsService:
                       'BBI', 'Avg', 'Econ', 'Dots', 'Bwld', 'LBW', 'Byes', 'LB', 'Wd', 'NB']
             if match_format == 'FC':
                 headers.insert(7, 'Mdns')
-                headers.insert(12, 'SR')
+                headers.insert(11, 'SR')
                 headers += ['BBM', '5WI', '10WM']
             rows = [
                 [
@@ -1290,7 +1325,7 @@ class StatsService:
             for card, match in records:
                 matches.add(match.id)
                 
-                if card.record_type == 'batting' and ((card.balls or 0) > 0 or (card.runs or 0) > 0 or bool(card.is_out)):
+                if card.record_type == 'batting' and has_batting_activity(card):
                     batting_data.append({
                         'match_id': match.id,
                         'innings_number': card.innings_number,
@@ -1841,6 +1876,23 @@ class StatsService:
     # Player Profile
     # ========================================================================
 
+    def _played_format_links(self, player, user_id, current_format):
+        """linked_format_players() minus formats where that row has no matches.
+
+        The current format is always kept so the selector is never empty.
+        """
+        links = linked_format_players(player)
+        pairs = (
+            db.session.query(MatchScorecard.player_id, Match.match_format)
+            .join(Match, MatchScorecard.match_id == Match.id)
+            .filter(MatchScorecard.player_id.in_(set(links.values())), Match.user_id == user_id)
+            .filter(MatchScorecard.is_super_over.isnot(True))
+            .distinct().all()
+        )
+        played = set(pairs)
+        return {f: pid for f, pid in links.items()
+                if f == current_format or (pid, f) in played}
+
     def get_player_profile(self, player_id, user_id, match_format=None, scheduled_overs=None):
         """Get full career stats + match log for a single player."""
         try:
@@ -1906,11 +1958,12 @@ class StatsService:
                 run_outs += card.run_outs or 0
                 stumpings += card.stumpings or 0
 
-                if card.record_type == "batting" and ((card.balls or 0) > 0 or (card.runs or 0) > 0 or card.is_out):
+                if card.record_type == "batting" and has_batting_activity(card):
                     batting_innings.append({
                         "match_id": match.id, "innings_number": card.innings_number,
                         "runs": card.runs or 0, "balls": card.balls or 0,
                         "is_out": card.is_out, "fours": card.fours or 0, "sixes": card.sixes or 0,
+                        "dots": card.dot_balls or 0,
                     })
                     ml["bat_runs"] = card.runs or 0
                     ml["bat_balls"] = card.balls or 0
@@ -1927,16 +1980,18 @@ class StatsService:
                         "match_id": match.id, "innings_number": card.innings_number,
                         "wickets": card.wickets or 0, "runs": card.runs_conceded or 0,
                         "balls": card.balls_bowled or 0,
+                        "dots": card.dot_balls_bowled or 0,
                     })
                     ml["bowl_wkts"] = card.wickets or 0
                     ml["bowl_runs"] = card.runs_conceded or 0
                     balls = card.balls_bowled or 0
-                    ml["bowl_overs"] = f"{balls // 6}.{balls % 6}"
+                    overs_text = str(balls) if effective_format == "Hundred" else f"{balls // 6}.{balls % 6}"
+                    ml["bowl_overs"] = overs_text
                     ml["bowling_innings"].append({
                         "innings_number": card.innings_number,
                         "wickets": card.wickets or 0,
                         "runs": card.runs_conceded or 0,
-                        "overs": f"{balls // 6}.{balls % 6}",
+                        "overs": overs_text,
                     })
 
             batting = self._calculate_batting_metrics(batting_innings)
@@ -1968,6 +2023,7 @@ class StatsService:
                 "player": player.name,
                 "team": team.name,
                 "team_id": team.id,
+                "format_links": self._played_format_links(player, user_id, effective_format),
                 "role": player.role or "Unknown",
                 "batting_hand": player.batting_hand or "",
                 "bowling_type": player.bowling_type or "",
@@ -2141,10 +2197,17 @@ class StatsService:
         if not player:
             return []
 
-        d = deltas or {}
-        runs_delta = max(int(d.get("runs", 1) or 0), 1)
-        wickets_delta = max(int(d.get("wickets", 1) or 0), 1)
-        catches_delta = max(int(d.get("catches", 1) or 0), 1)
+        d = deltas if isinstance(deltas, dict) else {}
+
+        def _resolve_delta(key):
+            val = d.get(key)
+            if val is None:
+                return 1
+            return max(int(val), 0)
+
+        runs_delta = _resolve_delta("runs")
+        wickets_delta = _resolve_delta("wickets")
+        catches_delta = _resolve_delta("catches")
 
         milestones = []
         run_marks = [500, 1000, 2000, 3000, 5000]

@@ -102,3 +102,44 @@ test('sorting a table reapplies pagination for its table type without throwing',
     assert.deepEqual(paginated, ['bowling']);
     assert.deepEqual(appended.map(r => r.querySelectorAll()[0].textContent), ['1', '2', '10']);
 });
+
+test('bowling figure sorting compares wickets first and prefers fewer runs on ties', () => {
+    const sorter = template.match(/const sortState = \{\};\nfunction handleSort\([\s\S]*?\n\}\n/);
+    assert.ok(sorter, 'handleSort should exist');
+
+    const mkRow = v => ({ querySelectorAll: () => [{ textContent: v }] });
+    let currentRows = [mkRow('5/90'), mkRow('-'), mkRow('5/10'), mkRow('10/120'), mkRow('4/15')];
+    const tbody = {
+        querySelectorAll: () => currentRows,
+        appendChild: r => currentRows.push(r),
+    };
+    const table = {
+        querySelectorAll: () => [],
+        querySelector: () => tbody,
+    };
+    const context = {
+        document: { getElementById: () => table },
+        applyPagination: () => {},
+    };
+    vm.runInNewContext(sorter[0], context);
+
+    // First click -> ascending (worst to best: '-', 4/15, 5/90, 5/10, 10/120)
+    const initialAsc = [...currentRows];
+    currentRows = [];
+    tbody.querySelectorAll = () => initialAsc;
+    context.handleSort('bowling-table', 0);
+    assert.deepEqual(
+        currentRows.map(r => r.querySelectorAll()[0].textContent),
+        ['-', '4/15', '5/90', '5/10', '10/120']
+    );
+
+    // Second click -> descending (best to worst: 10/120, 5/10, 5/90, 4/15, '-')
+    const initialDesc = [...currentRows];
+    currentRows = [];
+    tbody.querySelectorAll = () => initialDesc;
+    context.handleSort('bowling-table', 0);
+    assert.deepEqual(
+        currentRows.map(r => r.querySelectorAll()[0].textContent),
+        ['10/120', '5/10', '5/90', '4/15', '-']
+    );
+});
