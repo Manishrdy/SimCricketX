@@ -1,4 +1,5 @@
 """CSV import must use the same format IDs as database-backed statistics."""
+import csv
 import logging
 
 import pandas as pd
@@ -7,6 +8,41 @@ import pytest
 from engine.format_config import format_label
 from engine.stats_aggregator import StatsAggregator
 from match_archiver import MatchArchiver
+
+
+@pytest.mark.parametrize('statuses,expected_nos,expected_average', [
+    (['not out', 'Bowled'], 1, 40),
+    (['Bowled', 'Caught'], 0, 20),
+    (['not out', 'not out'], 2, 0),
+])
+def test_batting_csv_has_one_not_out_column(
+    tmp_path, monkeypatch, statuses, expected_nos, expected_average
+):
+    monkeypatch.chdir(tmp_path)
+    paths = []
+    for index, status in enumerate(statuses):
+        row = dict.fromkeys(StatsAggregator.REQUIRED_BATTING_COLS, 0)
+        row.update({
+            'Player Name': 'Batter', 'Team Name': 'Team',
+            'Runs': 20, 'Balls': 10, 'Status': status,
+        })
+        path = tmp_path / f'match{index}_batting.csv'
+        pd.DataFrame([row]).to_csv(path, index=False)
+        paths.append(str(path))
+
+    aggregator = StatsAggregator(paths, 'test')
+    stats = aggregator._calculate_batting_stats()
+    assert stats.columns.is_unique
+    assert stats.loc[0, 'NOs'] == expected_nos
+    assert stats.loc[0, 'Average'] == expected_average
+
+    aggregator.process_and_save()
+    output = next((tmp_path / 'data' / 'stats').glob('test_batting_*.csv'))
+    with output.open(newline='') as stream:
+        header = next(csv.reader(stream))
+    assert len(header) == len(set(header))
+    assert header.count('NOs') == 1
+    assert pd.read_csv(output).loc[0, 'NOs'] == expected_nos
 
 
 def test_archived_hundred_csv_economy_and_mixed_labels(tmp_path, monkeypatch):
