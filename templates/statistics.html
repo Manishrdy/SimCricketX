@@ -1489,6 +1489,11 @@
 <script src="{{ url_for('static', filename='js/image_export.js') }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
 <script>
+// Escape saved names (players, teams, tournaments) before they go into innerHTML.
+function escHtml(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 // ===== URL / VIEW NAVIGATION =====
 function switchView(view) {
     const p = new URLSearchParams(window.location.search);
@@ -1599,7 +1604,7 @@ function handleSort(tableId, colIdx) {
             return dir === 'asc' ? at.localeCompare(bt) : bt.localeCompare(at);
         })
         .forEach(r => tbody.appendChild(r));
-    applyPagination(type.replace('-table', ''));
+    applyPagination(tableId.replace('-table', ''));
 }
 
 // ===== PAGINATION =====
@@ -1781,9 +1786,9 @@ function loadPartnerships() {
                     const contrib = (pt.batsman1_contribution != null)
                         ? '<div class="p-contrib">' + pt.batsman1_contribution + ' / ' + pt.batsman2_contribution + '</div>' : '';
                     h += '<tr><td><span class="rank-chip ' + (i===0?'gold':i===1?'silver':i===2?'bronze':'') + '">' + (i+1) + '</span></td>'
-                       + '<td><div class="p-names">' + b1 + ' &amp; ' + b2 + '</div>' + contrib + '</td>'
+                       + '<td><div class="p-names">' + escHtml(b1) + ' &amp; ' + escHtml(b2) + '</div>' + contrib + '</td>'
                        + '<td class="p-runs">' + pt.runs + '</td><td>' + pt.balls + '</td><td>' + formatOrdinal(pt.wicket) + '</td>';
-                    if (view === 'overall') h += '<td>' + (pt.tournament || '\u2014') + '</td>';
+                    if (view === 'overall') h += '<td>' + (pt.tournament ? escHtml(pt.tournament) : '\u2014') + '</td>';
                     h += '</tr>';
                 });
                 h += '</tbody></table>';
@@ -1812,8 +1817,8 @@ function loadPartnerships() {
                 : '-';
             html += `<tr>`
                   + `<td>${i + 1}</td>`
-                  + `<td>${pt.batsman1}</td>`
-                  + `<td>${pt.batsman2}</td>`
+                  + `<td>${escHtml(pt.batsman1)}</td>`
+                  + `<td>${escHtml(pt.batsman2)}</td>`
                   + `<td class="kc">${pt.runs}</td>`
                   + `<td>${pt.balls || '-'}</td>`
                   + `<td>${formatOrdinal(pt.wicket)}</td>`
@@ -1952,8 +1957,8 @@ function displayComparison(players) {
 
     let html = '<div class="comp-header-row">'
              + '<div></div>'
-             + '<div class="comp-player-col p1">' + p1.name + '<br><span class="comp-player-team">' + (p1.team||'') + '</span></div>'
-             + '<div class="comp-player-col p2">' + p2.name + '<br><span class="comp-player-team">' + (p2.team||'') + '</span></div>'
+             + '<div class="comp-player-col p1">' + escHtml(p1.name) + '<br><span class="comp-player-team">' + escHtml(p1.team||'') + '</span></div>'
+             + '<div class="comp-player-col p2">' + escHtml(p2.name) + '<br><span class="comp-player-team">' + escHtml(p2.team||'') + '</span></div>'
              + '</div>';
 
     if (p1.batting || p2.batting) {

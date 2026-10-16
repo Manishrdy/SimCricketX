@@ -1880,7 +1880,8 @@
             var icon = type === 'success' ? 'fa-circle-check' : 'fa-circle-xmark';
             var toast = document.createElement('div');
             toast.className = 'toast ' + type;
-            toast.innerHTML = '<i class="fa-solid ' + icon + '"></i> ' + message;
+            toast.innerHTML = '<i class="fa-solid ' + icon + '"></i> ';
+            toast.appendChild(document.createTextNode(message));
             container.appendChild(toast);
 
             setTimeout(function () {

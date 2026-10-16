@@ -786,6 +786,11 @@ def register_team_routes(
             "bowling_hand": p.bowling_hand or "",
             "is_captain": p.is_captain, "is_wicketkeeper": p.is_wicketkeeper,
         } for p in squad])
+        # Rendered with |safe inside a <script> block: player names are user
+        # input, so a literal "</script>" would end the block. \u-escape the
+        # characters that can open or close a tag (still valid JSON).
+        squad_json = (squad_json.replace("<", "\\u003c")
+                      .replace(">", "\\u003e").replace("&", "\\u0026"))
         return render_template(
             "team_squad.html",
             team=team,

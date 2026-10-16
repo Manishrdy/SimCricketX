@@ -309,7 +309,7 @@
                     if (!isCurrentCheck()) return;
                     if (d.exists) {
                         var src = d.source === 'global' ? 'global pool' : 'your custom pool';
-                        nameWarn.innerHTML = '<i class="fas fa-exclamation-circle"></i> "' + d.name + '" already exists in the ' + src + '.';
+                        nameWarn.innerHTML = '<i class="fas fa-exclamation-circle"></i> "' + String(d.name).replace(/[&<>"']/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; }) + '" already exists in the ' + src + '.';
                         nameWarn.className = 'ppf-name-warn error';
                         submitBtn.disabled = true;
                     } else {

@@ -133,7 +133,7 @@
             <div class="pp-stat-row"><span>Innings</span><span class="pp-stat-val">{{ profile.bowling.innings }}</span></div>
             <div class="pp-stat-row"><span>Wickets</span><span class="pp-stat-val">{{ profile.bowling.wickets }}</span></div>
             <div class="pp-stat-row"><span>Average</span><span class="pp-stat-val">{{ profile.bowling.average if profile.bowling.average is not none else '-' }}</span></div>
-            <div class="pp-stat-row"><span>{{ 'Econ/100' if match_format == 'Hundred' else 'Economy' }}</span><span class="pp-stat-val">{{ profile.bowling.economy }}</span></div>
+            <div class="pp-stat-row"><span>{{ 'Econ/100' if match_format == 'Hundred' else 'Economy' }}</span><span class="pp-stat-val">{{ profile.bowling.economy if profile.bowling.economy is not none else '-' }}</span></div>
             <div class="pp-stat-row"><span>Strike Rate</span><span class="pp-stat-val">{{ profile.bowling.strike_rate if profile.bowling.strike_rate is not none else '-' }}</span></div>
             <div class="pp-stat-row"><span>Best Figures</span><span class="pp-stat-val">{{ profile.bowling.best_figures }}</span></div>
             {% if match_format == 'FC' %}

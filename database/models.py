@@ -1023,9 +1023,11 @@ class TournamentPlayerStatsCache(db.Model):
     noballs = db.Column(db.Integer, default=0)
     byes = db.Column(db.Integer, default=0)
     leg_byes = db.Column(db.Integer, default=0)
-    bowling_average = db.Column(db.Float, default=0.0)
-    bowling_economy = db.Column(db.Float, default=0.0)
-    bowling_strike_rate = db.Column(db.Float, default=0.0)
+    # Explicit None means an undefined rate. Preserve it on INSERT rather
+    # than letting SQLAlchemy substitute the legacy zero default.
+    bowling_average = db.Column(db.Float().evaluates_none(), default=0.0)
+    bowling_economy = db.Column(db.Float().evaluates_none(), default=0.0)
+    bowling_strike_rate = db.Column(db.Float().evaluates_none(), default=0.0)
 
     # Fielding Stats
     catches = db.Column(db.Integer, default=0)

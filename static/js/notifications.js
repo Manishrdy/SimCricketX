@@ -42,9 +42,10 @@ const Toast = {
 
         toast.innerHTML = `
             <i class="fas ${icon}"></i>
-            <span>${message}</span>
+            <span></span>
             <button class="toast-close">&times;</button>
         `;
+        toast.querySelector('span').textContent = message;
 
         // Styling (can be moved to CSS eventually, but inline ensures it works immediately)
         const colors = {

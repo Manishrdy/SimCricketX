@@ -1,3 +1,4 @@
+from engine.bowling_activity import bowling_activity_predicate
 from database import db
 from database.models import (
     Tournament, TournamentTeam, TournamentFixture, Match, Team,
@@ -1971,7 +1972,7 @@ class TournamentEngine:
                 MatchScorecard.record_type == "bowling",
                 MatchScorecard.match_id.in_(tournament_match_ids),
                 MatchScorecard.is_super_over.isnot(True),
-                MatchScorecard.balls_bowled > 0,
+                bowling_activity_predicate(MatchScorecard),
             ).first()
 
             if bowl:
@@ -1993,7 +1994,7 @@ class TournamentEngine:
                 ) if bowl[3] > 0 else None
                 cache.bowling_economy = round(
                     (bowl[2] * (100 if tournament_format == "Hundred" else 6) / total_balls), 2
-                ) if total_balls > 0 else 0.0
+                ) if total_balls > 0 else None
                 cache.bowling_strike_rate = round(
                     total_balls / bowl[3], 2
                 ) if bowl[3] > 0 else None
@@ -2006,6 +2007,7 @@ class TournamentEngine:
                 MatchScorecard.record_type == "bowling",
                 MatchScorecard.match_id.in_(tournament_match_ids),
                 MatchScorecard.is_super_over.isnot(True),
+                bowling_activity_predicate(MatchScorecard),
             ).order_by(
                 MatchScorecard.wickets.desc(),
                 MatchScorecard.runs_conceded.asc(),
@@ -2023,7 +2025,7 @@ class TournamentEngine:
                 MatchScorecard.match_id.in_(tournament_match_ids),
                 MatchScorecard.wickets >= 5,
                 MatchScorecard.is_super_over.isnot(True),
-                MatchScorecard.balls_bowled > 0,
+                bowling_activity_predicate(MatchScorecard),
             ).scalar() or 0
             cache.five_wicket_hauls = five_wkt
 
@@ -2036,7 +2038,7 @@ class TournamentEngine:
                 MatchScorecard.record_type == "bowling",
                 MatchScorecard.match_id.in_(tournament_match_ids),
                 MatchScorecard.is_super_over.isnot(True),
-                MatchScorecard.balls_bowled > 0,
+                bowling_activity_predicate(MatchScorecard),
             ).group_by(MatchScorecard.match_id).all()
             if match_figures:
                 best_match = max(match_figures, key=lambda row: (row[1], -row[2]))

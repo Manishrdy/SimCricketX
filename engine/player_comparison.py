@@ -6,6 +6,7 @@ from sqlalchemy import and_, or_
 from database import db
 from database.models import Player, Team, UserPlayer, Match, MatchScorecard, Tournament
 
+from engine.bowling_activity import has_bowling_activity
 from engine.format_catalog import SUPPORTED_FORMATS
 FORMATS = SUPPORTED_FORMATS
 
@@ -121,9 +122,9 @@ def compare(service, user_id, identity_ids, tournament_id=None, scheduled_overs=
                 if card.record_type == 'batting' and ((card.balls or 0) > 0 or (card.runs or 0) > 0 or card.is_out):
                     batting.append(dict(meta, runs=card.runs or 0, balls=card.balls or 0,
                                         is_out=bool(card.is_out), fours=card.fours or 0, sixes=card.sixes or 0))
-                if card.record_type == 'bowling' and (card.balls_bowled or 0) > 0:
+                if card.record_type == 'bowling' and has_bowling_activity(card):
                     bowling.append(dict(meta, wickets=card.wickets or 0,
-                                        runs=card.runs_conceded or 0, balls=card.balls_bowled))
+                                        runs=card.runs_conceded or 0, balls=card.balls_bowled or 0))
                 for key in fielding:
                     fielding[key] += getattr(card, key) or 0
             bat = service._calculate_batting_metrics(batting)
