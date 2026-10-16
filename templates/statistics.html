@@ -623,66 +623,90 @@
 
 .table-controls {
     display: flex; align-items: center; gap: 0.5rem;
-    padding: 0.6rem 1rem; border-bottom: 1px solid var(--card-border);
+    padding: 0.75rem 1rem; border-bottom: 1px solid var(--card-border);
     flex-wrap: wrap;
 }
 
 .tbl-search {
-    flex: 1; min-width: 140px;
-    padding: 0.35rem 0.75rem 0.35rem 2rem;
+    flex: 1 1 220px; min-width: 160px; max-width: 360px; height: 34px;
+    padding: 0 0.75rem 0 2.1rem;
     border: 1px solid var(--card-border); border-radius: 8px;
-    background: var(--bg-secondary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' fill='none' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='8' stroke='%23888' stroke-width='2'/%3E%3Cpath d='m21 21-4.35-4.35' stroke='%23888' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat left 0.55rem center;
-    font-size: 0.75rem; color: var(--fg); font-family: inherit;
+    background: var(--bg-secondary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' fill='none' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='8' stroke='%23888' stroke-width='2'/%3E%3Cpath d='m21 21-4.35-4.35' stroke='%23888' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat left 0.7rem center;
+    font-size: 0.78rem; color: var(--fg); font-family: inherit;
 }
 .tbl-search::placeholder { color: var(--fg-secondary); }
 
-.tbl-team-sel, .tbl-role-sel {
-    appearance: none;
-    padding: 0.35rem 1.8rem 0.35rem 0.7rem;
+.tbl-team-sel, .tbl-role-sel, .pg-size-sel {
+    appearance: none; -webkit-appearance: none; height: 34px;
+    padding: 0 1.9rem 0 0.75rem;
     border: 1px solid var(--card-border); border-radius: 8px;
-    background: var(--bg-secondary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 0.55rem center;
-    font-size: 0.75rem; color: var(--fg); font-family: inherit; cursor: pointer;
+    background: var(--bg-secondary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 0.65rem center;
+    font-size: 0.78rem; color: var(--fg); font-family: inherit; cursor: pointer;
+}
+.tbl-search:focus-visible, .tbl-team-sel:focus-visible, .tbl-role-sel:focus-visible,
+.pg-size-sel:focus-visible, .btn-exp:focus-visible, .tbl-pagination button:focus-visible {
+    outline: 2px solid var(--c1); outline-offset: 1px;
+}
+.tbl-team-sel, .tbl-role-sel { max-width: 180px; text-overflow: ellipsis; }
+
+.tbl-count {
+    font-size: 0.7rem; font-weight: 600; color: var(--fg-secondary); white-space: nowrap;
+    padding: 0.25rem 0.65rem; border-radius: 100px; background: var(--bg-secondary);
+    border: 1px solid var(--card-border);
 }
 
-.tbl-count { font-size: 0.7rem; color: var(--fg-secondary); white-space: nowrap; }
-
-.export-grp { display: flex; gap: 0.25rem; margin-left: auto; flex-shrink: 0; }
+/* Export: one segmented control with a label */
+.export-grp {
+    display: flex; align-items: center; margin-left: auto; flex-shrink: 0;
+}
+.export-grp::before {
+    content: "Export"; margin-right: 0.5rem;
+    font-size: 0.66rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--fg-secondary);
+}
 .btn-exp {
-    display: flex; align-items: center; gap: 0.25rem;
-    padding: 0.3rem 0.6rem;
-    border: 1px solid var(--card-border); border-radius: 7px;
+    display: flex; align-items: center; justify-content: center; gap: 0.3rem;
+    height: 34px; padding: 0 0.8rem; margin-left: -1px;
+    border: 1px solid var(--card-border); border-radius: 0;
     background: var(--bg-secondary); color: var(--fg-secondary);
-    font-size: 0.68rem; font-weight: 600; cursor: pointer;
-    font-family: inherit; transition: all 0.15s; white-space: nowrap;
+    font-size: 0.72rem; font-weight: 600; cursor: pointer;
+    font-family: inherit; transition: color 0.15s, background 0.15s; white-space: nowrap;
+    position: relative;
 }
-.btn-exp:hover { color: var(--c1); border-color: var(--c1); background: rgba(99,102,241,.06); }
+.btn-exp:first-child { border-radius: 8px 0 0 8px; margin-left: 0; }
+.btn-exp:last-child { border-radius: 0 8px 8px 0; }
+.btn-exp:only-child { border-radius: 8px; }
+.btn-exp:hover { color: var(--c1); border-color: var(--c1); background: rgba(99,102,241,.06); z-index: 1; }
 
 .table-panel { display: none; }
 .table-panel.active { display: block; }
 
-.tbl-wrap { overflow-x: auto; max-height: 520px; overflow-y: auto; }
+.tbl-wrap { overflow-x: auto; max-height: min(72vh, 680px); overflow-y: auto; }
 
-/* Pagination */
+/* Pagination footer: [rows per page + range]  ...  [pager] */
 .tbl-pagination {
-    display: flex; align-items: center; justify-content: center; gap: 0.4rem;
-    padding: 0.5rem 1rem; border-top: 1px solid var(--card-border);
-    font-size: 0.75rem;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 0.75rem 1.25rem; flex-wrap: wrap;
+    padding: 0.7rem 1rem; border-top: 1px solid var(--card-border);
+    background: var(--bg-secondary); font-size: 0.75rem;
 }
-.tbl-pagination button {
-    padding: 0.25rem 0.55rem; border: 1px solid var(--card-border);
-    border-radius: 6px; background: var(--bg-secondary); color: var(--fg);
-    cursor: pointer; font-size: 0.72rem; font-family: inherit;
+.pg-left { display: flex; align-items: center; gap: 0.5rem 1.1rem; flex-wrap: wrap; color: var(--fg-secondary); }
+.pg-size-lbl { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; white-space: nowrap; }
+.pg-size-sel { height: 30px; padding-left: 0.6rem; font-size: 0.75rem; background-color: var(--card-bg); }
+.pg-range b { color: var(--fg); font-weight: 700; }
+.pg-nav { display: flex; align-items: center; gap: 0.25rem; }
+.tbl-pagination .pg-btn {
+    min-width: 30px; height: 30px; padding: 0 0.5rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--card-border); border-radius: 8px;
+    background: var(--card-bg); color: var(--fg);
+    cursor: pointer; font-size: 0.75rem; font-weight: 600; font-family: inherit;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.tbl-pagination button:hover:not(:disabled) { background: var(--c1); color: #fff; }
-.tbl-pagination button:disabled { opacity: 0.4; cursor: default; }
-.tbl-pagination button.pg-active { background: var(--c1); color: #fff; font-weight: 700; }
-.tbl-pagination .pg-info { color: var(--fg-secondary); margin: 0 0.3rem; }
-.pg-size-sel {
-    appearance: none; padding: 0.25rem 1.4rem 0.25rem 0.5rem;
-    border: 1px solid var(--card-border); border-radius: 6px;
-    background: var(--bg-secondary); color: var(--fg); font-size: 0.72rem;
-    font-family: inherit; cursor: pointer; margin-left: auto;
-}
+.tbl-pagination .pg-btn:hover:not(:disabled):not(.pg-active) { border-color: var(--c1); color: var(--c1); }
+.tbl-pagination .pg-btn:disabled { opacity: 0.35; cursor: default; }
+.tbl-pagination .pg-btn.pg-active { background: var(--c1); border-color: var(--c1); color: #fff; font-weight: 700; cursor: default; }
+.tbl-pagination .pg-gap { min-width: 18px; text-align: center; color: var(--fg-secondary); }
 
 .stats-tbl {
     width: 100%; border-collapse: collapse; font-size: 0.77rem;
@@ -749,8 +773,15 @@
 @media (max-width: 600px) {
     .stats-bar-title { font-size: 0.88rem; }
     .kpi-value { font-size: 1.5rem; }
-    .table-controls { gap: 0.35rem; }
-    .export-grp { margin-left: 0; }
+    .table-controls { gap: 0.4rem; }
+    .tbl-search { flex-basis: 100%; max-width: none; }
+    .tbl-team-sel, .tbl-role-sel { flex: 1 1 0; max-width: none; min-width: 0; }
+    .export-grp { margin-left: 0; width: 100%; }
+    .export-grp .btn-exp { flex: 1; }
+    .tbl-pagination { flex-direction: column; align-items: stretch; }
+    .pg-left, .pg-nav { justify-content: space-between; }
+    .pg-nav .pg-num, .pg-nav .pg-gap { display: none; }
+    .pg-nav .pg-num.pg-active { display: inline-flex; }
 }
 </style>
 {% endblock %}
@@ -1661,28 +1692,35 @@ function applyPagination(type) {
     const unit = type === 'bowling' ? 'bowlers' : 'players';
     const el = document.getElementById(type + '-count');
     if (el) el.textContent = total + ' ' + unit;
-    // render nav
-    let html = '';
-    if (st.size > 0 && totalPages > 1) {
-        html += `<button onclick="pgGo('${type}',-1)" ${st.page<=1?'disabled':''}>&#8249;</button>`;
-        const range = [];
-        for (let i = 1; i <= totalPages; i++) {
-            if (i === 1 || i === totalPages || Math.abs(i - st.page) <= 2) range.push(i);
-            else if (range[range.length-1] !== '...') range.push('...');
-        }
-        range.forEach(p => {
-            if (p === '...') { html += `<span class="pg-info">…</span>`; }
-            else { html += `<button class="${p===st.page?'pg-active':''}" onclick="pgGo('${type}',0,${p})">${p}</button>`; }
-        });
-        html += `<button onclick="pgGo('${type}',1)" ${st.page>=totalPages?'disabled':''}>&#8250;</button>`;
-        html += `<span class="pg-info">Page ${st.page} of ${totalPages}</span>`;
-    }
-    html += `<select class="pg-size-sel" onchange="pgSize('${type}',this.value)">`;
+    // render footer: rows-per-page + range on the left, pager on the right
+    const from = total === 0 ? 0 : (st.size === 0 ? 1 : (st.page - 1) * st.size + 1);
+    const to = st.size === 0 ? total : Math.min(total, st.page * st.size);
+    let html = `<div class="pg-left">`
+        + `<label class="pg-size-lbl">Rows per page`
+        + `<select class="pg-size-sel" aria-label="Rows per page" onchange="pgSize('${type}',this.value)">`;
     [10,25,50,100,0].forEach(n => {
-        const label = n === 0 ? 'All' : n;
-        html += `<option value="${n}" ${st.size===n?'selected':''}>${label}</option>`;
+        html += `<option value="${n}" ${st.size===n?'selected':''}>${n === 0 ? 'All' : n}</option>`;
     });
-    html += '</select>';
+    html += `</select></label>`
+        + `<span class="pg-range"><b>${from}–${to}</b> of ${total}</span></div>`;
+    if (st.size > 0 && totalPages > 1) {
+        const atFirst = st.page <= 1, atLast = st.page >= totalPages;
+        html += `<nav class="pg-nav" aria-label="Pagination">`
+            + `<button class="pg-btn" aria-label="First page" title="First page" onclick="pgGo('${type}',0,1)" ${atFirst?'disabled':''}>&#171;</button>`
+            + `<button class="pg-btn" aria-label="Previous page" title="Previous page" onclick="pgGo('${type}',-1)" ${atFirst?'disabled':''}>&#8249;</button>`;
+        let last = 0;
+        for (let i = 1; i <= totalPages; i++) {
+            if (i !== 1 && i !== totalPages && Math.abs(i - st.page) > 1) continue;
+            if (i - last > 1) html += `<span class="pg-gap">…</span>`;
+            html += i === st.page
+                ? `<button class="pg-btn pg-num pg-active" aria-current="page" aria-label="Page ${i}">${i}</button>`
+                : `<button class="pg-btn pg-num" aria-label="Page ${i}" onclick="pgGo('${type}',0,${i})">${i}</button>`;
+            last = i;
+        }
+        html += `<button class="pg-btn" aria-label="Next page" title="Next page" onclick="pgGo('${type}',1)" ${atLast?'disabled':''}>&#8250;</button>`
+            + `<button class="pg-btn" aria-label="Last page" title="Last page" onclick="pgGo('${type}',0,${totalPages})" ${atLast?'disabled':''}>&#187;</button>`
+            + `</nav>`;
+    }
     nav.innerHTML = html;
 }
 function pgGo(type, delta, page) {
@@ -1852,7 +1890,7 @@ function loadPartnerships() {
         const countEl = document.getElementById('partnerships-count');
         if (countEl) countEl.textContent = data.data.length + ' partnerships';
         // Init pagination for partnerships tab
-        pgState['partnerships'] = { page: 1, size: 25 };
+        pgState['partnerships'] = { page: 1, size: (pgState['partnerships'] || {}).size ?? 25 };
         applyPagination('partnerships');
     }).catch(() => {
         if (oldC) oldC.innerHTML = '<div class="no-data"><i class="fas fa-exclamation-circle"></i>Error loading partnerships</div>';
