@@ -3,6 +3,7 @@ import os
 import logging
 from datetime import datetime
 
+from engine.format_catalog import FORMAT_CATALOG
 from utils.exception_tracker import log_exception
 
 class StatsAggregator:
@@ -24,6 +25,20 @@ class StatsAggregator:
         self.batting_df = self._merge_csv_files(self.batting_files, self.REQUIRED_BATTING_COLS)
         self.bowling_df = self._merge_csv_files(self.bowling_files, self.REQUIRED_BOWLING_COLS)
 
+    @staticmethod
+    def _normalize_format(value):
+        """Accept canonical IDs and archive display labels at the CSV boundary."""
+        if pd.isna(value) or not str(value).strip():
+            return 'Legacy'
+        label = str(value).strip()
+        # List A archives include the scheduled length in their display label.
+        base_label = label.split('·', 1)[0].strip().casefold()
+        for format_id, spec in FORMAT_CATALOG.items():
+            if base_label in (format_id.casefold(), spec['label'].casefold()):
+                return format_id
+        # Preserve custom formats rather than silently assigning them to T20.
+        return label
+
     def _merge_csv_files(self, file_paths, required_columns=None):
         if not file_paths:
             return pd.DataFrame()
@@ -33,6 +48,7 @@ class StatsAggregator:
                 df = pd.read_csv(file_path)
                 if 'Match Format' not in df:
                     df['Match Format'] = 'Legacy'
+                df['Match Format'] = df['Match Format'].map(self._normalize_format)
                 if 'Balls' in df and 'Overs' not in df and required_columns == self.REQUIRED_BOWLING_COLS:
                     # Legacy aggregation works in six-ball notation internally.
                     df['Overs'] = df['Balls'].apply(lambda b: int(b) // 6 + (int(b) % 6) / 10)
