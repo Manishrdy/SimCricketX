@@ -938,7 +938,7 @@ class Match(CaptaincyMixin, HundredPresentation):
     def _create_next_bowler_decision(self):
         candidates = self._get_manual_bowler_candidates()
         if self.captaincy_enabled:
-            legal_names = {p['name'] for p in self._captain_eligible()}
+            legal_names = {p['name'] for p in self._captain_eligible(manual=True)}
             candidates = [(idx, p) for idx, p in candidates if p['name'] in legal_names]
         # FC has no fixed overs-per-bowler cap (see _get_manual_bowler_candidates)
         # — "overs_remaining" isn't a meaningful concept there, so sort by
