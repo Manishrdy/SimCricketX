@@ -174,8 +174,8 @@ function syncWithGitHub(event) {
                     (s.errors ? ' (' + s.errors + ' errors)' : '') + '. Reloading...</div>';
                 setTimeout(() => location.reload(), 1200);
             } else {
-                alertBox.innerHTML = '<div class="a-alert a-alert-error" style="display:block">Sync failed: ' +
-                    (body.error || 'unknown error') + '</div>';
+                alertBox.innerHTML = '<div class="a-alert a-alert-error" style="display:block"></div>';
+                alertBox.firstChild.textContent = 'Sync failed: ' + (body.error || 'unknown error');
             }
         })
         .catch(err => {

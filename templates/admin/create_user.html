@@ -158,7 +158,12 @@
 <script>
 function showAlert(msg, type) {
     const c = document.getElementById('alertContainer');
-    c.innerHTML = `<div class="a-alert a-alert-${type}" style="display:block">${msg}</div>`;
+    c.textContent = '';
+    const alertEl = document.createElement('div');
+    alertEl.className = 'a-alert a-alert-' + type;
+    alertEl.textContent = msg;
+    c.appendChild(alertEl);
+    alertEl.style.display = 'block';
     setTimeout(() => c.innerHTML = '', 5000);
 }
 
