@@ -138,7 +138,8 @@ function retryExcSync(btn, rowId) {
                 box.innerHTML = '<div class="a-alert a-alert-success" style="display:block">Retry queued. Reloading…</div>';
                 setTimeout(() => location.reload(), 1200);
             } else {
-                box.innerHTML = '<div class="a-alert a-alert-error" style="display:block">' + (body.error || 'Retry failed') + '</div>';
+                box.innerHTML = '<div class="a-alert a-alert-error" style="display:block"></div>';
+                box.firstChild.textContent = body.error || 'Retry failed';
                 btn.disabled = false;
             }
         })

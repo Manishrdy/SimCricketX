@@ -5,6 +5,7 @@ Handles all statistics calculations and queries for the SimCricketX application.
 """
 
 from sqlalchemy import func
+from engine.bowling_activity import has_bowling_activity
 from engine.length_filter import parse_length_filter, length_predicate
 from sqlalchemy.orm import aliased
 from datetime import datetime
@@ -218,7 +219,7 @@ class StatsService:
                         if (cache.best_match_bowling_wickets or 0) > 0 else '-'
                     ),
                     'average': cache.bowling_average,
-                    'economy': cache.bowling_economy or 0.0,
+                    'economy': cache.bowling_economy,
                     'strike_rate': cache.bowling_strike_rate,
                     'maidens': cache.maidens or 0,
                     'five_wicket_hauls': cache.five_wicket_hauls or 0,
@@ -372,7 +373,7 @@ class StatsService:
 
             if card.record_type == "bowling":
                 balls = card.balls_bowled or 0
-                if balls > 0:
+                if has_bowling_activity(card):
                     entry["wickets"] += card.wickets or 0
                     bowling_forms.setdefault(pid, {
                         "player": player.name,
@@ -608,17 +609,16 @@ class StatsService:
                 player_data[pid]['bat_dots'] += card.dot_balls or 0
             
             # Bowling stats
-            if card.record_type == 'bowling':
+            if card.record_type == 'bowling' and has_bowling_activity(card):
                 balls = card.balls_bowled or 0
-                if balls > 0:
-                    player_data[pid]['bowl_innings'] += 1
-                    if (card.wickets or 0) == 4:
-                        player_data[pid]['bowl_four_wicket_hauls'] += 1
-                    if (card.wickets or 0) >= 5:
-                        player_data[pid]['bowl_five_wicket_hauls'] += 1
-                    match_figures = player_data[pid]['bowl_match_data'][match.id]
-                    match_figures['wickets'] += card.wickets or 0
-                    match_figures['runs'] += card.runs_conceded or 0
+                player_data[pid]['bowl_innings'] += 1
+                if (card.wickets or 0) == 4:
+                    player_data[pid]['bowl_four_wicket_hauls'] += 1
+                if (card.wickets or 0) >= 5:
+                    player_data[pid]['bowl_five_wicket_hauls'] += 1
+                match_figures = player_data[pid]['bowl_match_data'][match.id]
+                match_figures['wickets'] += card.wickets or 0
+                match_figures['runs'] += card.runs_conceded or 0
 
                 player_data[pid]['bowl_balls'] += balls
                 player_data[pid]['bowl_runs'] += card.runs_conceded or 0
@@ -723,7 +723,7 @@ class StatsService:
         bowling_stats = []
         
         for pid, data in player_data.items():
-            if data['bowl_balls'] == 0 and data['bowl_wickets'] == 0:
+            if data['bowl_innings'] == 0:
                 continue  # Skip players who haven't bowled
             
             matches = len(data['matches'])
@@ -736,7 +736,7 @@ class StatsService:
             overs = balls if match_format == "Hundred" else balls_to_overs_float(balls)
 
             # Calculate economy rate
-            economy = runs * (100 if match_format == "Hundred" else 6) / balls if balls > 0 else (None if match_format == "Hundred" else 0)
+            economy = runs * (100 if match_format == "Hundred" else 6) / balls if balls > 0 else None
             
             # Calculate average — undefined when bowler has zero wickets.
             # Standard cricket convention: shown as '-', not as 0.
@@ -1116,7 +1116,7 @@ class StatsService:
             bowling_figures = []
             for card, match, player, team in records:
                 # Calculate economy rate
-                economy = 0.0
+                economy = None
                 if card.balls_bowled and card.balls_bowled > 0:
                     economy = (card.runs_conceded * (100 if match_format == "Hundred" else 6.0)) / card.balls_bowled
                 
@@ -1302,7 +1302,7 @@ class StatsService:
                         'dots': card.dot_balls or 0
                     })
                 
-                if card.record_type == 'bowling' and (card.balls_bowled or 0) > 0:
+                if card.record_type == 'bowling' and has_bowling_activity(card):
                     bowling_data.append({
                         'match_id': match.id,
                         'innings_number': card.innings_number,
@@ -1387,7 +1387,7 @@ class StatsService:
         # Bowling average and strike rate are undefined when bowler has zero
         # wickets (cricket convention — cannot be 0, that would imply best ever).
         avg = round(total_runs / total_wickets, 2) if total_wickets > 0 else None
-        economy = (total_runs * (100 if match_format == "Hundred" else 6.0) / total_balls) if total_balls > 0 else (None if match_format == "Hundred" else 0.0)
+        economy = (total_runs * (100 if match_format == "Hundred" else 6.0) / total_balls) if total_balls > 0 else None
         sr = round(total_balls / total_wickets, 1) if total_wickets > 0 else None
 
         best = max(bowling_list, key=lambda x: (x['wickets'], -x['runs'])) if bowling_list else None
@@ -1922,7 +1922,7 @@ class StatsService:
                         "is_out": bool(card.is_out),
                     })
 
-                if card.record_type == "bowling" and (card.balls_bowled or 0) > 0:
+                if card.record_type == "bowling" and has_bowling_activity(card):
                     bowling_innings.append({
                         "match_id": match.id, "innings_number": card.innings_number,
                         "wickets": card.wickets or 0, "runs": card.runs_conceded or 0,
