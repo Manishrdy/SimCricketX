@@ -107,6 +107,25 @@ class StatsAggregator:
         num_cols = ['Runs', 'Balls', '1s', '2s', '3s', 'Fours', 'Sixes', 'Dots']
         self.batting_df[num_cols] = self.batting_df[num_cols].apply(pd.to_numeric, errors='coerce').fillna(0)
 
+        # Normalize dismissal values to canonical casing before any filter/groupby.
+        # The engine writes "Run Out" (capital O); archive CSVs may use "Run out".
+        # All other dismissal types are also normalised here so the crosstab columns
+        # and the rename map further below always match, regardless of source.
+        _STATUS_CANON = {
+            'run out': 'Run out',
+            'caught':  'Caught',
+            'bowled':  'Bowled',
+            'lbw':     'LBW',
+            'not out': 'not out',
+        }
+        self.batting_df['Status'] = (
+            self.batting_df['Status']
+            .where(self.batting_df['Status'].isna(),
+                   self.batting_df['Status'].str.strip().apply(
+                       lambda s: _STATUS_CANON.get(s.lower(), s) if isinstance(s, str) else s
+                   ))
+        )
+
         agg_funcs = {
             'Matches': ('match_id', 'nunique'), 'Runs': ('Runs', 'sum'), 'Balls': ('Balls', 'sum'),
             '1s': ('1s', 'sum'), '2s': ('2s', 'sum'), '3s': ('3s', 'sum'),
@@ -130,7 +149,10 @@ class StatsAggregator:
         player_stats['Average'] = (player_stats['Runs'] / outs.where(outs > 0, None)).fillna(0).round(2)
         player_stats['Strike Rate'] = (player_stats['Runs'] / player_stats['Balls'].where(player_stats['Balls'] > 0, None) * 100).fillna(0).round(2)
 
-        dismissals = pd.crosstab(self.batting_df['Player Name'], self.batting_df['Status'])
+        # Not-outs are already counted per player/team above; they are not dismissals.
+        dismissals = pd.crosstab(
+            self.batting_df['Player Name'], self.batting_df['Status']
+        ).drop(columns=['not out'], errors='ignore')
         player_stats = pd.merge(player_stats, dismissals, on='Player Name', how='left')
         
         catches = self.batting_df[self.batting_df['Status'] == 'Caught'].groupby('Fielder Out').size().reset_index(name='Catches')
@@ -140,7 +162,7 @@ class StatsAggregator:
         player_stats = pd.merge(player_stats, run_outs, left_on='Player Name', right_on='Fielder Out', how='left').drop(columns=['Fielder Out'])
         
         player_stats.fillna(0, inplace=True)
-        player_stats.rename(columns={'Player Name': 'Player', 'Team Name': 'Team', 'Fours': '4s', 'Sixes': '6s', 'Run out': 'RunOut', 'not out': 'NOs'}, inplace=True)
+        player_stats.rename(columns={'Player Name': 'Player', 'Team Name': 'Team', 'Fours': '4s', 'Sixes': '6s', 'Run out': 'RunOut'}, inplace=True)
         
         ordered_cols = ['Player', 'Team', 'Matches', 'Innings', 'Runs', 'Balls', 'Strike Rate', 'Average', 'HS', 'NOs', '50s', '100s', '200s', '300s', '1s', '2s', '3s', '4s', '6s', 'Dots', 'Bowled', 'Caught', 'LBW', 'RunOut', 'Catches', 'RunOuts_Made']
         for col in ordered_cols:
