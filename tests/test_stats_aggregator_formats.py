@@ -106,3 +106,114 @@ def test_import_normalizes_both_disciplines(tmp_path, monkeypatch, label, expect
     assert aggregator.bowling_df['Match Format'].tolist() == [expected]
     row = aggregator._calculate_bowling_stats().iloc[0]
     assert row['Economy'] == (125 if expected == 'Hundred' else 7.5)
+
+
+def test_same_name_players_on_different_teams_do_not_share_attributions(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    def _bat_row(**overrides):
+        row = dict.fromkeys(StatsAggregator.REQUIRED_BATTING_COLS, 0)
+        row.update({'Fielder Out': None, 'Bowler Out': None, 'Match Format': 'T20'})
+        row.update(overrides)
+        return row
+
+    def _bowl_row(**overrides):
+        row = dict.fromkeys(StatsAggregator.REQUIRED_BOWLING_COLS, 0)
+        row.update({'Match Format': 'T20'})
+        row.update(overrides)
+        return row
+
+    # Match 1: Team A vs Team B (both teams have a player named "Alex")
+    m1_bat = pd.DataFrame([
+        # Team A batting: Alex (Team A) is Bowled by Alex (Team B); Opener A Caught by Alex (Team B) off Alex (Team B); Batter A3 Run out by Alex (Team B)
+        _bat_row(**{
+            'Player Name': 'Alex', 'Team Name': 'Team A', 'Runs': 15, 'Balls': 10,
+            'Status': 'Bowled', 'Bowler Out': 'Alex',
+        }),
+        _bat_row(**{
+            'Player Name': 'Opener A', 'Team Name': 'Team A', 'Runs': 8, 'Balls': 6,
+            'Status': 'Caught', 'Bowler Out': 'Alex', 'Fielder Out': 'Alex',
+        }),
+        _bat_row(**{
+            'Player Name': 'Batter A3', 'Team Name': 'Team A', 'Runs': 4, 'Balls': 5,
+            'Status': 'Run out', 'Fielder Out': 'Alex',
+        }),
+        # Team B batting: Alex (Team B) is LBW to Alex (Team A); Opener B Caught by Alex (Team A) off Pace A
+        _bat_row(**{
+            'Player Name': 'Alex', 'Team Name': 'Team B', 'Runs': 30, 'Balls': 20,
+            'Status': 'LBW', 'Bowler Out': 'Alex',
+        }),
+        _bat_row(**{
+            'Player Name': 'Opener B', 'Team Name': 'Team B', 'Runs': 12, 'Balls': 9,
+            'Status': 'Caught', 'Bowler Out': 'Pace A', 'Fielder Out': 'Alex',
+        }),
+    ])
+    m1_bowl = pd.DataFrame([
+        _bowl_row(**{'Bowler Name': 'Alex', 'Team Name': 'Team B', 'Overs': 4.0, 'Runs': 20, 'Wickets': 2}),
+        _bowl_row(**{'Bowler Name': 'Alex', 'Team Name': 'Team A', 'Overs': 4.0, 'Runs': 25, 'Wickets': 1}),
+        _bowl_row(**{'Bowler Name': 'Pace A', 'Team Name': 'Team A', 'Overs': 2.0, 'Runs': 15, 'Wickets': 1}),
+    ])
+
+    # Match 2: Team C vs Team D (another player named "Alex" on Team D)
+    m2_bat = pd.DataFrame([
+        _bat_row(**{
+            'Player Name': 'Batter C', 'Team Name': 'Team C', 'Runs': 10, 'Balls': 12,
+            'Status': 'Bowled', 'Bowler Out': 'Alex',
+        }),
+        _bat_row(**{
+            'Player Name': 'Alex', 'Team Name': 'Team D', 'Runs': 5, 'Balls': 4,
+            'Status': 'Caught', 'Bowler Out': 'Bowler C', 'Fielder Out': 'Fielder C',
+        }),
+    ])
+    m2_bowl = pd.DataFrame([
+        _bowl_row(**{'Bowler Name': 'Alex', 'Team Name': 'Team D', 'Overs': 3.0, 'Runs': 10, 'Wickets': 1}),
+        _bowl_row(**{'Bowler Name': 'Bowler C', 'Team Name': 'Team C', 'Overs': 2.0, 'Runs': 5, 'Wickets': 1}),
+    ])
+
+    paths = []
+    for name, df in [
+        ('match1_batting.csv', m1_bat),
+        ('match1_bowling.csv', m1_bowl),
+        ('match2_batting.csv', m2_bat),
+        ('match2_bowling.csv', m2_bowl),
+    ]:
+        p = tmp_path / name
+        df.to_csv(p, index=False)
+        paths.append(str(p))
+
+    agg = StatsAggregator(paths, 'test')
+    bat = agg._calculate_batting_stats().set_index(['Player', 'Team'])
+    bowl = agg._calculate_bowling_stats().set_index(['Player', 'Team'])
+
+    # Batting dismissal & fielding assertions for each distinct (Alex, Team)
+    assert bat.loc[('Alex', 'Team A'), 'Bowled'] == 1
+    assert bat.loc[('Alex', 'Team A'), 'LBW'] == 0
+    assert bat.loc[('Alex', 'Team A'), 'Caught'] == 0
+    assert bat.loc[('Alex', 'Team A'), 'Catches'] == 1
+    assert bat.loc[('Alex', 'Team A'), 'RunOuts_Made'] == 0
+
+    assert bat.loc[('Alex', 'Team B'), 'Bowled'] == 0
+    assert bat.loc[('Alex', 'Team B'), 'LBW'] == 1
+    assert bat.loc[('Alex', 'Team B'), 'Caught'] == 0
+    assert bat.loc[('Alex', 'Team B'), 'Catches'] == 1
+    assert bat.loc[('Alex', 'Team B'), 'RunOuts_Made'] == 1
+
+    assert bat.loc[('Alex', 'Team D'), 'Bowled'] == 0
+    assert bat.loc[('Alex', 'Team D'), 'LBW'] == 0
+    assert bat.loc[('Alex', 'Team D'), 'Caught'] == 1
+    assert bat.loc[('Alex', 'Team D'), 'Catches'] == 0
+    assert bat.loc[('Alex', 'Team D'), 'RunOuts_Made'] == 0
+
+    # Bowling dismissal breakdown assertions for each distinct (Alex, Team)
+    assert bowl.loc[('Alex', 'Team A'), 'D_LBW'] == 1
+    assert bowl.loc[('Alex', 'Team A'), 'D_Bowled'] == 0
+    assert bowl.loc[('Alex', 'Team A'), 'D_Caught'] == 0
+
+    assert bowl.loc[('Alex', 'Team B'), 'D_LBW'] == 0
+    assert bowl.loc[('Alex', 'Team B'), 'D_Bowled'] == 1
+    assert bowl.loc[('Alex', 'Team B'), 'D_Caught'] == 1
+
+    assert bowl.loc[('Alex', 'Team D'), 'D_LBW'] == 0
+    assert bowl.loc[('Alex', 'Team D'), 'D_Bowled'] == 1
+    assert bowl.loc[('Alex', 'Team D'), 'D_Caught'] == 0
+
