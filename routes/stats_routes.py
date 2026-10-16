@@ -171,7 +171,22 @@ def register_stats_routes(
             log_exception(e)
             app.logger.error(f"Error in statistics route: {e}", exc_info=True)
             flash("Error loading statistics", "danger")
-            return render_template("statistics.html", has_stats=False, user=current_user)
+            # statistics.html serialises these with |tojson, so they must be
+            # defined even here; the try block may have failed before
+            # resolving them.
+            try:
+                fallback_format = _stats_format_arg()
+            except Exception:
+                fallback_format = "T20"
+            return render_template(
+                "statistics.html",
+                view_type="overall",
+                tournament_id=None,
+                match_format=fallback_format,
+                tournaments=[],
+                has_stats=False,
+                user=current_user,
+            )
 
     @app.route("/statistics/export/<stat_type>/<format_type>")
     @login_required

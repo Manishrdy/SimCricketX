@@ -397,16 +397,20 @@ class CaptaincyMixin:
             if outcome.get('batter_out'):
                 state['review'] = 'wicket'
 
-    def _captain_eligible(self):
+    def _captain_eligible(self, *, manual=False):
         if self.is_fc:
             return self.bowler_manager.get_eligible_bowlers(self.current_over)
         left = self.overs - self.current_over
-        eligible = self.bowler_manager.get_eligible_bowlers(self.current_over, left)
         if getattr(self.fmt, 'strict_short_bowling', False):
-            return eligible
+            return self.bowler_manager.get_eligible_bowlers(self.current_over, left)
         # Legacy manager can relax quotas; captain policy cannot. Feasibility
         # checks capacity in alternating slots, including the candidate's use.
         all_bowlers = [p for p in self.bowling_team if p.get('will_bowl')]
+        # The legacy manager's fresh-bowler override is an automatic selection
+        # policy, not a rule of cricket. Manual choices must retain every legal
+        # bowler, while still passing the quota and completion checks below.
+        eligible = (all_bowlers if manual else
+                    self.bowler_manager.get_eligible_bowlers(self.current_over, left))
         cap = self.fmt.max_bowler_overs
         last = self.bowler_manager._last_bowler
         result = []
