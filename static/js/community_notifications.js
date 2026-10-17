@@ -118,7 +118,7 @@
     if (pending) return pending;
     pending = (async () => {
       try {
-        const res = await fetch(panel.dataset.listUrl, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        const res = await fetch(panel.dataset.listUrl, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
         if (!res.ok) throw new Error();
         render(await res.json());
       } catch (_) {
