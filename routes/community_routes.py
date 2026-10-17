@@ -28,6 +28,12 @@ def _error(exc: cs.CommunityError):
     return jsonify({"error": exc.message, "code": exc.code, "fields": exc.fields}), exc.status
 
 
+def _no_store(response):
+    """Per-user, changes on every read: never let a browser or CDN replay it."""
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 def _json_body() -> dict:
     data = request.get_json(silent=True)
     return data if isinstance(data, dict) else {}
@@ -411,10 +417,10 @@ def register_community_routes(app, *, db=db, limiter=None):
         except cs.CommunityError as exc:
             return _error(exc)
         total = cs.visible_notifications(current_user).count()
-        return jsonify({"unread": cs.unread_count(current_user), "page": page,
+        return _no_store(jsonify({"unread": cs.unread_count(current_user), "page": page,
                         "has_next": page * limit < total,
                         "items": [cs.serialize_notification(n) for n in
-                                  cs.recent_notifications(current_user, limit, page)]})
+                                  cs.recent_notifications(current_user, limit, page)]}))
 
     @app.route("/api/community/notifications/read", methods=["POST"])
     @login_required
@@ -429,7 +435,7 @@ def register_community_routes(app, *, db=db, limiter=None):
                 raise cs.CommunityError("Provide ids or all: true.")
         except cs.CommunityError as exc:
             return _error(exc)
-        return jsonify({"ok": True, "unread": cs.unread_count(current_user)})
+        return _no_store(jsonify({"ok": True, "unread": cs.unread_count(current_user)}))
 
     # ── Images ───────────────────────────────────────────────────────────────
 

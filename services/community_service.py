@@ -59,6 +59,7 @@ STATUSES = {
     "under_review": "Under review",
     "planned":      "Planned",
     "in_progress":  "In progress",
+    "deferred":     "Deferred",
     "fixed":        "Fixed",
     "wont_fix":     "Won't fix",
     "duplicate":    "Duplicate",
