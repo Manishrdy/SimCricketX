@@ -8,7 +8,7 @@
     <div>
       <p class="cm-eyebrow"><i class="fas fa-comments" aria-hidden="true"></i> SimCricketX Community</p>
       <h1>Questions, bugs &amp; ideas</h1>
-      <p>Search first: if someone already posted it, upvote it instead of posting again. Upvotes decide what gets fixed and built next.</p>
+      <p>Share your ideas, get help, and talk cricket with the community.</p>
     </div>
     <a class="cm-btn cm-btn--primary" href="{{ url_for('community_new') }}"><i class="fas fa-pen-to-square" aria-hidden="true"></i>New post</a>
   </header>
@@ -67,6 +67,9 @@
     </main>
 
     <aside class="cm-aside" aria-label="About the community">
+      {% if current_user.is_admin %}
+      <a class="cm-btn cm-queue-link" href="{{ url_for('admin_community') }}"><i class="fas fa-shield-halved" aria-hidden="true"></i>Moderation queue</a>
+      {% endif %}
       <section class="cm-panel">
         <h3>Before you post</h3>
         <ul class="cm-tips">

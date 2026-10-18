@@ -21,7 +21,7 @@
 {% block head %}{% endblock %}
 <script>try { document.documentElement.dataset.theme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch(e) {}</script>
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
 <a class="skip" href="#main">Skip to content</a>
 <header class="public-nav navbar scx-nav">
 <a class="nav-brand" href="/">

@@ -1,24 +1,27 @@
-{% extends "public_base.html" %}{% block content %}
+{% extends "public_base.html" %}
+{% block body_class %}landing-page{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/public_home.css') }}">{% endblock %}
+{% block content %}
 <section class="hero">
 <div>
-<p class="eyebrow">THE GAME IS IN THE DETAILS</p>
-<h1>Big cricket.<br>Every ball.<br>
-<em>All text.</em>
+<p class="eyebrow">YOUR TEAM. YOUR CALL.</p>
+<h1>Cricket, on<br><em>your terms.</em>
 </h1>
-<p class="lead">Text-based cricket simulators for the selector, the tactician and the scorecard obsessive. Build your squads. Shape the conditions. Let the contest unfold.</p>
+<p class="lead">Build your dream XI. Make the big calls. Follow every ball.<br class="desktop-break"> A text-based cricket simulator for people who love the game.</p>
 <div class="actions">
-<a class="button" href="/register">Build your cricket world ↗</a>
-<a href="/about">Explore every capability →</a>
+<a class="button" href="/register">Start playing <span aria-hidden="true">↗</span></a>
+<a href="#formats">Find your format <span aria-hidden="true">↓</span></a>
 </div>
 <p class="fine">Free to play · Runs in your browser · Open source · <a href="/changelog">What's new</a></p>
 </div>
 <aside class="scorebook" aria-label="Illustrative match commentary">
-<div class="score-top">THE MATCHDAY NOTEBOOK <span>DEMO</span>
+<div class="score-top"><span class="match-label">MATCH CENTRE</span> <span class="demo-label">ILLUSTRATIVE MATCH</span>
 </div>
-<p class="eyebrow">T20 / SECOND INNINGS</p>
+<p class="eyebrow">T20 · THE CHASE</p>
+<h2 class="match-team">Your XI <span>vs The Visitors</span></h2>
 <div class="score">168<span>/ 5</span>
 </div>
-<p>19.2 overs · 9 needed from 4 balls</p>
+<p class="match-equation"><b>9 needed</b> from 4 balls <span>19.2 overs</span></p>
 <div class="delivery">
 <b>19.1</b>
 <span>FOUR. Finds the gap through cover.</span>
@@ -49,31 +52,31 @@
 </span>
 </div>
 <section id="formats">
-<p class="eyebrow">01 / FIND YOUR FORMAT</p>
+<p class="eyebrow">FIVE FORMATS. ONE OBSESSION.</p>
 <h2>From ten overs to the long game.</h2>
 <p class="section-intro">Five ways to experience cricket, each with its own rhythm.</p>{% include "partials/public_formats.html" %}
 </section>
 <section class="ink-panel">
-<p class="eyebrow">02 / CHOOSE HOW YOU PLAY</p>
+<p class="eyebrow">IN THE DUGOUT</p>
 <h2>Take the controls.<br>Or watch the story unfold.</h2>
 <div class="three-grid">
 <article>
-<h3>Auto simulation</h3>
+<span class="mode-number" aria-hidden="true">01</span><h3>Let it play out.</h3>
 <p>Set up a match and let the engine take it from there. Available across all five formats.</p>
 </article>
 <article>
-<h3>Manual simulation</h3>
+<span class="mode-number" aria-hidden="true">02</span><h3>Make the calls.</h3>
 <p>Take a more hands-on role in T10, T20, List A and The Hundred. First-Class runs in Auto mode.</p>
 </article>
 <article>
-<h3>Story Mode</h3>
+<span class="mode-number" aria-hidden="true">03</span><h3>Rewrite the story.</h3>
 <p>Bring your own teams to supported scenarios inspired by legendary match arcs.</p>
 </article>
 </div>
 <p class="mode-note">Tune supported game profiles: Auto, Natural Game, Aggressive, Defensive, Flat Track Bully and Bowler’s Day.</p>
 </section>
 <section>
-<p class="eyebrow">03 / BUILD THE BIGGER PICTURE</p>
+<p class="eyebrow">BEYOND MATCHDAY</p>
 <h2>One fixture is only the beginning.</h2>
 <p class="section-intro">Seven competition structures, plus multi-format tours. Available structures depend on your team count.</p>{% include "partials/public_competitions.html" %}
 <div class="tour-callout">
