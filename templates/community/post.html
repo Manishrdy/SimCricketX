@@ -17,20 +17,26 @@
   <div class="cm-comment__tools">
     {% if not c.deleted and post.can.comment %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="reply" data-parent="{{ c.id }}" data-name="{{ c.author.name }}"><i class="fas fa-reply" aria-hidden="true"></i>Reply</button>{% endif %}
     {% if c.can.edit %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="edit-comment">Edit</button>{% endif %}
-    {% if c.can.delete %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="delete-comment">Delete</button>{% endif %}
+    {% if c.can.delete and not c.can.moderate %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="delete-comment">Delete</button>{% endif %}
     {% if not c.deleted and not c.can.edit and not c.can.moderate %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="report" data-comment="{{ c.id }}">Report</button>{% endif %}
     {% if c.can.moderate %}
+    <details class="cm-mod-menu">
+      <summary><i class="fas fa-shield-halved" aria-hidden="true"></i> Moderate</summary>
+      <div class="cm-mod-menu__actions">
+      {% if c.can.delete %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="delete-comment">Delete comment</button>{% endif %}
       {% if not is_reply and not c.deleted %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="mod-comment" data-op="{{ 'unofficial' if c.is_official else 'official' }}">{{ 'Unmark answer' if c.is_official else 'Mark as answer' }}</button>{% endif %}
       {% if c.deleted %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="mod-comment" data-op="restore">Restore</button>
       <button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="mod-comment" data-op="purge" data-confirm="Permanently delete this comment and its replies?">Purge</button>{% endif %}
       {% if c.author.email and not c.author.is_admin %}<button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" data-action="mute" data-email="{{ c.author.email }}" data-name="{{ c.author.name }}">Mute author</button>{% endif %}
+      </div>
+    </details>
     {% endif %}
   </div>
 </article>
 {%- endmacro %}
 
 {% block content %}
-<div class="cm-wrap cm-wrap--narrow">
+<div class="cm-wrap cm-wrap--narrow cm-discussion">
   <a class="cm-crumb" href="{{ url_for('community_index') }}"><i class="fas fa-arrow-left" aria-hidden="true"></i>Community</a>
 
   {% if post.duplicate_of %}
@@ -41,13 +47,14 @@
   {% endif %}
 
   <article class="cm-post cm-post--{{ post.flair }}" id="cm-post">
-    {{ badges(post) }}
-    <h1>{{ post.title }}</h1>
     <div class="cm-meta">
       {{ author(post.author) }}
       <span title="{{ post.created_at }}">{{ post.created_at|cm_ago }}</span>
       {% if post.edited_at %}<span>edited {{ post.edited_at|cm_ago }}</span>{% endif %}
     </div>
+
+    {{ badges(post) }}
+    <h1>{{ post.title }}</h1>
 
     {% if post.flair == 'bug' and post.steps %}
     <div class="cm-section">
@@ -77,36 +84,34 @@
 
     <div class="cm-actions">
       {% if post.visibility == 'public' %}
-      <div class="cm-votebar" role="group" aria-label="Vote" data-vote-post="{{ post.id }}">
-        <button type="button" class="cm-pill cm-pill--up{% if post.my_vote == 1 %} is-on{% endif %}" data-vote="1"
-          aria-pressed="{{ 'true' if post.my_vote == 1 else 'false' }}" {% if not post.can.vote %}disabled title="You can’t vote on this post"{% endif %}>
-          <i class="fas fa-arrow-up" aria-hidden="true"></i><span>{{ post.vote_label }}</span><b data-role="up">{{ post.vote_count }}</b></button>
-        <button type="button" class="cm-pill cm-pill--down{% if post.my_vote == -1 %} is-on{% endif %}" data-vote="-1"
-          aria-pressed="{{ 'true' if post.my_vote == -1 else 'false' }}" {% if not post.can.vote %}disabled title="You can’t vote on this post"{% endif %}>
-          <i class="fas fa-arrow-down" aria-hidden="true"></i><span>{{ post.down_label }}</span><b data-role="down">{{ post.downvote_count }}</b></button>
+      <div class="cm-votebar" role="group" aria-label="Vote on post" data-vote-post="{{ post.id }}">
+        <button type="button" class="cm-pill cm-pill--up{% if post.my_vote == 1 %} is-on{% endif %}" data-vote="1" aria-label="{{ post.vote_label }}" title="{{ post.vote_label }}" aria-pressed="{{ 'true' if post.my_vote == 1 else 'false' }}" {% if not post.can.vote %}disabled{% endif %}><i class="fas fa-arrow-up" aria-hidden="true"></i></button>
+        <strong class="cm-score" data-role="score" aria-live="polite">{{ post.score }}</strong>
+        <button type="button" class="cm-pill cm-pill--down{% if post.my_vote == -1 %} is-on{% endif %}" data-vote="-1" aria-label="{{ post.down_label }}" title="{{ post.down_label }}" aria-pressed="{{ 'true' if post.my_vote == -1 else 'false' }}" {% if not post.can.vote %}disabled{% endif %}><i class="fas fa-arrow-down" aria-hidden="true"></i></button>
       </div>
-      {% if post.is_mine %}<span class="cm-votenote">Score {{ post.score }}</span>{% endif %}
       {% endif %}
+      <a class="cm-btn cm-btn--sm cm-comment-link" href="#cm-comments-h"><i class="far fa-comment" aria-hidden="true"></i>{{ post.comment_count }} comments</a>
       <span class="cm-spacer"></span>
       {% if post.can.edit and not post.deleted %}<a class="cm-btn cm-btn--sm" href="{{ url_for('community_edit', public_id=post.id) }}"><i class="fas fa-pen" aria-hidden="true"></i>Edit</a>{% endif %}
-      {% if post.can.delete and not post.deleted %}<button type="button" class="cm-btn cm-btn--sm cm-btn--danger" data-action="delete-post"><i class="fas fa-trash" aria-hidden="true"></i>Delete</button>{% endif %}
+      {% if post.can.delete and not post.can.moderate and not post.deleted %}<button type="button" class="cm-btn cm-btn--sm cm-btn--danger" data-action="delete-post"><i class="fas fa-trash" aria-hidden="true"></i>Delete</button>{% endif %}
       {% if not post.is_mine and not post.can.moderate %}<button type="button" class="cm-btn cm-btn--sm" data-action="report"><i class="fas fa-flag" aria-hidden="true"></i>Report</button>{% endif %}
     </div>
 
     {% if post.can.moderate %}
-    <div class="cm-modbar" aria-label="Moderation">
-      <h4><i class="fas fa-shield-halved" aria-hidden="true"></i> Moderation</h4>
+    <details class="cm-modbar">
+      <summary><i class="fas fa-shield-halved" aria-hidden="true"></i> Moderator tools <span>Manage this discussion</span></summary>
+      <div class="cm-modbar__content">
       <div class="cm-modbar__row">
-        <label class="sr-only" for="cm-mod-status" style="position:absolute;left:-9999px">Status</label>
-        <select id="cm-mod-status" class="cm-select" data-mod="status">
+        <label class="cm-mod-field">Status<select id="cm-mod-status" class="cm-select" data-mod="status">
           {% for key, label in statuses.items() %}<option value="{{ key }}" {% if post.status == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
-        </select>
-        <select class="cm-select" data-mod="flair" aria-label="Flair">
+        </select></label>
+        <label class="cm-mod-field">Category<select class="cm-select" data-mod="flair" aria-label="Flair">
           {% for key, f in flairs.items() %}<option value="{{ key }}" {% if post.flair == key %}selected{% endif %}>{{ f.label }}</option>{% endfor %}
-        </select>
+        </select></label>
         <button type="button" class="cm-btn cm-btn--sm" data-mod-action="{{ 'unlock' if post.is_locked else 'lock' }}">{{ 'Unlock' if post.is_locked else 'Lock' }}</button>
         <button type="button" class="cm-btn cm-btn--sm" data-mod-action="{{ 'unpin' if post.is_pinned else 'pin' }}">{{ 'Unpin' if post.is_pinned else 'Pin' }}</button>
         <button type="button" class="cm-btn cm-btn--sm" data-action="duplicate">Mark duplicate…</button>
+        {% if post.can.delete and not post.deleted %}<button type="button" class="cm-btn cm-btn--sm cm-btn--danger" data-action="delete-post">Delete post</button>{% endif %}
         {% if post.deleted %}
         <button type="button" class="cm-btn cm-btn--sm" data-mod-action="restore">Restore</button>
         <button type="button" class="cm-btn cm-btn--sm cm-btn--danger" data-mod-action="purge" data-confirm="Permanently delete this post, its comments and images? This cannot be undone.">Purge</button>
@@ -115,14 +120,9 @@
         <button type="button" class="cm-btn cm-btn--sm" data-action="mute" data-email="{{ post.author.email }}" data-name="{{ post.author.name }}">{{ 'Change mute' if post.author.muted_until else 'Mute author' }}</button>
         {% endif %}
       </div>
-      <dl>
-        {% if post.author.email %}<dt>Author</dt><dd>{{ post.author.email }}{% if post.author.muted_until %} (muted until {{ post.author.muted_until }}){% endif %}</dd>{% endif %}
-        {% if post.page_url %}<dt>From page</dt><dd>{{ post.page_url }}</dd>{% endif %}
-        {% if post.app_version %}<dt>App version</dt><dd>{{ post.app_version }}</dd>{% endif %}
-        {% if post.user_agent %}<dt>Browser</dt><dd>{{ post.user_agent }}</dd>{% endif %}
-        <dt>Needs admin</dt><dd>{{ 'Yes' if post.needs_admin else 'No' }}</dd>
-      </dl>
-    </div>
+      <a class="cm-mod-queue" href="{{ url_for('admin_community') }}">Open moderation queue <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+      </div>
+    </details>
     {% endif %}
   </article>
 
@@ -132,7 +132,7 @@
     {% if post.can.comment %}
     <form class="cm-composer" id="cm-comment-form" data-parent="">
       <label for="cm-comment-body" style="position:absolute;left:-9999px">Write a comment</label>
-      <textarea id="cm-comment-body" class="cm-textarea" maxlength="{{ comment_max }}" placeholder="Add a comment in English… Type @ to tag someone" required></textarea>
+      <textarea id="cm-comment-body" class="cm-textarea" maxlength="{{ comment_max }}" placeholder="Join the conversation…" required></textarea>
       <div class="cm-composer__foot">
         <span id="cm-reply-to" hidden>Replying to <strong></strong> · <button type="button" class="cm-btn cm-btn--ghost cm-btn--sm" id="cm-reply-cancel">cancel</button></span>
         <span class="cm-spacer"></span>

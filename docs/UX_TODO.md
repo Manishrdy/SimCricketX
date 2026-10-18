@@ -100,3 +100,10 @@ Validation: 133 stadium Python regression checks passed, followed by four focuse
 Removed the Captain tactics panel and expandable Stadium conditions summary from the match detail page. Fixed v3 stadium phase inputs to use scoreboard legal-ball progress instead of the pitch-wear counter, which includes wides/no-balls. The old counter could exceed the innings budget before the last legal ball, repeatedly throwing after reload and triggering the delivery-conflict banner.
 
 Validation: 76 focused Python tests and 13 JavaScript delivery/resume checks passed. Added regressions for T10, T20, List A and Hundred with an exhausted wear counter, a wide and no-ball before the final legal delivery, replay-safe delivery tokens, and successful innings completion. Existing unrelated changes were preserved.
+
+
+## Community discussion layout — October 18, 2026
+
+Made posts and comments a continuous discussion panel with author-first headers, compact score voting, a comment shortcut, and indented reply threads. Simplified feed cards and the community introduction. Post and comment moderation now use keyboard-accessible, collapsed-by-default disclosures; the post tools link to the existing moderation queue, also available from the board sidebar for admins. Removed author diagnostics, From page, App version, Browser and Needs admin metadata from the post UI. Existing moderation actions and permission checks remain in place.
+
+Validation: shared QA admin/member clients on a temporary database copy created a post, comment and reply, rendered both views and the board, and verified moderation visibility, default collapsed state, metadata removal and reply nesting. Browser inspection verified desktop post/comment appearance and opening/closing moderator tools. JavaScript syntax and diff whitespace checks passed. Phone layout rules were added but have not been visually verified.
