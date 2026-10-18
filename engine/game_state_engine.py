@@ -36,7 +36,8 @@ multipliers applied.  All values are clamped to a safe positive range.
 Design principles
 ─────────────────
 • GSME is a multiplicative post-processor; it cannot zero any outcome.
-• No multiplier is allowed outside [MULT_MIN, MULT_MAX] = [0.35, 3.00].
+• Local multipliers are clamped to [MULT_MIN, MULT_MAX] = [0.35, 3.00].
+  T20/ListA pooled wicket risk is composed once across layers by the caller.
 • Extras are never adjusted – they reflect bowler error, not game state.
 • All existing layers (pitch matrices, player ratings, phase boosts, pressure
   engine, scenario engine) remain intact and execute after GSME.
@@ -45,6 +46,8 @@ Design principles
 """
 
 import logging
+
+from engine.psychological_risk import WicketRisk, collapse_recovery
 
 from engine.format_config import FormatConfig  # noqa: F401 — used in type hints
 
@@ -283,6 +286,7 @@ def compute_game_state_vector(
     scenario_phase:   str  = "inactive",
     format_config            = None,   # FormatConfig | None — defaults to T20
     ground_config:    dict = None,     # per-match ground config snapshot
+    rebuilding: bool = False,
 ) -> dict:
     """
     Compute the full game-state descriptor for the CURRENT delivery.
@@ -376,6 +380,8 @@ def compute_game_state_vector(
 
         # Collapse/cluster risk
         "collapse_multiplier":    collapse_multiplier,
+        "collapse_recovery":      collapse_recovery(history, rebuilding),
+        "_hybrid_risk":           _fmt is None or _fmt.name in ("T20", "ListA"),
         "recent_wickets_18":      recent_wickets_18,
 
         # Tail patterns
@@ -432,13 +438,15 @@ def compute_game_state_vector(
 SHORT_COLLAPSE_DAMPEN = 0.4
 
 
-def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
+def apply_game_state_to_probs(raw_weights: dict, state: dict, wicket_risk=None) -> dict:
     """
     Apply GSME multipliers to a raw_weights dict and return the adjusted dict.
 
-    The original dict is NOT mutated.  All multipliers are independently
-    clamped to [MULT_MIN, MULT_MAX] before application, and the final
-    per-outcome weights are floored at 1e-9 to prevent zero probabilities.
+    The original dict is NOT mutated. Local multipliers are clamped to
+    [MULT_MIN, MULT_MAX]. With a shared wicket_risk ledger, positive collapse
+    and urgency wicket boosts are collected there instead of applied here;
+    calculate_outcome composes them with pressure and limits the final odds.
+    Standalone calls compose and clamp locally. Weights are floored at 1e-9.
 
     Application order (all multiplicative):
       A. Momentum              (Four, Six, Wicket, Dot)
@@ -475,12 +483,32 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     _is_short             = state.get("_is_short",             False)
     _in_death             = state.get("_in_death",             False)
 
+    # Remove pooled wicket boosts from the local product before its clamp.
+    # A caller can share the ledger with pressure/mode effects; standalone
+    # callers receive the same grouping locally.
+    hybrid = state.get("_hybrid_risk", not _is_short)
+    risk = (wicket_risk if wicket_risk is not None else WicketRisk()) if hybrid else None
+    recovery = state.get("collapse_recovery", 1.0)
+
+    def collect(before, group, recover=False):
+        if risk is None:
+            return
+        if recover:
+            for key in mults:
+                ratio = mults[key] / before[key]
+                mults[key] = before[key] * (1.0 + (ratio - 1.0) * recovery)
+        factor = mults["Wicket"] / before["Wicket"]
+        if factor > 1.0:
+            risk.add(group, factor)
+            mults["Wicket"] = before["Wicket"]
+
     # ── A. MOMENTUM ──────────────────────────────────────────────────────────
     _apply_momentum_multipliers(mults, momentum)
 
     # ── B. COLLAPSE RISK ─────────────────────────────────────────────────────
     # During scenario convergence (overs 15–17), cap the collapse multiplier so
     # the scenario engine's wicket steering can operate without being overwhelmed.
+    before = dict(mults)
     _effective_cm = collapse_multiplier
     if scenario_phase == "convergence":
         _effective_cm = min(collapse_multiplier, 1.20)
@@ -499,6 +527,8 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
             mults["Dot"]    *= 1.0 + excess * 0.40
             mults["Four"]   *= _clamp(1.0 - excess * 0.32, 0.50, 1.0)
             mults["Six"]    *= _clamp(1.0 - excess * 0.38, 0.45, 1.0)
+
+    collect(before, "collapse", recover=True)
 
     # ── C. RUN-RATE PRESSURE — FIRST INNINGS ─────────────────────────────────
     # _agg_w (defined with section D below) damps the wicket cost of
@@ -545,6 +575,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     # more wickets than the first innings in overs 4-7 — the middle-over bleed
     # that left it with no batting for a death surge. The chase still takes
     # more risk than a side setting a total; it no longer gets out for it.
+    before = dict(mults)
     if innings == 2:
         if required_aggression < 0.67:
             # Very comfortable chase (rrr < ~6) — rotate and grind
@@ -597,6 +628,8 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
             mults["Wicket"] *= _agg_w(1.55)
             mults["Dot"]    *= 0.62
             mults["Single"] *= 0.68
+
+    collect(before, "urgency")
 
     # ── E. PATTERN OVERRIDES ─────────────────────────────────────────────────
 
@@ -655,6 +688,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     # E3. Consecutive wickets — psychological collapse amplifier
     # During scenario convergence, halve the excess so scenario steering can steer
     # wicket count without being overwhelmed by the cascade.
+    before = dict(mults)
     _cw_dampen = 0.5 if scenario_phase == "convergence" else 1.0
     # Short formats keep the full wicket escalation but almost none of the
     # shot suppression: in a 10-over game the reply to losing a couple is the
@@ -683,6 +717,8 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
         # New batsman just in — small additional collapse-fear on top of
         # the new-batter vulnerability already in compute_weighted_prob()
         mults["Wicket"] *= 1.0 + 0.108 * _cw_dampen   # normal: 1.108 | convergence: 1.054
+
+    collect(before, "collapse", recover=True)
 
     # ── F. RESOURCE CONSERVATISM ─────────────────────────────────────────────
     # When resources are very thin (tail in, or near the end), protect wickets
@@ -718,6 +754,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     else:
         _p_growing, _p_established, _p_strong, _p_dominant = state.get("_partnership_thresholds", (25, 50, 75, 100))
 
+    before = dict(mults)
     if p_balls <= 3 and p_runs < 4:
         # NEW PARTNERSHIP — danger zone: both batters still reading conditions,
         # one uncertain end, increased wicket risk and cautious shot selection.
@@ -765,6 +802,11 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
         # Settled by time at the crease even without many runs (slow pitch/tight bowling).
         mults["Four"]   *= 1.04
         mults["Wicket"] *= 0.97
+
+    if p_balls <= 3 and p_runs < 4:
+        collect(before, "collapse", recover=True)
+    if risk is not None and wicket_risk is None:
+        mults["Wicket"] *= risk.multiplier()
 
     # ── SAFETY: hard-clamp every multiplier ───────────────────────────────────
     for key in mults:
@@ -945,4 +987,5 @@ def make_ball_event(outcome: dict) -> dict:
         "is_six":      is_six,
         "is_dot":      is_dot,
         "is_extra":    is_extra,
+        "is_legal":    not (is_extra and extra_type in ("Wide", "No Ball")),
     }

@@ -2,6 +2,7 @@ from engine import random_source as random
 import logging
 from typing import Optional
 
+from engine.psychological_risk import combine_risk_factors
 from engine.format_config import get_format
 from engine.game_state_engine import SUPER_OVER_NEUTRAL_RPO
 
@@ -76,7 +77,12 @@ class PressureEngine:
         
         # 1. Death overs base risk
         if self.fmt.is_death(current_over):
-            death_risk = 0.3 + (current_over - self.fmt.death_phase.start) * 0.1
+            # Same endpoint regardless of death-phase length, including reduced games.
+            phase_length = max(1.0, self.fmt.overs - self.fmt.death_phase.start)
+            progress = min(1.0, max(0.0, (
+                current_over + match_state.get('current_ball', 0) / self.fmt.balls_per_over
+                - self.fmt.death_phase.start) / phase_length))
+            death_risk = 0.3 + 0.4 * progress
             risk_factor += death_risk
             risk_components.append(f"Death overs: +{death_risk:.1f}")
 
@@ -441,8 +447,11 @@ class PressureEngine:
                 extreme_boost = 1.5
                 chaos_level = "DESPERATE_SWINGING"
 
-            wicket_multiplier *= extreme_boost
-            logger.info(f"{chaos_level}: RRR {required_rr:.1f} = {extreme_boost:.1f}x wicket boost!")
+            # Desperation already contributes to risk_multiplier. Retain the
+            # extreme ladder as overlapping evidence, not another full product.
+            wicket_multiplier = combine_risk_factors((wicket_multiplier, extreme_boost))
+            logger.info("%s: RRR %.1f, pooled wicket boost %.2fx",
+                        chaos_level, required_rr, wicket_multiplier)
         
         effects = {
             'risk_active': True,
@@ -850,16 +859,17 @@ class FCPressureEngine:
     # A real collapse accelerates. The old model applied a flat 1.25x however
     # many had just gone, so 3 for 12 looked the same as one loose shot.
     _COLLAPSE_SEVERITY = {2: 1.18, 3: 1.30, 4: 1.42}
-    _COLLAPSE_NEW_BATTER_BONUS = 0.12     # walking in mid-collapse is the worst moment
-    _COLLAPSE_NEW_BATTER_BALLS = 8
 
     def collapse_severity(self, recent_wickets: int, striker_balls_faced: int = 99,
                           temperament_rating: Optional[int] = None) -> float:
-        """Wicket multiplier once a collapse has been triggered."""
+        """Team collapse pressure, independent of the batter's settling-in risk.
+
+        Keep striker_balls_faced for caller compatibility. FC's batting contest
+        and explicit new-batter wicket boost already account for inexperience
+        at the crease; adding it here counted that vulnerability again.
+        """
         severity = self._COLLAPSE_SEVERITY.get(
             min(recent_wickets, 4), 1.18 if recent_wickets >= 2 else 1.0)
-        if striker_balls_faced < self._COLLAPSE_NEW_BATTER_BALLS:
-            severity += self._COLLAPSE_NEW_BATTER_BONUS
         if temperament_rating is not None:
             # A batter who resists pressure well takes less of the extra.
             severity = 1.0 + (severity - 1.0) * (
@@ -977,8 +987,8 @@ class FCPressureEngine:
             effects["dot_bonus"] -= 0.03 * grind
 
         # --- Wicket-cluster collapse, as a cascade rather than a flat bump.
-        # The more that have just gone the harder it gets, and a batter who
-        # has only just walked in is at his most vulnerable. ---
+        # The more that have just gone the harder it gets. Settling-in risk
+        # is handled separately in ball_outcome, not amplified again here. ---
         if self.should_trigger_collapse(wickets, recent_wickets, temperament_rating=striker_temperament):
             severity = self.collapse_severity(
                 recent_wickets,

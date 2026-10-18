@@ -2094,8 +2094,8 @@ def test_a_collapse_accelerates_rather_than_being_a_flat_bump(app):
     assert 1.0 < two < three < four, "it must cascade"
     assert eng.collapse_severity(9) == four, "and then plateau"
 
-    # Walking in mid-collapse is the most vulnerable moment there is.
-    assert eng.collapse_severity(3, striker_balls_faced=1) > \
+    # Settling-in vulnerability is already applied by the ball outcome engine.
+    assert eng.collapse_severity(3, striker_balls_faced=1) == \
            eng.collapse_severity(3, striker_balls_faced=50)
 
     # Temperament blunts it; the floor is always a no-op, never a discount.

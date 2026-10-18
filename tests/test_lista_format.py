@@ -109,7 +109,11 @@ def _mute_match_print(monkeypatch):
         # Hard: balanced ODI pitch. GSME frustration/partnership thresholds are
         # now correctly calibrated for 50-over cricket (fewer spurious boosts in
         # middle overs), so average settles slightly below the old band floor.
-        ("Hard", 265, 320, 265),
+        # Recoverable collapse pressure moves this seam-heavy XI's eight-seed
+        # mean from 312.4 to 323.6. Keep this a coarse smoke band; the balanced
+        # attack's authoritative 280-320 target in test_scoring_calibration is
+        # unchanged (314.2 on its sixteen seeds).
+        ("Hard", 265, 330, 265),
         ("Flat", 320, 370, 285),
         # Dead: LISTA_RUN_FACTORS["Dead"] corrected from 0.68 → 1.18 to align
         # with _LISTA_PITCH_PAR_FACTORS["Dead"] = 1.18 (~342 expected).
