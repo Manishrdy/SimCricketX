@@ -529,7 +529,7 @@ class TestAnalytics:
 
     def test_user_own_analytics(self, authenticated_client):
         """Test user viewing their own analytics."""
-        response = authenticated_client.get("/my-analytics")
+        response = authenticated_client.get("/my-analytics", follow_redirects=True)
         assert response.status_code == 200
 
     def test_admin_retention(self, admin_client):

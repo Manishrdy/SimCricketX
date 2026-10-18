@@ -107,3 +107,12 @@ Validation: 76 focused Python tests and 13 JavaScript delivery/resume checks pas
 Made posts and comments a continuous discussion panel with author-first headers, compact score voting, a comment shortcut, and indented reply threads. Simplified feed cards and the community introduction. Post and comment moderation now use keyboard-accessible, collapsed-by-default disclosures; the post tools link to the existing moderation queue, also available from the board sidebar for admins. Removed author diagnostics, From page, App version, Browser and Needs admin metadata from the post UI. Existing moderation actions and permission checks remain in place.
 
 Validation: shared QA admin/member clients on a temporary database copy created a post, comment and reply, rendered both views and the board, and verified moderation visibility, default collapsed state, metadata removal and reply nesting. Browser inspection verified desktop post/comment appearance and opening/closing moderator tools. JavaScript syntax and diff whitespace checks passed. Phone layout rules were added but have not been visually verified.
+
+
+## Recent users and member profile — October 18, 2026
+
+Admin Users now defaults to the latest 30 registrations. All, role, banned and unverified views use stable cursor pagination with 30 users per batch and an explicit Load more control. Search runs on the server across the selected category. Team and match counts use two grouped queries for only the displayed batch, replacing two queries per user. No schema changes or migrations.
+
+My Profile replaces My Analytics in navigation at `/my-profile`, with the previous URL redirecting. The private member pavilion includes a minimal cricket-ground illustration, account metadata, career and squad statistics, outcomes, formats, monthly activity, latest results, team collection, stadium/community counts and sign-in details. Existing account settings, session review and export actions remain linked. Win figures explicitly describe current owned-team wins. Credentials and authentication tokens are never rendered.
+
+Validation: 70 admin/profile regression tests passed using shared QA identities, followed by two focused tests after the squad-total addition. An isolated copy of the local database returned all 85 users in batches of 30/30/25 without duplicates or omissions. Browser previews verified the stadium header and Recent users layout; phone-specific visual verification remains outstanding.

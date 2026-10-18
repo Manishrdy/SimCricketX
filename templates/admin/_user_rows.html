@@ -1,0 +1,73 @@
+            {% for user in users %}
+            <tr data-email="{{ user.email }}"
+                data-name="{{ (user.display_name or '') | lower }}"
+                data-role="{{ 'admin' if user.is_admin else 'user' }}"
+                data-banned="{{ '1' if user.is_banned else '0' }}"
+                data-verified="{{ '1' if user.email_verified else '0' }}"
+                data-locked="{{ '1' if user.is_locked else '0' }}"
+                data-href="{{ url_for('admin_user_detail', user_email=user.email, tab='overview') }}"
+                tabindex="0">
+                <td class="ul-col-email">
+                    <div class="ul-email-cell">
+                        <div class="ul-avatar">{{ (user.display_name or user.email)[0] | upper }}</div>
+                        <div class="ul-email-info">
+                            <span class="ul-email-primary">{{ user.email }}</span>
+                            <div class="ul-email-meta">
+                                {% if user.display_name %}
+                                <span class="ul-email-name">{{ user.display_name }}</span>
+                                {% endif %}
+                                {% if user.is_banned %}
+                                <span class="ul-pill ul-pill-banned" title="User is banned"><i class="fas fa-ban"></i> Banned</span>
+                                {% endif %}
+                                {% if user.is_locked %}
+                                <span class="ul-pill ul-pill-locked" title="Account locked from too many failed logins"><i class="fas fa-lock"></i> Locked</span>
+                                {% endif %}
+                                {% if not user.email_verified %}
+                                <span class="ul-pill ul-pill-unverified" title="Email not verified"><i class="fas fa-envelope-open"></i> Unverified</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    {% if user.is_admin %}
+                    <span class="a-badge a-badge-admin"><i class="fas fa-shield-alt"></i> Admin</span>
+                    {% else %}
+                    <span class="a-badge a-badge-user">User</span>
+                    {% endif %}
+                </td>
+                <td class="a-cell-num" data-sort="{{ user.teams_count }}">
+                    <span class="ul-stat">{{ user.teams_count }}</span>
+                </td>
+                <td class="a-cell-num" data-sort="{{ user.matches_count }}">
+                    <span class="ul-stat">{{ user.matches_count }}</span>
+                </td>
+                <td class="ul-col-joined" data-sort="{{ user.created_at.isoformat() if user.created_at else '' }}">
+                    {% if user.created_at %}
+                    <time class="ul-rel" datetime="{{ user.created_at.isoformat() }}Z">{{ user.created_at | localtime }}</time>
+                    {% else %}
+                    <span class="ul-never">—</span>
+                    {% endif %}
+                </td>
+                <td class="ul-col-login" data-sort="{{ user.last_login.isoformat() if user.last_login else '' }}">
+                    {% if user.last_login %}
+                    <time class="ul-rel" datetime="{{ user.last_login.isoformat() }}Z">{{ user.last_login | localtime }}</time>
+                    {% else %}
+                    <span class="ul-never">Never</span>
+                    {% endif %}
+                </td>
+                <td class="a-cell-actions">
+                    <a href="{{ url_for('admin_user_detail', user_email=user.email, tab='overview') }}"
+                       class="a-btn a-btn-secondary a-btn-sm"
+                       onclick="event.stopPropagation()">
+                        <i class="fas fa-user"></i> View User
+                    </a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7">
+                    <div class="a-empty"><i class="fas fa-users"></i><p>No users found</p></div>
+                </td>
+            </tr>
+            {% endfor %}

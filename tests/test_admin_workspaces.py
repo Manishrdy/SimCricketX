@@ -144,7 +144,7 @@ def test_removed_user_sections_and_self_service_unchanged(app, qa):
     response = qa.get(user_url(tab='activity'))
     assert b'Account Summary' in response.data
     regular = logged_in_client(app, 'user1')
-    assert regular.get('/my-analytics').status_code == 200
+    assert regular.get('/my-analytics', follow_redirects=True).status_code == 200
 
 
 def test_system_metrics_failure_isolation(app,tmp_path,monkeypatch):

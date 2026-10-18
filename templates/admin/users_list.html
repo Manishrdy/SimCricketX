@@ -10,7 +10,7 @@
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Users</h1>
-        <p class="admin-page-subtitle">{{ users|length }} registered user{{ 's' if users|length != 1 }}</p>
+        <p class="admin-page-subtitle">Newest registrations first · 30 users per batch</p>
     </div>
     <div class="admin-page-actions">
         <a href="/admin/users/create" class="a-btn a-btn-primary">
@@ -22,18 +22,16 @@
 {# ── Canonical toolbar ── #}
 <div class="a-toolbar">
     <div class="a-toolbar-left">
-        <div class="a-search-wrap">
-            <i class="fas fa-search a-search-icon"></i>
-            <input type="text" id="userSearch" class="a-search-input" placeholder="Search email or name…">
-            <kbd class="a-search-kbd">/</kbd>
-        </div>
-        <div class="a-chip-group" id="userFilters">
-            <button class="a-chip active" data-filter="all">All <span class="count" data-count="all">{{ users|length }}</span></button>
-            <button class="a-chip" data-filter="admin">Admins <span class="count" data-count="admin">{{ users|selectattr('is_admin')|list|length }}</span></button>
-            <button class="a-chip" data-filter="user">Users <span class="count" data-count="user">{{ users|rejectattr('is_admin')|list|length }}</span></button>
-            <button class="a-chip" data-filter="banned">Banned <span class="count" data-count="banned">{{ users|selectattr('is_banned')|list|length }}</span></button>
-            <button class="a-chip" data-filter="unverified">Unverified <span class="count" data-count="unverified">{{ users|rejectattr('email_verified')|list|length }}</span></button>
-        </div>
+        <form class="a-search-wrap" method="get">
+            <input type="hidden" name="filter" value="{{ selected }}">
+            <input aria-label="Search users" name="q" value="{{ search }}" class="a-search-input" placeholder="Search email or name…">
+            <button class="a-btn a-btn-secondary" type="submit">Search</button>
+        </form>
+        <nav class="a-chip-group" aria-label="User filters">
+        {% for key, label in [('recent','Recent'),('all','All'),('admin','Admins'),('user','Users'),('banned','Banned'),('unverified','Unverified')] %}
+            <a class="a-chip {{ 'active' if selected == key }}" href="{{ url_for('admin_users', filter=key, q=search) }}" {% if selected == key %}aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}
+        </nav>
     </div>
     <div class="a-toolbar-right">
         <div class="a-density-toggle">
@@ -52,104 +50,25 @@
     <table class="a-table a-table-pro ul-table">
         <thead>
             <tr>
-                <th class="sortable ul-col-email">Email / Name</th>
-                <th class="sortable ul-col-role">Role</th>
-                <th class="sortable ul-col-stats">Teams</th>
-                <th class="sortable ul-col-stats">Matches</th>
-                <th class="sortable ul-col-joined">Joined</th>
-                <th class="sortable ul-col-login">Last Login</th>
+                <th class="ul-col-email">Email / Name</th>
+                <th class="ul-col-role">Role</th>
+                <th class="ul-col-stats">Teams</th>
+                <th class="ul-col-stats">Matches</th>
+                <th class="ul-col-joined">Joined</th>
+                <th class="ul-col-login">Last Login</th>
                 <th class="ul-col-actions">Actions</th>
             </tr>
         </thead>
         <tbody id="usersTableBody">
-            {% for user in users %}
-            <tr data-email="{{ user.email }}"
-                data-name="{{ (user.display_name or '') | lower }}"
-                data-role="{{ 'admin' if user.is_admin else 'user' }}"
-                data-banned="{{ '1' if user.is_banned else '0' }}"
-                data-verified="{{ '1' if user.email_verified else '0' }}"
-                data-locked="{{ '1' if user.is_locked else '0' }}"
-                data-href="{{ url_for('admin_user_detail', user_email=user.email, tab='overview') }}"
-                tabindex="0">
-                <td class="ul-col-email">
-                    <div class="ul-email-cell">
-                        <div class="ul-avatar">{{ (user.display_name or user.email)[0] | upper }}</div>
-                        <div class="ul-email-info">
-                            <span class="ul-email-primary">{{ user.email }}</span>
-                            <div class="ul-email-meta">
-                                {% if user.display_name %}
-                                <span class="ul-email-name">{{ user.display_name }}</span>
-                                {% endif %}
-                                {% if user.is_banned %}
-                                <span class="ul-pill ul-pill-banned" title="User is banned"><i class="fas fa-ban"></i> Banned</span>
-                                {% endif %}
-                                {% if user.is_locked %}
-                                <span class="ul-pill ul-pill-locked" title="Account locked from too many failed logins"><i class="fas fa-lock"></i> Locked</span>
-                                {% endif %}
-                                {% if not user.email_verified %}
-                                <span class="ul-pill ul-pill-unverified" title="Email not verified"><i class="fas fa-envelope-open"></i> Unverified</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                </td>
-                <td>
-                    {% if user.is_admin %}
-                    <span class="a-badge a-badge-admin"><i class="fas fa-shield-alt"></i> Admin</span>
-                    {% else %}
-                    <span class="a-badge a-badge-user">User</span>
-                    {% endif %}
-                </td>
-                <td class="a-cell-num" data-sort="{{ user.teams_count }}">
-                    <span class="ul-stat">{{ user.teams_count }}</span>
-                </td>
-                <td class="a-cell-num" data-sort="{{ user.matches_count }}">
-                    <span class="ul-stat">{{ user.matches_count }}</span>
-                </td>
-                <td class="ul-col-joined" data-sort="{{ user.created_at.isoformat() if user.created_at else '' }}">
-                    {% if user.created_at %}
-                    <time class="ul-rel" datetime="{{ user.created_at.isoformat() }}Z">{{ user.created_at | localtime }}</time>
-                    {% else %}
-                    <span class="ul-never">—</span>
-                    {% endif %}
-                </td>
-                <td class="ul-col-login" data-sort="{{ user.last_login.isoformat() if user.last_login else '' }}">
-                    {% if user.last_login %}
-                    <time class="ul-rel" datetime="{{ user.last_login.isoformat() }}Z">{{ user.last_login | localtime }}</time>
-                    {% else %}
-                    <span class="ul-never">Never</span>
-                    {% endif %}
-                </td>
-                <td class="a-cell-actions">
-                    <a href="{{ url_for('admin_user_detail', user_email=user.email, tab='overview') }}"
-                       class="a-btn a-btn-secondary a-btn-sm"
-                       onclick="event.stopPropagation()">
-                        <i class="fas fa-user"></i> View User
-                    </a>
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="7">
-                    <div class="a-empty"><i class="fas fa-users"></i><p>No users found</p></div>
-                </td>
-            </tr>
-            {% endfor %}
-            <tr id="ulNoMatches" class="ul-no-matches" hidden>
-                <td colspan="7">
-                    <div class="a-empty">
-                        <i class="fas fa-search-minus"></i>
-                        <p>No users match your filters</p>
-                        <button type="button" class="a-btn a-btn-secondary a-btn-sm" id="ulClearFilters">
-                            <i class="fas fa-times"></i> Clear filters
-                        </button>
-                    </div>
-                </td>
-            </tr>
+{% include 'admin/_user_rows.html' %}
         </tbody>
     </table>
 </div>
 
+<div style="margin:1rem 0;text-align:center">
+    <p id="loadStatus" role="status">{{ 'The 30 most recent matching registrations.' if selected == 'recent' else 'Users load in batches of 30.' }}</p>
+    {% if next_url %}<a id="loadMore" class="a-btn a-btn-secondary" href="{{ next_url }}">Load more users</a>{% endif %}
+</div>
 <style>
 /* Column widths — compact friendly */
 .ul-table { table-layout: auto; }
@@ -277,7 +196,7 @@
 }
 
 /* Search keybinding hint */
-.a-search-wrap { position: relative; }
+.a-search-wrap { position: relative; display:flex; gap:.5rem; flex-wrap:wrap; }
 .a-search-kbd {
     position: absolute;
     right: .5rem;
@@ -296,132 +215,39 @@
 </style>
 
 <script>
-(function() {
-    const searchInput = document.getElementById('userSearch');
-    const tbody       = document.getElementById('usersTableBody');
-    const countEl     = document.getElementById('ulCount');
-    const filterBtns  = document.querySelectorAll('#userFilters .a-chip[data-filter]');
-    const noMatchRow  = document.getElementById('ulNoMatches');
-    const clearBtn    = document.getElementById('ulClearFilters');
-    const rows        = Array.from(tbody.querySelectorAll('tr[data-email]'));
-    let activeFilter  = 'all';
-
-    function rowMatchesFilter(row, filter) {
-        switch (filter) {
-            case 'all':        return true;
-            case 'admin':      return row.dataset.role === 'admin';
-            case 'user':       return row.dataset.role === 'user';
-            case 'banned':     return row.dataset.banned === '1';
-            case 'unverified': return row.dataset.verified === '0';
-            default:           return true;
+(() => {
+    const body = document.getElementById('usersTableBody');
+    const more = document.getElementById('loadMore');
+    const status = document.getElementById('loadStatus');
+    body.addEventListener('click', event => {
+        if (event.target.closest('a,button')) return;
+        const row = event.target.closest('tr[data-href]');
+        if (row) location.href = row.dataset.href;
+    });
+    body.addEventListener('keydown', event => {
+        if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('tr[data-href]')) {
+            event.preventDefault(); location.href = event.target.dataset.href;
         }
-    }
-
-    function rowMatchesQuery(row, q) {
-        if (!q) return true;
-        return row.dataset.email.toLowerCase().includes(q) || row.dataset.name.includes(q);
-    }
-
-    function applyFilters() {
-        const q = searchInput.value.toLowerCase().trim();
-        let visible = 0;
-        rows.forEach(row => {
-            const show = rowMatchesQuery(row, q) && rowMatchesFilter(row, activeFilter);
-            row.style.display = show ? '' : 'none';
-            if (show) visible++;
-        });
-
-        /* Recompute chip counts against the search-narrowed set */
-        const narrowed = rows.filter(r => rowMatchesQuery(r, q));
-        const counts = {
-            all:        narrowed.length,
-            admin:      narrowed.filter(r => r.dataset.role === 'admin').length,
-            user:       narrowed.filter(r => r.dataset.role === 'user').length,
-            banned:     narrowed.filter(r => r.dataset.banned === '1').length,
-            unverified: narrowed.filter(r => r.dataset.verified === '0').length,
-        };
-        document.querySelectorAll('#userFilters .count').forEach(el => {
-            const k = el.dataset.count;
-            if (k in counts) el.textContent = counts[k];
-        });
-
-        countEl.textContent = visible + ' shown';
-        if (noMatchRow) noMatchRow.hidden = !(rows.length && visible === 0);
-    }
-
-    searchInput.addEventListener('input', applyFilters);
-
-    filterBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            filterBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            activeFilter = btn.dataset.filter;
-            applyFilters();
-        });
     });
-
-    if (clearBtn) {
-        clearBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            activeFilter = 'all';
-            filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === 'all'));
-            applyFilters();
-            searchInput.focus();
-        });
-    }
-
-    /* Row click → user 360. Inner links/buttons stop propagation. */
-    rows.forEach(row => {
-        row.addEventListener('click', (ev) => {
-            if (ev.target.closest('a, button')) return;
-            const href = row.dataset.href;
-            if (href) window.location.href = href;
-        });
-        row.addEventListener('keydown', (ev) => {
-            if (ev.key !== 'Enter' && ev.key !== ' ') return;
-            if (ev.target !== row) return;
-            ev.preventDefault();
-            const href = row.dataset.href;
-            if (href) window.location.href = href;
-        });
+    let loading = false;
+    if (more) more.addEventListener('click', async event => {
+        event.preventDefault();
+        if (loading) return;
+        loading = true; more.setAttribute('aria-disabled', 'true'); status.textContent = 'Loading users…';
+        try {
+            const url = new URL(more.href); url.searchParams.set('partial', '1');
+            const response = await fetch(url, {headers: {'Accept':'application/json'}});
+            if (!response.ok) throw new Error('Request failed');
+            const data = await response.json();
+            body.insertAdjacentHTML('beforeend', data.html);
+            const count = body.querySelectorAll('tr[data-email]').length;
+            document.getElementById('ulCount').textContent = count + ' shown';
+            status.textContent = data.next_url ? count + ' users loaded.' : 'All matching users loaded.';
+            if (data.next_url) more.href = data.next_url;
+            else { more.remove(); status.setAttribute('tabindex', '-1'); status.focus(); }
+        } catch (error) { status.textContent = 'Could not load users. Please try again.'; }
+        finally { loading = false; more.removeAttribute('aria-disabled'); }
     });
-
-    /* "/" focuses search (unless typing in another input) */
-    document.addEventListener('keydown', (ev) => {
-        if (ev.key !== '/') return;
-        const t = ev.target;
-        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-        ev.preventDefault();
-        searchInput.focus();
-        searchInput.select();
-    });
-
-    /* Convert "Joined" / "Last Login" cells to relative time, with full timestamp on hover */
-    function relativeTime(iso) {
-        const d = new Date(iso);
-        if (isNaN(d.getTime())) return null;
-        const diff = (Date.now() - d.getTime()) / 1000;
-        if (diff < 45)        return 'just now';
-        if (diff < 90)        return '1m ago';
-        if (diff < 3600)      return Math.round(diff / 60) + 'm ago';
-        if (diff < 5400)      return '1h ago';
-        if (diff < 86400)     return Math.round(diff / 3600) + 'h ago';
-        if (diff < 86400 * 2) return 'yesterday';
-        if (diff < 86400 * 30)  return Math.round(diff / 86400)  + 'd ago';
-        if (diff < 86400 * 365) return Math.round(diff / 2592000) + 'mo ago';
-        return Math.round(diff / 31536000) + 'y ago';
-    }
-
-    document.querySelectorAll('time.ul-rel').forEach(el => {
-        const iso = el.getAttribute('datetime');
-        const rel = relativeTime(iso);
-        if (!rel) return;
-        const fullText = el.textContent.trim();
-        el.title = fullText;
-        el.textContent = rel;
-    });
-
-    applyFilters();
 })();
 </script>
 {% endblock %}
