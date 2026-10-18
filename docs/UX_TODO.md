@@ -116,3 +116,9 @@ Admin Users now defaults to the latest 30 registrations. All, role, banned and u
 My Profile replaces My Analytics in navigation at `/my-profile`, with the previous URL redirecting. The private member pavilion includes a minimal cricket-ground illustration, account metadata, career and squad statistics, outcomes, formats, monthly activity, latest results, team collection, stadium/community counts and sign-in details. Existing account settings, session review and export actions remain linked. Win figures explicitly describe current owned-team wins. Credentials and authentication tokens are never rendered.
 
 Validation: 70 admin/profile regression tests passed using shared QA identities, followed by two focused tests after the squad-total addition. An isolated copy of the local database returned all 85 users in batches of 30/30/25 without duplicates or omissions. Browser previews verified the stadium header and Recent users layout; phone-specific visual verification remains outstanding.
+
+## Member pavilion visual refinement — October 18, 2026
+
+Redesigned `/my-profile` with a forest-green pavilion header, gold edit action, private-profile badge, numbered section headings, coordinated statistic and content cards, themed team tiles, clearer account rows and responsive spacing. Uses existing application fonts and surface colors in a dedicated profile stylesheet. Preserves profile data, privacy checks and account/export/team/session destinations; zero-activity chart bars now accurately have zero height.
+
+Validation: both existing directory/profile regression tests passed using shared QA identities in isolated databases. Rendered the shared QA member from a temporary database copy and visually inspected light/dark themes, desktop account/security sections and the 390px phone header/statistics. Browser measurements found no horizontal overflow at 390px and 1280px. Diff whitespace checks passed.
