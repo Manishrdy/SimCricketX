@@ -1,3 +1,11 @@
+[3.0.2] 2026-10-17
+- Made First-Class collapses fairer for incoming batters: they still face the usual difficult settling-in period and team collapse pressure, but no longer receive an extra penalty simply for arriving during a collapse, including against the new ball or on a worn pitch
+- Made difficult T20 and List A chases less prone to runaway collapses: desperate hitting still brings more scoring chances and wicket risk, but overlapping pressure effects no longer compound as severely
+- Gave teams a clearer route back after losing wickets: collapse pressure eases as batters survive legal deliveries, with faster recovery when rebuilding
+- Balanced List A's death overs so a longer late-innings phase does not automatically make desperate chases more punishing than T20
+- Smoothed batting assistance on Flat and Dead pitches in T20, T10 and The Hundred: it now fades over six legal balls after the third wicket and near the end of the early batting phase, instead of disappearing suddenly; manually selected game modes keep their full effect
+- Fixed wides lowering the batter's form despite no ball being faced; no-balls without bat runs no longer lower form, and runs hit off a no-ball now improve form just like other scoring shots
+
 [3.0.1] 2026-10-09
 - Added Continue Match on Home so unfinished games are easier to find and resume; removed the pending-match list from the profile dropdown
 - Added live squad-readiness guidance on Create/Edit Team and Manage Squad, with actions to find wicketkeepers and bowling options, select leaders, and resolve squad-size requirements

@@ -8,6 +8,7 @@ from flask_login import current_user, login_required
 from utils.exception_tracker import log_exception
 from database.models import User, Match, SupportPromptEvent
 from utils import support_prompt
+from utils.changelog import load_changelog
 
 
 def register_core_routes(
@@ -245,6 +246,15 @@ def register_core_routes(
     def about():
         return render_template("about.html")
 
+    @app.route("/changelog")
+    def changelog():
+        releases = load_changelog(os.path.join(app.root_path, "changelog.txt"))
+        return render_template(
+            "changelog.html",
+            releases=releases,
+            total_changes=sum(len(r["entries"]) for r in releases),
+        )
+
     @app.route("/llm.txt")
     @app.route("/llms.txt")
     def llm_guide():
@@ -264,6 +274,7 @@ def register_core_routes(
         pages = [
             ("https://simcricketx.app/",       "weekly",  "1.0"),
             ("https://simcricketx.app/about",   "monthly", "0.7"),
+            ("https://simcricketx.app/changelog", "weekly", "0.5"),
         ]
         lines = ['<?xml version="1.0" encoding="UTF-8"?>',
                  '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']

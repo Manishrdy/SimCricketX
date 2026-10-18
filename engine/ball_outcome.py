@@ -29,6 +29,9 @@ from engine.ground_config import (
     get_fc_ball_condition_outcome_factors as _gc_fc_ball_condition_outcomes,
     get_fc_rough_targeting_factor as _gc_fc_rough_targeting_factor,
 )
+from engine.psychological_risk import (
+    WicketRisk, limit_psychological_odds, LIMITED_OVERS_WICKET_CAP,
+)
 from engine.game_state_engine import apply_game_state_to_probs
 from engine.format_config import FormatConfig, FORMAT_REGISTRY
 
@@ -1130,6 +1133,49 @@ def calculate_outcome(
         pitch_matrix = (_gc_scoring_matrix(pitch, mode_override=game_mode_override, config=_gc)
                         or PITCH_SCORING_MATRIX.get(pitch, DEFAULT_SCORING_MATRIX))
 
+    hybrid = _fmt_name in (None, "T20", "ListA")
+    wicket_risk = WicketRisk() if hybrid else None
+
+    if not _is_lista and not _is_fc and pressure_effects:
+        blend = pressure_effects.get('automatic_flat_blend')
+        if blend and game_mode_override == 'flat_track_bully':
+            strength = max(0.0, min(1.0, blend['strength']))
+            replacement = _gc_scoring_matrix(
+                pitch, mode_override=blend['replacement'], config=_gc)
+            if replacement is not None:
+                # During a chase the replacement may itself be aggressive.
+                # Pool its proportional wicket boost throughout the fade, so
+                # reaching zero assistance does not create a second cliff.
+                unpooled_wicket = None
+                if hybrid and blend['replacement'] == 'aggressive':
+                    from engine.ground_config import get_game_modes
+                    factor = get_game_modes(config=_gc).get('aggressive', {}).get(
+                        'modifiers', {}).get('wicket_mult', 1.0)
+                    if factor > 1:
+                        unpooled_wicket = (strength * pitch_matrix.get('Wicket', 0.0)
+                            + (1-strength) * replacement.get('Wicket', 0.0) / factor)
+                pitch_matrix = {
+                    key: strength * pitch_matrix.get(key, 0.0)
+                    + (1.0 - strength) * replacement.get(key, 0.0)
+                    for key in dict.fromkeys((*pitch_matrix, *replacement))
+                }
+                if unpooled_wicket is not None and unpooled_wicket > 0:
+                    wicket_risk.add('urgency', pitch_matrix.get('Wicket', 0.0) / unpooled_wicket)
+                    pitch_matrix['Wicket'] = unpooled_wicket
+
+    # Only automatic RRR-driven modes overlap urgency. User-pinned modes and
+    # pitch-driven modes remain independent. Undo just the wicket multiplier;
+    # matrix normalization is a common scalar and cancels when sampling.
+    if (hybrid and not _is_lista and pressure_effects
+            and pressure_effects.get('rate_driven_game_mode')):
+        from engine.ground_config import get_game_modes
+        mode = get_game_modes(config=_gc).get(game_mode_override, {})
+        factor = mode.get('modifiers', {}).get('wicket_mult', 1.0)
+        if factor > 1.0 and "Wicket" in pitch_matrix:
+            pitch_matrix = dict(pitch_matrix)
+            pitch_matrix["Wicket"] /= factor
+            wicket_risk.add('urgency', factor)
+
     # --- Bowling matchup modifier (computed once, applied to wickets + boundaries) ---
     matchup_boost, boundary_suppression = compute_matchup_boost(
         bowling_type, bowling_hand, batting_hand, batting, pitch
@@ -1338,8 +1384,9 @@ def calculate_outcome(
     # This layer accounts for ball history (last 18 deliveries), run-rate
     # pressure, resources remaining, and collapse risk — BEFORE the
     # pressure-engine and scenario-engine modifiers are applied.
+    psychological_baseline = dict(raw_weights)
     if game_state is not None:
-        raw_weights = apply_game_state_to_probs(raw_weights, game_state)
+        raw_weights = apply_game_state_to_probs(raw_weights, game_state, wicket_risk=wicket_risk)
         logger.debug("[GSME] Applied game-state multipliers to raw_weights.")
 
     # 3.6) Calculate total weight
@@ -1347,10 +1394,24 @@ def calculate_outcome(
 
     # 3.7) Apply pressure effects if provided
     if pressure_effects:
+        if wicket_risk is not None:
+            pressure_effects = dict(pressure_effects)
+            recovery = (game_state or {}).get('collapse_recovery', 1.0)
+            for group, factor in pressure_effects.get('wicket_risk_factors', ()):
+                if factor > 1.0:
+                    pressure_effects['wicket_modifier'] /= factor
+                    effective = 1.0 + (factor - 1.0) * recovery if group == 'collapse' else factor
+                    wicket_risk.add(group, effective)
         raw_weights, total_weight = apply_pressure_effects_to_weights(
             raw_weights, pressure_effects, total_weight
         )
     
+    if wicket_risk is not None:
+        if 'Wicket' in raw_weights:
+            raw_weights['Wicket'] *= wicket_risk.multiplier()
+        raw_weights = limit_psychological_odds(raw_weights, psychological_baseline)
+        total_weight = sum(raw_weights.values())
+
     if captain_tactics:
         from engine.captaincy import apply_tactics
         raw_weights = apply_tactics(raw_weights, captain_tactics, is_fc=_is_fc)
@@ -1392,15 +1453,17 @@ def calculate_outcome(
         raw_weights = {key: max(0.0, weight) for key, weight in raw_weights.items()}
         total_weight = sum(raw_weights.values())
 
-    # 4.9) Short-format wicket ceiling — see SHORT_FORMAT_WICKET_CAP.
-    if _short and total_weight > 0:
+    # Emergency ceiling after all weight modifiers, in both innings.
+    _wicket_cap = (SHORT_FORMAT_WICKET_CAP if _short else
+                   LIMITED_OVERS_WICKET_CAP if hybrid else None)
+    if _wicket_cap is not None and total_weight > 0:
         _wicket = raw_weights.get("Wicket", 0.0)
         _others = total_weight - _wicket
         # Weight that normalises to exactly the cap, given everything else.
-        _ceiling = SHORT_FORMAT_WICKET_CAP / (1.0 - SHORT_FORMAT_WICKET_CAP) * _others
+        _ceiling = _wicket_cap / (1.0 - _wicket_cap) * _others
         if _others > 0 and _wicket > _ceiling:
             logger.debug("[WicketCap] %.3f -> %.3f of total", _wicket / total_weight,
-                         SHORT_FORMAT_WICKET_CAP)
+                         _wicket_cap)
             raw_weights["Wicket"] = _ceiling
             total_weight = _others + _ceiling
 

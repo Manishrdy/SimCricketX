@@ -189,11 +189,9 @@ formats:
           wicket_mult: 0.90
           extras_mult: 1.0
 
-      # Match._get_dynamic_game_mode() pins this mode on Flat/Dead whenever
-      # `wickets < 3 and over < 10`, so its own wicket_mult feeds back into its
-      # own trigger: suppressed wickets keep the condition true, which keeps the
-      # boundary multipliers running. The old 1.22/1.35/0.69 made that loop
-      # self-sustaining for the whole first 10 overs. Keep these mild.
+      # Automatic Flat/Dead assistance fades over six legal deliveries after
+      # the third wicket and near the phase cutoff. Pinned mode stays full.
+      # Keep the modifiers mild: wicket protection can sustain batting momentum.
       flat_track_bully:
         label: "Flat Track Bully"
         description: "Batting paradise — minimal wickets, boundary bonanza"

@@ -207,9 +207,12 @@ SQUAD = [
 # again on 2026-08-30 for the commentary-RNG split (second REPIN NOTE), and
 # again on 2026-09-21 for the collapse fix, and 2026-10-03 for rating shape.
 # (mean_runs, mean_wickets, dot_pct, bdry_per_100)
+# 2026-10-17: re-pin Green/Dry after recoverable collapse pressure. These
+# snapshots intentionally move; the independent pitch TARGET_BANDS below do
+# not. Forty additional seeds per pitch are reported in docs/psychological_risk.md.
 T20_BASELINE = {
-    "Green": (133.0, 7.5, 40.9, 12.7),
-    "Dry":   (131.8, 7.5, 43.1, 12.3),
+    "Green": (143.6, 7.2, 40.2, 13.4),
+    "Dry":   (139.4, 7.4, 43.3, 12.8),
     "Hard":  (192.9, 5.1, 33.4, 20.9),
     "Flat":  (219.8, 4.5, 29.6, 24.4),
     "Dead":  (267.8, 1.5, 21.8, 33.2),

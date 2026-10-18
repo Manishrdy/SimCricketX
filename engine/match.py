@@ -1302,6 +1302,7 @@ class Match(CaptaincyMixin, HundredPresentation):
         state = {
             'innings': self.innings,
             'current_over': self.current_over,
+            'current_ball': self.current_ball,
             'current_run_rate': current_rr,
             'wickets': self.wickets,
             'score': self.score,
@@ -1414,6 +1415,17 @@ class Match(CaptaincyMixin, HundredPresentation):
                 outcome = dict(outcome, batter_out=False)
             if outcome.get("is_extra"):
                 outcome = dict(outcome, is_extra=False, runs=outcome["delivery"]["bat_runs"])
+
+        if not self.is_fc and outcome.get("is_extra"):
+            extra_type = outcome.get("extra_type")
+            if extra_type == "Wide":
+                return  # no batting opportunity, including milestone floors
+            if extra_type == "No Ball":
+                bat_runs = outcome.get("bat_runs", 0)
+                if bat_runs <= 0:
+                    return  # a free delivery must not count as a failed shot
+                outcome = dict(outcome, runs=bat_runs, is_extra=False, label="run")
+            # Byes/leg-byes remain legal balls with no runs from the bat.
 
         current_form = stats.get("form", 1.0)
 
@@ -2964,7 +2976,41 @@ class Match(CaptaincyMixin, HundredPresentation):
             return configured
         return self._get_dynamic_game_mode()
 
-    def _get_dynamic_game_mode(self) -> str:
+    def _flat_track_strength(self) -> float:
+        """Fade automatic assistance over six legal balls, without new save state.
+
+        The third wicket starts a fade; later wickets do not restart it. A
+        separate taper ends at the old phase cutoff. Illegal balls advance
+        neither clock. Missing old history conservatively means the fade ended.
+        """
+        if self.pitch not in ("Flat", "Dead") or self.fmt.name not in ("T20", "T10", "Hundred"):
+            return 0.0
+        cutoff = self.fmt.overs / 2 if self.fmt.strict_short_bowling else 10
+        balls_left = cutoff * self.balls_per_over - (
+            self.current_over * self.balls_per_over + self.current_ball)
+        phase_strength = max(0.0, min(1.0, balls_left / 6.0))
+        if self.wickets < 3:
+            return phase_strength
+        wickets_back = self.wickets - 2
+        # The existing tracker uses legal-ball indices and survives a run of
+        # extras that could evict the third wicket from the event window.
+        tracker = getattr(self, "recent_wickets_tracker", ())
+        if len(tracker) >= wickets_back:
+            third_wicket_ball = tracker[-wickets_back]
+            completed = self.current_over * self.balls_per_over + self.current_ball
+            legal_since = max(0, completed - third_wicket_ball - 1)
+            return min(phase_strength, max(0.0, 1.0 - legal_since / 6.0))
+        legal_since = 0
+        for event in reversed(self.ball_history):
+            if event.get("is_wicket") or event.get("label") == "Wicket":
+                wickets_back -= 1
+                if wickets_back == 0:
+                    return min(phase_strength, max(0.0, 1.0 - legal_since / 6.0))
+            if event.get("is_legal", event.get("label") not in ("Wide", "NoBall")):
+                legal_since += 1
+        return 0.0
+
+    def _get_dynamic_game_mode(self, include_flat=True) -> str:
         """
         Dynamically select the most appropriate game mode for the current
         delivery based on match state (pitch, innings, overs, wickets, RRR).
@@ -2977,8 +3023,8 @@ class Match(CaptaincyMixin, HundredPresentation):
         wickets = self.wickets
         innings = self.innings
 
-        # Flat/Dead pitch + strong batting position early on → bully mode
-        if pitch in ("Dead", "Flat") and wickets < 3 and over < (self.fmt.overs / 2 if getattr(self.fmt, "strict_short_bowling", False) else 10):
+        # Automatic assistance fades instead of vanishing on the third wicket.
+        if include_flat and self._flat_track_strength() > 0:
             return "flat_track_bully"
 
         # NOTE: "bowlers_day" is no longer triggered automatically in any
@@ -7370,6 +7416,14 @@ class Match(CaptaincyMixin, HundredPresentation):
                 self.pitch
             )
 
+            # Keep source factors alongside the legacy product. Outcome sampling
+            # pools these with GSME; scenario/protective factors remain independent.
+            if self.fmt.name in ("T20", "ListA"):
+                pressure_effects['wicket_risk_factors'] = [
+                    ('urgency' if self.innings == 2 else 'collapse',
+                     pressure_effects.get('wicket_modifier', 1.0))
+                ]
+
             # 🔧 ADD CHASING ADVANTAGE
             chasing_advantage = self.pressure_engine.get_chasing_advantage(match_state)
             if chasing_advantage:
@@ -7389,6 +7443,7 @@ class Match(CaptaincyMixin, HundredPresentation):
                 or defensive_effects.get('rebuild_active')))
 
             if _consolidating:
+                pressure_effects['rebuilding'] = True
                 # Defensive mode (many wickets down) or a first-innings rebuild
                 pressure_effects['boundary_modifier'] *= (1 - defensive_effects['boundary_reduction'])
                 pressure_effects['wicket_modifier'] *= (1 - defensive_effects['wicket_reduction'])
@@ -7414,13 +7469,19 @@ class Match(CaptaincyMixin, HundredPresentation):
                         )
 
                         if cluster_trigger:
-                            pressure_effects['wicket_modifier'] *= 1.3  # Reduced from 1.5
+                            pressure_effects['wicket_modifier'] *= 1.3
+                            if 'wicket_risk_factors' in pressure_effects:
+                                pressure_effects['wicket_risk_factors'].append(
+                                    ('collapse' if recent_wickets else 'urgency', 1.3))
                             logger.info(f"WICKET CLUSTER: 1.3x additional wicket boost!")
 
                     # Apply effects
                     pressure_effects['boundary_modifier'] *= risk_effects['boundary_boost']
                     pressure_effects['dot_bonus'] += risk_effects['dot_increase']
                     pressure_effects['wicket_modifier'] *= risk_effects['wicket_boost']
+                    if 'wicket_risk_factors' in pressure_effects:
+                        pressure_effects['wicket_risk_factors'].append(
+                            ('urgency', risk_effects['wicket_boost']))
                     pressure_effects['strike_rotation_penalty'] = risk_effects['strike_rotation_penalty']
                     pressure_effects['single_floor'] = risk_effects['single_floor']
 
@@ -7433,6 +7494,8 @@ class Match(CaptaincyMixin, HundredPresentation):
                 recent_wickets = getattr(self, 'recent_wickets_count', 0)
                 if self.pressure_engine.should_trigger_wicket_cluster(match_state, recent_wickets):
                     pressure_effects['wicket_modifier'] *= 1.25
+                    if 'wicket_risk_factors' in pressure_effects:
+                        pressure_effects['wicket_risk_factors'].append(('collapse', 1.25))
                     logger.info(f"FIRST INNINGS COLLAPSE: 1.25x wicket boost! ({self.wickets} down, {recent_wickets} recent)")
 
         # Limited-overs toss × conditions modifier. FC deliberately excludes
@@ -7518,7 +7581,22 @@ class Match(CaptaincyMixin, HundredPresentation):
             scenario_phase=_scenario_phase,
             format_config=self.fmt,
             ground_config=self.ground_config,
+            rebuilding=pressure_effects.get('rebuilding', False),
         )
+        if self.fmt.name == "T20":
+            configured_mode = ground_config_engine.get_active_game_mode_name(config=self.ground_config)
+            pressure_effects['rate_driven_game_mode'] = (
+                self.innings == 2 and _game_mode_override == 'aggressive'
+                and configured_mode in (None, ground_config_engine.AUTO_GAME_MODE))
+
+        if not self.is_fc:
+            configured_mode = ground_config_engine.get_active_game_mode_name(config=self.ground_config)
+            if (configured_mode in (None, ground_config_engine.AUTO_GAME_MODE)
+                    and _game_mode_override == "flat_track_bully"):
+                pressure_effects['automatic_flat_blend'] = {
+                    'strength': self._flat_track_strength(),
+                    'replacement': self._get_dynamic_game_mode(include_flat=False),
+                }
 
         # ===== SCENARIO ENGINE HOOK =====
         scenario_override = None
