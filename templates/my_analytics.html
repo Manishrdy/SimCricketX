@@ -1,9 +1,19 @@
 {% extends "layout.html" %}
 
-{% block title %}My Analytics | SimCricketX{% endblock %}
+{% block title %}My Profile | SimCricketX{% endblock %}
 
 {% block extra_css %}
 <style>
+.profile-hero{position:relative;display:grid;grid-template-columns:1.3fr 1fr;align-items:center;gap:2rem;padding:2.5rem;border-radius:20px;background:#102f29;color:#f1f5ec;overflow:hidden}
+.profile-eyebrow,.ground-caption{font-size:.68rem;letter-spacing:.18em;color:#c1d8be;font-weight:700}
+.profile-hero h1{font-size:2.6rem;letter-spacing:-.045em;margin:.5rem 0 1.6rem;color:inherit}
+.profile-hero h2{font-size:1.2rem;margin:0;color:inherit;overflow-wrap:anywhere}.profile-hero p{color:#c1d2c8;font-size:.88rem;line-height:1.6}
+.profile-person{display:flex;align-items:center;gap:1rem}.profile-person p{margin:.3rem 0}.profile-monogram{display:grid;place-items:center;flex-shrink:0;width:54px;height:54px;border:1px solid #789c82;border-radius:50%;font-size:1.5rem;color:#e2d6a7}
+.profile-actions-row{display:flex;gap:.8rem;margin-top:1.4rem;flex-wrap:wrap}.profile-actions-row a{border:1px solid #658776;border-radius:7px;padding:.6rem .9rem;color:#f1f5ec;font-size:.8rem;text-decoration:none}.profile-actions-row a:first-child{background:#e2d6a7;border-color:#e2d6a7;color:#173d30}
+.profile-ground{display:grid;justify-items:center;gap:2rem}.ground-ring{width:100%;max-width:320px;aspect-ratio:1.3;border:1px solid #75927b;border-radius:50%;padding:12px;box-shadow:0 0 0 10px #ffffff04,0 0 0 23px #ffffff04;transform:rotate(-18deg)}.ground-inner{height:100%;border:1px solid #b8ccb466;border-radius:50%;display:grid;place-items:center;background:repeating-linear-gradient(90deg,#214b39 0px,#214b39 28px,#28543f 28px,#28543f 56px)}.ground-pitch{height:47%;width:15%;background:#c3b683;position:relative;border:4px solid #b4aa7b}.ground-pitch:before,.ground-pitch:after{content:'';position:absolute;left:-4px;right:-4px;height:1px;background:#fff8;top:15%}.ground-pitch:after{top:85%}
+.profile-nav{display:flex;gap:1.5rem;padding:1.3rem 0;border-bottom:1px solid var(--card-border);flex-wrap:wrap}.profile-nav a{color:var(--fg-secondary);font-size:.85rem;text-decoration:none}.profile-section-title{font-size:1.25rem;margin:2rem 0 1rem;scroll-margin-top:90px;color:var(--fg)}.profile-card-title{font-size:1rem;margin:0 0 1rem;color:var(--fg)}.profile-note{font-size:.8rem;color:var(--fg-secondary);line-height:1.6}.profile-detail{display:flex;justify-content:space-between;gap:1rem;padding:.8rem 0;border-bottom:1px solid var(--card-border);font-size:.82rem;color:var(--fg-secondary)}.profile-detail strong{color:var(--fg);font-weight:550;overflow-wrap:anywhere}.profile-detail>strong{text-align:right;max-width:65%}.profile-detail time{flex-shrink:0;font-size:.75rem}.profile-teams{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:.8rem}.profile-team{display:flex;flex-direction:column;gap:.4rem;padding:1rem;border:1px solid var(--card-border);border-radius:9px;overflow-wrap:anywhere}.profile-team>span:last-child{font-size:.75rem;color:var(--fg-secondary)}.profile-team-code{font-size:.7rem;letter-spacing:.12em;color:var(--fg-secondary)}
+@media(max-width:640px){.profile-hero{grid-template-columns:1fr;padding:1.5rem}.profile-hero h1{font-size:2rem}.profile-ground{display:none}.profile-detail{flex-wrap:wrap}.profile-nav{gap:1rem}}
+
 .ma-page {
     max-width: 1100px;
     margin: 0 auto;
@@ -89,16 +99,18 @@
 {% block content %}
 <div class="ma-page">
 
-    <div class="ma-header">
-        <div>
-            <h1 style="font-size:1.75rem;font-weight:700;color:var(--fg);margin:0;letter-spacing:-0.03em;">My Analytics</h1>
-            <p style="color:var(--fg-secondary);margin:0.25rem 0 0;">{{ current_user.display_name or current_user.id }} &mdash; personal performance overview</p>
+    <header class="profile-hero">
+        <div class="profile-identity">
+            <span class="profile-eyebrow">THE MEMBERS’ PAVILION</span>
+            <h1>My Profile</h1>
+            <div class="profile-person"><span class="profile-monogram">{{ (user.display_name or user.id)[0]|upper }}</span><div><h2>{{ user.display_name or user.id.split('@')[0] }}</h2><p>{{ 'Administrator' if user.is_admin else 'Club member' }} · Since {{ user.created_at.strftime('%b %Y') if user.created_at else 'date unavailable' }}</p></div></div>
+            <p>Your cricket world, from the first ball to the latest result.</p>
+            <div class="profile-actions-row"><a href="{{ url_for('account_settings') }}">Edit profile</a><a href="{{ url_for('export_my_data') }}">Export my data <i class="fas fa-arrow-down" aria-hidden="true"></i></a></div>
         </div>
-        <a href="{{ url_for('export_my_data') }}" style="display:inline-flex;align-items:center;gap:0.4rem;padding:0.58rem 1.05rem;border-radius:8px;font-size:0.85rem;font-weight:600;background:var(--card-bg);border:1px solid var(--card-border);color:var(--fg);text-decoration:none;">
-            <i class="fas fa-download"></i> Export My Data
-        </a>
-    </div>
-
+        <div class="profile-ground" aria-hidden="true"><div class="ground-ring"><div class="ground-inner"><div class="ground-pitch"><span></span></div></div></div><span class="ground-caption">YOUR HOME OF CRICKET</span></div>
+    </header>
+    <nav class="profile-nav" aria-label="Profile sections"><a href="#career">Career</a><a href="#club">My club</a><a href="#identity">Account</a><a href="#security">Security</a></nav>
+    <h2 id="career" class="profile-section-title">Career scorebook</h2>
     <!-- Summary Cards -->
     <div class="ma-kpis">
         {% for label, value, icon in [
@@ -106,7 +118,7 @@
             ('Players', analytics.players_count, 'fas fa-users'),
             ('Matches', analytics.matches_count, 'fas fa-cricket-bat-ball'),
             ('Tournaments', analytics.tournaments_count, 'fas fa-trophy'),
-            ('Wins', analytics.wins, 'fas fa-check-circle'),
+            ('Owned-team wins', analytics.wins, 'fas fa-check-circle'),
         ] %}
         <div class="ma-kpi">
             <div style="position:absolute;top:1rem;right:1rem;font-size:1.5rem;opacity:0.08;color:var(--fg);"><i class="{{ icon }}"></i></div>
@@ -116,11 +128,19 @@
         {% endfor %}
         <div class="ma-kpi">
             <div style="position:absolute;top:1rem;right:1rem;font-size:1.5rem;opacity:0.08;color:var(--fg);"><i class="fas fa-percentage"></i></div>
-            <div style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--fg-secondary);margin-bottom:0.5rem;">Win Rate</div>
+            <div style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--fg-secondary);margin-bottom:0.5rem;">Owned-team win share</div>
             <div style="font-size:2rem;font-weight:700;color:var(--fg);line-height:1;">{{ analytics.win_rate }}%</div>
         </div>
     </div>
 
+    <p class="profile-note">Wins count archived matches won by a team you currently own, including games between two of your teams. Win share is that count divided by all your archived matches.</p>
+    <div class="ma-split">
+        <section class="ma-card"><h2 class="profile-card-title">Match outcomes</h2>
+        {% for outcome, count in analytics.outcomes %}<div class="profile-detail"><span>{{ (outcome or 'Not recorded')|replace('_',' ')|title }}</span><strong>{{ count }}</strong></div>{% else %}<p class="profile-note">Your scorebook starts with your first completed match.</p>{% endfor %}
+        <p class="profile-note">First archived match: {{ analytics.first_match.strftime('%d %b %Y') if analytics.first_match else 'Yet to play' }}</p></section>
+        <section class="ma-card"><h2 class="profile-card-title">Around the club</h2>
+        {% for label, value in [('Active stadiums', analytics.stadiums_count), ('Community posts', analytics.posts_count), ('Comments & replies', analytics.comments_count)] %}<div class="profile-detail"><span>{{ label }}</span><strong>{{ value }}</strong></div>{% endfor %}</section>
+    </div>
     <div class="ma-split">
         <!-- Format Breakdown -->
         <div class="ma-card">
@@ -134,7 +154,7 @@
                     <span style="font-size:0.85rem;font-weight:600;color:var(--fg);">{{ fb.format }}</span>
                     <div style="flex:1;min-width:0;height:10px;background:var(--bg-secondary);border-radius:5px;overflow:hidden;">
                         {% set pct = (fb.count / analytics.matches_count * 100)|round(0)|int if analytics.matches_count else 0 %}
-                        <div style="width:{{ pct }}%;height:100%;background:var(--gradient);border-radius:5px;"></div>
+                        <div style="width:{{ pct }}%;height:100%;background:#58896b;border-radius:5px;"></div>
                     </div>
                     <span style="font-size:0.82rem;color:var(--fg-secondary);flex-shrink:0;text-align:right;">{{ fb.count }}</span>
                 </div>
@@ -174,6 +194,7 @@
         </div>
     </div>
 
+    <section class="ma-card" style="margin-bottom:2rem"><h3 class="profile-card-title">Squad career totals</h3><p class="profile-note">Stored career records across players in your current teams.</p><div class="profile-teams">{% for label, value in analytics.player_totals %}<div class="profile-team"><span>{{ label }}</span><strong style="font-size:1.5rem">{{ value }}</strong></div>{% endfor %}</div></section>
     <!-- Monthly Chart -->
     <div class="ma-card" style="margin-bottom:2rem;">
         <h3 style="font-size:1rem;font-weight:700;color:var(--fg);margin:0 0 1rem;display:flex;align-items:center;gap:0.5rem;">
@@ -186,7 +207,7 @@
             <div style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;">
                 <div style="font-size:0.72rem;color:var(--fg-secondary);">{{ m.count }}</div>
                 {% set bar_pct = (m.count / max_count * 100)|int if max_count else 0 %}
-                <div style="width:100%;background:var(--gradient);border-radius:4px 4px 0 0;height:{{ [bar_pct, 4]|max }}px;"></div>
+                <div style="width:100%;background:#58896b;border-radius:4px 4px 0 0;height:{{ [bar_pct, 4]|max }}px;"></div>
                 <div class="ma-month" style="font-size:0.65rem;color:var(--fg-secondary);">{{ m.month }}</div>
             </div>
             {% endfor %}
@@ -196,6 +217,20 @@
         {% endif %}
     </div>
 
+    <h2 id="club" class="profile-section-title">My club</h2>
+    <section class="ma-card" style="margin-bottom:1.5rem"><div class="ma-row"><h3 class="profile-card-title">Team collection</h3><a href="/teams/manage">Manage teams →</a></div><div class="profile-teams">{% for team in analytics.teams %}<div class="profile-team"><span class="profile-team-code">{{ team.short_code }}</span><strong>{{ team.name }}</strong><span>{{ team.home_ground or 'Home ground not set' }}</span></div>{% else %}<p class="profile-note">Build your first team to make this pavilion your own.</p>{% endfor %}</div>{% if analytics.teams_count > 12 %}<p class="profile-note">Showing 12 of {{ analytics.teams_count }} teams. Open Manage teams for your full collection.</p>{% endif %}</section>
+    <section class="ma-card" style="margin-bottom:2rem"><h3 class="profile-card-title">Latest results</h3>{% for match in analytics.recent_matches %}<div class="profile-detail"><div><strong>{{ match.result_description or 'Result not recorded' }}</strong><p class="profile-note">{{ match.venue or 'Venue not recorded' }} · {{ match.match_format or 'Unknown format' }}</p></div><time>{{ match.date.strftime('%d %b %Y') if match.date else 'Date unavailable' }}</time></div>{% else %}<p class="profile-note">No archived matches yet. Your latest six results will appear here.</p>{% endfor %}</section>
+    <h2 id="identity" class="profile-section-title">Account details</h2>
+    <div class="ma-split"><section class="ma-card"><h3 class="profile-card-title">Member identity</h3>
+    {% for label, value in [('Display name', user.display_name or 'Not set'), ('Email', user.id), ('Member ID', user.stable_id or 'Not recorded'), ('Joined', user.created_at|localtime if user.created_at else 'Not recorded'), ('Last login', user.last_login|localtime if user.last_login else 'Not recorded'), ('Pending email', user.pending_email or 'None')] %}<div class="profile-detail"><span>{{ label }}</span><strong>{{ value }}</strong></div>{% endfor %}</section>
+    <section class="ma-card"><h3 class="profile-card-title">Account status</h3>
+    <div class="profile-detail"><span>Email verification</span><strong>{{ 'Verified' if user.email_verified else 'Not verified' }}</strong></div>
+    <div class="profile-detail"><span>Role</span><strong>{{ 'Administrator' if user.is_admin else 'Member' }}</strong></div>
+    <div class="profile-detail"><span>Password update</span><strong>{{ 'Required' if user.force_password_reset else 'No update required' }}</strong></div>
+    <div class="profile-detail"><span>First community participation</span><strong>{{ user.community_engaged_at|localtime if user.community_engaged_at else 'Not yet' }}</strong></div>
+    <p class="profile-note">Your profile is private and visible only to you.</p><a href="{{ url_for('account_settings') }}">Manage account settings →</a></section></div>
+    <h2 id="security" class="profile-section-title">Security & sign-ins</h2>
+    <p class="profile-note">{{ analytics.active_sessions }} sessions active in the last 24 hours. <a href="{{ url_for('account_sessions') }}">Review sessions →</a></p>
     <!-- Recent Logins -->
     <div class="ma-card">
         <h3 style="font-size:1rem;font-weight:700;color:var(--fg);margin:0 0 1rem;display:flex;align-items:center;gap:0.5rem;">
@@ -207,7 +242,7 @@
             <div class="ma-login-row" style="{% if not loop.last %}border-bottom:1px solid var(--card-border);{% endif %}">
                 <span style="color:var(--fg);overflow-wrap:anywhere;">
                     <i class="fas fa-sign-in-alt" style="color:#22c55e;margin-right:0.4rem;"></i>
-                    <code style="font-size:0.78rem;color:var(--fg-secondary);">{{ lh.ip_address or 'Unknown IP' }}</code>
+                    <code style="font-size:0.78rem;color:var(--fg-secondary);">{{ lh.ip_address or 'Unknown IP' }} · {{ (lh.event or 'login')|replace('_', ' ')|title }}</code>
                 </span>
                 <span style="color:var(--fg-secondary);font-size:0.78rem;">
                     {% if lh.timestamp %}{{ lh.timestamp.strftime('%Y-%m-%d %H:%M') }} UTC{% endif %}

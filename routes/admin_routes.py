@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import yaml
 from flask import Response, flash, jsonify, redirect, render_template, request, send_file, session, stream_with_context, url_for
 from flask_login import current_user, login_user
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, and_
 from services import admin_workspace as workspace
 from match_archiver import reverse_player_aggregates
 from utils.exception_tracker import log_exception
@@ -144,31 +144,55 @@ def register_admin_routes(
     @login_required
     @admin_required
     def admin_users():
-        """List all users"""
-        try:
-            users = db.session.query(DBUser).all()
-            now = datetime.utcnow()
-            user_data = []
-            for user in users:
-                locked = bool(user.lockout_until and user.lockout_until > now)
-                user_data.append({
-                    'email': user.id,
-                    'display_name': user.display_name,
-                    'is_admin': user.is_admin,
-                    'is_banned': bool(user.is_banned),
-                    'email_verified': bool(user.email_verified),
-                    'is_locked': locked,
-                    'created_at': user.created_at,
-                    'teams_count': db.session.query(DBTeam).filter_by(user_id=user.id).count(),
-                    'matches_count': db.session.query(DBMatch).filter_by(user_id=user.id).count(),
-                    'last_login': user.last_login
-                })
-
-            return render_template('admin/users_list.html', users=user_data)
-        except Exception as e:
-            log_exception(e)
-            app.logger.error(f"[Admin] Users list error: {e}", exc_info=True)
-            return "Error loading users", 500
+        """Bounded user directory; related counts are fetched once per batch."""
+        selected = request.args.get('filter', 'recent')
+        if selected not in {'recent', 'all', 'admin', 'user', 'banned', 'unverified'}:
+            selected = 'recent'
+        query = DBUser.query
+        search = request.args.get('q', '').strip()[:120]
+        if search:
+            query = query.filter(or_(DBUser.id.contains(search, autoescape=True),
+                                     DBUser.display_name.contains(search, autoescape=True)))
+        filters = {'admin': DBUser.is_admin.is_(True), 'user': DBUser.is_admin.is_(False),
+                   'banned': DBUser.is_banned.is_(True), 'unverified': DBUser.email_verified.is_(False)}
+        if selected in filters:
+            query = query.filter(filters[selected])
+        cursor = request.args.get('cursor') if selected != 'recent' else None
+        if cursor:
+            try:
+                stamp, email = json.loads(cursor)
+                if not isinstance(email, str) or (stamp is not None and not isinstance(stamp, str)):
+                    raise ValueError('Invalid cursor')
+                if stamp is None:
+                    query = query.filter(DBUser.created_at.is_(None), DBUser.id > email)
+                else:
+                    date = datetime.fromisoformat(stamp)
+                    query = query.filter(or_(DBUser.created_at < date, DBUser.created_at.is_(None),
+                                             and_(DBUser.created_at == date, DBUser.id > email)))
+            except (ValueError, TypeError):
+                return jsonify(error='Invalid pagination cursor'), 400
+        batch = query.order_by(DBUser.created_at.desc(), DBUser.id.asc()).limit(30 if selected == 'recent' else 31).all()
+        users = batch[:30]
+        ids = [u.id for u in users]
+        teams = dict(db.session.query(DBTeam.user_id, func.count(DBTeam.id)).filter(
+            DBTeam.user_id.in_(ids)).group_by(DBTeam.user_id).all()) if ids else {}
+        matches = dict(db.session.query(DBMatch.user_id, func.count(DBMatch.id)).filter(
+            DBMatch.user_id.in_(ids)).group_by(DBMatch.user_id).all()) if ids else {}
+        now = datetime.utcnow()
+        user_data = [dict(email=u.id, display_name=u.display_name, is_admin=u.is_admin,
+                          is_banned=u.is_banned, email_verified=u.email_verified,
+                          is_locked=bool(u.lockout_until and u.lockout_until > now),
+                          created_at=u.created_at, last_login=u.last_login,
+                          teams_count=teams.get(u.id, 0), matches_count=matches.get(u.id, 0)) for u in users]
+        next_url = None
+        if selected != 'recent' and len(batch) > 30:
+            last = users[-1]
+            next_url = url_for('admin_users', filter=selected, q=search,
+                               cursor=json.dumps([last.created_at.isoformat() if last.created_at else None, last.id]))
+        if request.args.get('partial') == '1':
+            return jsonify(html=render_template('admin/_user_rows.html', users=user_data), next_url=next_url)
+        return render_template('admin/users_list.html', users=user_data, selected=selected,
+                               search=search, next_url=next_url)
 
     @app.route('/admin/users/<user_email>')
     @login_required
@@ -1541,6 +1565,11 @@ def register_admin_routes(
     # --- 12b. Self-service analytics ---
     @app.route('/my-analytics')
     @login_required
+    def legacy_my_analytics():
+        return redirect(url_for('my_analytics'))
+
+    @app.route('/my-profile')
+    @login_required
     def my_analytics():
         """User views their own analytics dashboard."""
         user = db.session.get(DBUser, current_user.id)
@@ -1549,7 +1578,8 @@ def register_admin_routes(
 
     def _build_user_analytics(user_id):
         """Build analytics dict for a user."""
-        teams = DBTeam.query.filter_by(user_id=user_id).all()
+        from database.models import Stadium, CommunityPost, CommunityComment
+        teams = DBTeam.query.filter_by(user_id=user_id).order_by(DBTeam.name).all()
         team_ids = [t.id for t in teams]
         total_players = DBPlayer.query.filter(DBPlayer.team_id.in_(team_ids)).count() if team_ids else 0
         total_matches = DBMatch.query.filter_by(user_id=user_id).count()
@@ -1574,6 +1604,11 @@ def register_admin_routes(
         login_hist = LoginHistory.query.filter_by(user_id=user_id).order_by(
             LoginHistory.timestamp.desc()
         ).limit(30).all()
+        career_fields = [('Runs', DBPlayer.total_runs), ('Wickets', DBPlayer.total_wickets),
+                         ('Fours', DBPlayer.total_fours), ('Sixes', DBPlayer.total_sixes),
+                         ('Fifties', DBPlayer.total_fifties), ('Centuries', DBPlayer.total_centuries)]
+        career_values = db.session.query(*[func.coalesce(func.sum(column), 0) for _, column in career_fields]).filter(
+            DBPlayer.team_id.in_(team_ids)).one()
         # Top scoring player (by total_runs)
         top_batsman = None
         top_bowler = None
@@ -1585,7 +1620,16 @@ def register_admin_routes(
                 DBPlayer.total_wickets.desc()
             ).first()
         return {
+            'player_totals': list(zip([label for label, _ in career_fields], career_values)),
             'teams_count': len(teams),
+            'teams': teams[:12],
+            'stadiums_count': Stadium.query.filter_by(owner_user_id=user_id, status='active').count(),
+            'posts_count': CommunityPost.query.filter_by(author_id=user_id, deleted_at=None).count(),
+            'comments_count': CommunityComment.query.filter_by(author_id=user_id, deleted_at=None).count(),
+            'recent_matches': DBMatch.query.filter_by(user_id=user_id).order_by(DBMatch.date.desc()).limit(6).all(),
+            'outcomes': db.session.query(DBMatch.match_status, func.count(DBMatch.id)).filter(DBMatch.user_id == user_id).group_by(DBMatch.match_status).all(),
+            'first_match': db.session.query(func.min(DBMatch.date)).filter(DBMatch.user_id == user_id).scalar(),
+            'active_sessions': ActiveSession.query.filter_by(user_id=user_id).filter(ActiveSession.last_active > datetime.utcnow() - timedelta(days=1)).count(),
             'players_count': total_players,
             'matches_count': total_matches,
             'tournaments_count': total_tournaments,
