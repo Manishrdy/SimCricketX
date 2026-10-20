@@ -1,6 +1,6 @@
 # SimCricketX
 
-**Build a squad. Read the pitch. Play every ball. Run an entire cricket season.**
+**Build a squad. Read the pitch. Play every ball. Run an entire cricket season!**
 
 SimCricketX is a browser-based cricket simulation platform that connects ball-by-ball gameplay with squad management, tournaments, multi-format tours, and persistent statistics. Underneath the scoreboard is a Python simulation engine that models player ability, conditions, match pressure, and tactical decisions.
 
