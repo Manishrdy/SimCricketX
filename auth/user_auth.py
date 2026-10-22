@@ -11,6 +11,7 @@ from database.models import User
 from database import db
 import json
 from utils.exception_tracker import log_exception
+from utils.client_ip import get_client_ip
 
 
 def _hash_token(raw_token: str) -> str:
@@ -21,22 +22,6 @@ EMAIL_VERIFY_TTL_MINUTES = 10
 PASSWORD_RESET_TTL_MINUTES = 360  # 6 hours
 
 # --- Helper Functions ---
-
-def get_ip_address() -> str:
-    try:
-        from flask import request
-        from utils.helpers import load_config
-        cfg = load_config()
-        if cfg.get("security", {}).get("trust_proxy_headers", False):
-            forwarded = request.headers.get("X-Forwarded-For", "")
-            if forwarded:
-                first = forwarded.split(",")[0].strip()
-                if first:
-                    return first
-        return (request.remote_addr or "").strip()
-    except Exception:
-        log_exception(source="backend")
-        return ""
 
 # C4: Unified password policy
 MIN_PASSWORD_LENGTH = 8
@@ -86,7 +71,7 @@ def register_user(email: str, password: str, display_name: Optional[str] = None)
         new_user = User(
             id=email,
             password_hash=generate_password_hash(password),
-            ip_address=get_ip_address(),
+            ip_address=get_client_ip(),
             display_name=display_name,
             email_verified=False,
             email_verify_token=_hash_token(token),

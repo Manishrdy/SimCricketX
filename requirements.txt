@@ -14,6 +14,7 @@ tabulate
 flask-sqlalchemy
 sqlalchemy
 requests
+idna>=3.7,<4
 flask-wtf
 flask-limiter
 flask-socketio>=5.3

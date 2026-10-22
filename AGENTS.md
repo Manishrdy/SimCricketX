@@ -18,3 +18,16 @@ credentials locally. Local/dev databases only.
 ## User UX backlog
 
 See `docs/UX_TODO.md` for the user-selected improvements and their status. All three selected improvements are implemented; consult the backlog before starting further UX work.
+
+## One-account-per-person work
+
+Before working on duplicate-account prevention, identity rules, VPN restrictions,
+account merges or the related admin tools, read `todo/one-account-per-person.md`.
+It contains the user's decisions, unresolved requirements and feature tracker.
+The file is local and gitignored; if missing, obtain the plan from the user before
+implementing this use case. Do not treat proposed choices as approved requirements.
+
+Develop one feature at a time: implement it, run its relevant test cases, and
+record the status, changes, test results and remaining issues in that same plan
+before starting the next feature. Keep user decisions in the plan up to date.
+Complete requirements review and obtain development go-ahead before coding.

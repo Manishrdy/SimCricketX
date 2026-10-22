@@ -201,6 +201,7 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # users.support_prompt_* — when the Buy Me a Coffee popup was shown,
     # closed, clicked or opted out of. NULL means never asked, so no backfill.
     ("add_user_support_prompt",  _loader("migrations.add_user_support_prompt")),
+    ("add_identity_foundation", _loader("migrations.add_identity_foundation")),
 ]
 
 
