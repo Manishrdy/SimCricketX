@@ -100,7 +100,7 @@ import traceback
 from pathlib import Path
 
 from werkzeug.utils import secure_filename
-from werkzeug.middleware.proxy_fix import ProxyFix
+from utils.client_ip import TrustedProxyMiddleware, get_client_ip
 from engine.stats_aggregator import StatsAggregator 
 from engine.stats_service import StatsService
 import glob
@@ -564,13 +564,6 @@ def create_app():
     IP_WHITELIST_MODE = bool(config.get("security", {}).get("ip_whitelist_mode", False))
     trust_proxy_headers = bool(config.get("security", {}).get("trust_proxy_headers", False))
 
-    # Apply ProxyFix so request.scheme and request.host reflect the real
-    # client-facing protocol/host set by nginx via X-Forwarded-* headers.
-    # This fixes `request.base_url` (used in canonical tags) returning http://
-    # instead of https:// when gunicorn sits behind nginx.
-    if trust_proxy_headers:
-        app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-
     ADMIN_CONFIG_ALLOWLIST = {
         "app": {"maintenance_mode": bool},
         "rate_limits": {
@@ -607,16 +600,6 @@ def create_app():
         "max_iterations": int(config.get("bot_defense", {}).get("max_iterations", 1_500_000)),
         "trusted_ip_prefixes": str(config.get("bot_defense", {}).get("trusted_ip_prefixes", "")).strip(),
     }
-
-    def get_client_ip() -> str:
-        """Resolve client IP safely; only trust proxy headers when explicitly enabled."""
-        if trust_proxy_headers:
-            forwarded = request.headers.get("X-Forwarded-For", "")
-            if forwarded:
-                first = forwarded.split(",")[0].strip()
-                if first:
-                    return first
-        return (request.remote_addr or "").strip()
 
     def parse_ip(value: str):
         try:
@@ -2735,6 +2718,13 @@ def create_app():
                 ws_emit('ws_error', {'message': 'Internal error', 'details': str(exc)})
 
         app.logger.info('[SocketIO] WebSocket support enabled (threading mode).')
+
+    # Wrap Socket.IO too, so handshakes use the same trusted ingress boundary.
+    app.wsgi_app = TrustedProxyMiddleware(
+        app.wsgi_app,
+        enabled=trust_proxy_headers,
+        trusted_cidrs=config.get("security", {}).get("trusted_proxy_cidrs", []),
+    )
 
     return app
 

@@ -16,6 +16,11 @@ class User(UserMixin, db.Model):
     id = db.Column(db.String(120), primary_key=True)  # Email as ID (legacy)
     email = synonym('id')  # Backward compatibility for tests/code using User.email
     stable_id = db.Column(db.String(36), unique=True, default=lambda: str(uuid.uuid4()))
+    # Evidence only until signup enforcement is integrated. Legacy collisions
+    # must coexist; never add uniqueness here before ownership review.
+    canonical_email = db.Column(db.String(254), nullable=True, index=True)
+    email_normalization_version = db.Column(db.Integer, nullable=True)
+    email_normalization_error = db.Column(db.String(40), nullable=True)
     password_hash = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -90,6 +95,17 @@ class User(UserMixin, db.Model):
     teams = relationship('Team', backref='owner', lazy=True, cascade="all, delete-orphan")
     matches = relationship('Match', backref='user', lazy=True, cascade="all, delete-orphan")
     tournaments = relationship('Tournament', backref='owner', lazy=True, cascade="all, delete-orphan")
+
+class IdentityEmailReservation(db.Model):
+    """Occupied canonical identities, including unresolved legacy collisions.
+
+    No owner is chosen for a collision. Release/transfer requires the later
+    reviewed identity workflows; this foundation never deletes reservations.
+    """
+    __tablename__ = 'identity_email_reservations'
+    canonical_email = db.Column(db.String(254), primary_key=True)
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.current_timestamp())
+
 
 class Stadium(db.Model):
     """Stable identity; immutable revisions preserve played conditions."""
