@@ -924,7 +924,7 @@ def create_app():
         if request.path.startswith('/static'):
             return None
         # Allow login/logout so admin can authenticate
-        if request.endpoint in ('login', 'logout', 'static', 'auth_challenge', 'admin_stop_impersonation'):
+        if request.endpoint in ('login', 'logout', 'static', 'auth_challenge', 'admin_stop_impersonation', 'identity_device_privacy'):
             return None
         # Allow admin users through
         if current_user.is_authenticated and getattr(current_user, 'is_admin', False):
@@ -978,7 +978,7 @@ def create_app():
             return None
         if request.path.startswith('/static'):
             return None
-        if request.endpoint in ('force_change_password', 'logout', 'static', 'admin_stop_impersonation'):
+        if request.endpoint in ('force_change_password', 'logout', 'static', 'admin_stop_impersonation', 'identity_device_privacy'):
             return None
         if getattr(current_user, 'force_password_reset', False):
             session['force_password_reset'] = True
@@ -1002,6 +1002,7 @@ def create_app():
 
             # Allow auth and setup routes to avoid redirect loops.
             if request.endpoint in (
+                'identity_device_privacy',
                 'set_display_name',
                 'logout',
                 'login',
@@ -1038,6 +1039,7 @@ def create_app():
     # Endpoints reachable while the user is gated to the squad-cleanup flow.
     # Anything not in this set is redirected to /account/squad-cleanup.
     OVERSIZE_SQUAD_ALLOWED_ENDPOINTS = frozenset({
+        'identity_device_privacy',
         'static',
         'login', 'logout', 'register',
         'force_change_password', 'set_display_name',
@@ -1118,7 +1120,7 @@ def create_app():
         if request.endpoint in ('login', 'logout', 'static',
                                 'verify_email', 'verify_email_pending', 'resend_verification',
                                 'forgot_password', 'reset_password',
-                                'auth_challenge', 'register'):
+                                'auth_challenge', 'register', 'identity_device_privacy'):
             return None
 
         token = session.get('session_token')
@@ -2471,6 +2473,11 @@ def create_app():
         increment_visit_counter=increment_visit_counter,
         basedir=basedir,
     )
+
+    from utils.identity_devices import init_app as init_identity_devices
+    init_identity_devices(app, limiter)
+    from routes.admin_identity_routes import init_app as init_identity_review
+    init_identity_review(app)
 
     # --- Auth Routes (Phase 3 extraction) ---
     register_auth_routes(

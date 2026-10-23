@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from flask import flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from utils.turnstile import verify_turnstile
+from utils.identity_devices import collect as collect_device
 from utils.email_service import (
     send_verification_email,
     send_password_reset_email,
@@ -68,6 +69,7 @@ def register_auth_routes(
 
     # Endpoints exempt from the force-email-verify redirect
     _FORCE_VERIFY_EXEMPT = {
+        'identity_device_privacy',
         'force_verify_email',
         'force_verify_email_send',
         'force_verify_email_change',
@@ -148,6 +150,7 @@ def register_auth_routes(
                 return render_template("register.html", error=policy_error)
 
             if register_user(email, password, display_name=display_name):
+                collect_device(db.session.get(DBUser, email), request.form.get("device_fingerprint"))
                 # Send verification email immediately after registration.
                 # generate_email_verify_token returns the raw token; the DB stores
                 # its SHA-256 hash. Passing user.email_verify_token (the hash) directly
@@ -338,6 +341,8 @@ def register_auth_routes(
                             error="We hit a temporary problem signing you in. Please try again.",
                             error_type="system",
                         )
+
+                    collect_device(user, request.form.get("device_fingerprint"), mark_session=True)
 
                     if user.force_email_verify:
                         session["force_email_verify"] = True

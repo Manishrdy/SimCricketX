@@ -67,6 +67,10 @@
                             class="admin-nav-link {% if request.endpoint in ['admin_users','admin_user_detail','admin_user_360','admin_create_user','admin_user_analytics','admin_user_login_history'] %}active{% endif %}">
                             <i class="fas fa-users"></i> <span>Users</span>
                         </a></li>
+                    <li><a href="{{ url_for('admin_identity.overview') }}" data-label="Identity"
+                            class="admin-nav-link {% if request.blueprint == 'admin_identity' %}active{% endif %}">
+                            <i class="fas fa-fingerprint" aria-hidden="true"></i> <span>Identity</span>
+                        </a></li>
                     <li><a href="/admin/player-pool" data-label="Player Pool"
                             class="admin-nav-link {% if request.endpoint in ['admin_player_pool','admin_player_pool_add','admin_player_pool_edit','admin_player_pool_import'] %}active{% endif %}">
                             <i class="fas fa-database"></i> <span>Player Pool</span>

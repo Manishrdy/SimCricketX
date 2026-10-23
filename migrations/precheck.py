@@ -202,6 +202,8 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # closed, clicked or opted out of. NULL means never asked, so no backfill.
     ("add_user_support_prompt",  _loader("migrations.add_user_support_prompt")),
     ("add_identity_foundation", _loader("migrations.add_identity_foundation")),
+    ("add_identity_devices", _loader("migrations.add_identity_devices")),
+    ("add_identity_review", _loader("migrations.add_identity_review")),
 ]
 
 

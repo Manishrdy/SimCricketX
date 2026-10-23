@@ -137,6 +137,7 @@
                     <span id="btnText">Sign In</span>
                 </button>
                 <button type="button" class="auth-cancel-link" id="cancelCheckBtn">Cancel</button>
+                {% include "partials/device_notice.html" %}
             </form>
 
             <div class="auth-link-row" style="margin-top:14px;">
@@ -333,5 +334,6 @@
 }());
 </script>
 
+{% if identity_device_enabled %}<script src="{{ url_for('static', filename='js/identity_device.js') }}" defer></script>{% endif %}
 </body>
 </html>

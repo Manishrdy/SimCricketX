@@ -1192,6 +1192,9 @@
     {% include 'partials/guide.html' %}
 
 
+{% if identity_device_collect_session %}
+    <script src="{{ url_for('static', filename='js/identity_device.js') }}" data-collect-session="true" defer></script>
+    {% endif %}
 </body>
 
 </html>

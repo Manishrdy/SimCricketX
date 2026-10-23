@@ -22,6 +22,7 @@
         </div>
         <div class="user-profile-meta"><span>Last login</span><strong>{{ user.last_login|localtime if user.last_login else 'Never recorded' }}</strong><span>Joined {{ user.created_at|localtime if user.created_at else 'Unknown' }}</span></div>
     </section>
+    {% if user.stable_id %}<p><a href="{{ url_for('admin_identity.account', stable_id=user.stable_id) }}">Identity review summary</a></p>{% endif %}
     <nav class="workspace-tabs user-tabs" aria-label="User sections">
         {% for key,label,icon in [('overview','Overview','user'),('security','Security','shield-alt'),('actions','Account Actions','sliders-h')] %}
         <a href="{{ url_for('admin_user_detail',user_email=user.id,tab=key) }}" {% if tab == key %}class="selected" aria-current="page"{% endif %}><i class="fas fa-{{ icon }}" aria-hidden="true"></i> {{ label }}</a>

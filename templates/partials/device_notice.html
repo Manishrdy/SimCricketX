@@ -1,0 +1,8 @@
+{% if identity_device_enabled %}
+<input type="hidden" name="device_fingerprint" value="" data-device-fingerprint>
+<p class="device-notice" style="font-size:0.8rem;line-height:1.6;margin:14px 0 0;color:var(--fg-muted)">
+    We use a device cookie and basic browser signals to help prevent duplicate accounts.
+    Device data expires after 180 days without use.
+    <a href="{{ url_for('identity_device_privacy') }}" style="color:inherit;text-decoration:underline">Device privacy details</a>.
+</p>
+{% endif %}
