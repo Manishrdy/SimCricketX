@@ -96,6 +96,23 @@ class User(UserMixin, db.Model):
     matches = relationship('Match', backref='user', lazy=True, cascade="all, delete-orphan")
     tournaments = relationship('Tournament', backref='owner', lazy=True, cascade="all, delete-orphan")
 
+class IdentityDeviceSighting(db.Model):
+    """Account-linked pseudonymous evidence; never authentication proof."""
+    __tablename__ = 'identity_device_sightings'
+    id = db.Column(db.Integer, primary_key=True)
+    user_stable_id = db.Column(db.String(36), db.ForeignKey('users.stable_id', ondelete='CASCADE'), nullable=False, index=True)
+    key_id = db.Column(db.String(16), nullable=False)
+    device_hash = db.Column(db.String(64), nullable=False, index=True)
+    fingerprint_hash = db.Column(db.String(64), nullable=False, default='', index=True)
+    fingerprint_status = db.Column(db.String(16), nullable=False)
+    cookie_confirmed = db.Column(db.Boolean, nullable=False)
+    first_seen = db.Column(db.DateTime, nullable=False)
+    last_seen = db.Column(db.DateTime, nullable=False, index=True)
+    __table_args__ = (db.UniqueConstraint('user_stable_id', 'key_id', 'device_hash',
+                                        'fingerprint_hash', 'fingerprint_status',
+                                        name='uq_identity_device_sighting'),)
+
+
 class IdentityEmailReservation(db.Model):
     """Occupied canonical identities, including unresolved legacy collisions.
 
@@ -1609,3 +1626,40 @@ class VoidedFixtureMatch(db.Model):
     match_id = db.Column(db.String(36), primary_key=True)
     replay_id = db.Column(db.String(64), db.ForeignKey('fixture_replays.id'), nullable=False)
     json_path = db.Column(db.Text, nullable=True)
+
+
+class IdentityReviewCase(db.Model):
+    __tablename__ = 'identity_review_cases'
+    id = db.Column(db.Integer, primary_key=True)
+    left_id = db.Column(db.String(36), nullable=False)
+    right_id = db.Column(db.String(36), nullable=False)
+    status = db.Column(db.String(16), nullable=False, default='open', index=True)
+    assignee = db.Column(db.String(36), nullable=True)
+    version = db.Column(db.Integer, nullable=False, default=1)
+    created_at = db.Column(db.DateTime, nullable=False)
+    updated_at = db.Column(db.DateTime, nullable=False)
+    closed_at = db.Column(db.DateTime, nullable=True, index=True)
+    __table_args__ = (db.UniqueConstraint('left_id', 'right_id', name='uq_identity_review_pair'),)
+
+
+class IdentityReviewEvidence(db.Model):
+    __tablename__ = 'identity_review_evidence'
+    id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('identity_review_cases.id', ondelete='CASCADE'), nullable=False, index=True)
+    reason = db.Column(db.String(32), nullable=False)
+    payload = db.Column(db.Text, nullable=False)
+    captured_at = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    __table_args__ = (db.UniqueConstraint('case_id', 'reason', name='uq_identity_review_reason'),)
+
+
+class IdentityReviewAction(db.Model):
+    __tablename__ = 'identity_review_actions'
+    id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('identity_review_cases.id', ondelete='CASCADE'), nullable=False, index=True)
+    actor_id = db.Column(db.String(36), nullable=False)
+    action = db.Column(db.String(32), nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+    # Open-case history/notes also expire, retaining only minimal case metadata.
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)

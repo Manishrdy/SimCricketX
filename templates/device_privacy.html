@@ -1,0 +1,20 @@
+{% extends "public_base.html" %}
+{% block title %}Device privacy — SimCricketX{% endblock %}
+{% block content %}
+<section class="about-hero">
+<p class="eyebrow">PRIVACY / DEVICE DATA</p>
+<h1>How we recognize a device</h1>
+<p class="lead">We use a first-party device cookie and basic browser signals to help identify possible duplicate accounts. They do not prove who a person is.</p>
+</section>
+<section>
+<h2>What we collect</h2>
+<p>At signup and sign-in, and once per signed-in session, we collect your browser language, timezone, screen dimensions and platform. We do not use canvas or WebGL rendering for this fingerprint.</p>
+<p>Our device cookie contains a random identifier. We store protected hashes of that identifier and the browser signals, linked to your account, along with collection status and first/last observation times. We do not store the raw browser signals in this device evidence, and we do not share them with a fingerprinting service.</p>
+<h2>How long it lasts</h2>
+<p>The cookie lasts 180 days from its last use. Device evidence expires 180 days after its last observation and is removed by our retention cleanup. Expired evidence is excluded from matching immediately. Clearing cookies can remove the device identifier sooner; we do not recreate it from browser storage.</p>
+<h2>What this means for you</h2>
+<p>People can share similar browser signals, and signals can change when you change browsers or devices. Collection alone does not block your account. Possible matches require the separate account-policy and review process; they are not proof of common ownership.</p>
+<p>If your browser prevents collection, we record that signals were unavailable. You can still use the current sign-in flow.</p>
+<p><a href="{{ url_for('login') }}">Back to sign in</a> · <a href="{{ url_for('register') }}">Create an account</a></p>
+</section>
+{% endblock %}
