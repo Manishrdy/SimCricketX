@@ -887,6 +887,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_manage.css') }}">
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navigation.css') }}">
+    <style>.network-restriction-banner{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;padding:1rem max(1rem,calc((100vw - 1200px)/2));background:#fff0c2;color:#342700;border-bottom:2px solid #b8861b;line-height:1.5}.network-restriction-banner span{flex:1 1 360px}.network-restriction-banner a{color:inherit;font-weight:700}.network-restriction-banner form{margin:0}.network-restriction-banner button{background:#342700;color:#fff;border:0;border-radius:6px;padding:.6rem .85rem;cursor:pointer}[data-theme="dark"] .network-restriction-banner{background:#3c3013;color:#fff0c2}@media(max-width:480px){.network-restriction-banner span{flex-basis:100%}.network-restriction-banner{padding:1rem}}</style>
     {% block extra_css %}{% endblock %}
 </head>
 
@@ -895,13 +896,18 @@
     <!-- Navigation -->
     {% block site_navigation %}
     <nav class="navbar scx-nav" aria-label="Main navigation">
-        <a href="{{ url_for('home') }}" class="nav-brand">
+        <a href="{{ url_for('community_index' if network_restricted else 'home') }}" class="nav-brand">
             <span class="nav-brand-mark" aria-hidden="true"><i class="fas fa-baseball-ball"></i></span>
             <span class="nav-logo-text">SimCricketX</span>
         </a>
 
         <div class="nav-items">
             {% block navbar_items %}
+            {% if network_restricted %}
+            <a href="{{ url_for('community_index') }}" class="nav-control">Community</a>
+            <a href="{{ url_for('identity_network.appeal') }}" class="nav-control">Private review</a>
+            <button id="theme-btn" class="nav-control" type="button" aria-label="Toggle theme">Theme</button>
+            {% else %}
             {% if current_user.is_authenticated %}
             {% if request.endpoint != 'home' %}
             <a href="{{ url_for('home') }}" class="nav-control nav-home-link" title="Dashboard" aria-label="Dashboard"><i class="fas fa-house" aria-hidden="true"></i><span>Dashboard</span></a>
@@ -1009,6 +1015,7 @@
                 </div>
             </div>
             {% endif %}
+            {% endif %}
             {% endblock %}
             {% if not current_user.is_authenticated %}
             <button id="theme-btn" class="nav-control" type="button" title="Toggle theme" aria-label="Toggle theme"><i class="fas fa-moon" aria-hidden="true"></i></button>
@@ -1016,6 +1023,8 @@
         </div>
     </nav>
     {% endblock %}
+
+    {% include 'partials/network_banner.html' %}
 
     <!-- Maintenance Mode Banner (admin only) -->
     {% if maintenance_mode and current_user.is_authenticated and current_user.is_admin %}
@@ -1048,6 +1057,7 @@
         {% block content %}{% endblock %}
     </main>
 
+    {% if not network_restricted %}
     <!-- Site Footer -->
     <footer
         style="text-align: center; padding: 1.25rem 1rem; font-size: 0.75rem; color: var(--fg-secondary); border-top: 1px solid var(--card-border); opacity: 0.7;">
@@ -1075,6 +1085,7 @@
         <span style="margin: 0 0.4rem;">&middot;</span>
         <a href="{{ url_for('changelog') }}" style="color: inherit; text-decoration: none;">v{{ app_version }}</a>
     </footer>
+    {% endif %}
 
 
     <!-- Scripts -->

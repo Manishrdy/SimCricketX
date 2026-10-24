@@ -65,6 +65,9 @@
             </div>
             {% endif %}
 
+            {% if identity_signup_enforced or identity_network_enabled %}<p><a href="{{ url_for('identity_signup.appeal') }}">Signup blocked? Request private review</a></p>{% endif %}
+
+            {% if identity_network_enabled %}<p class="auth-form-sub">We check your IP for VPNs and proxies through ProxyCheck. <a href="{{ url_for('identity_network.privacy') }}">Network privacy details</a></p>{% endif %}
             <!-- Register form -->
             <form class="auth-form" method="POST" action="/register" id="registerForm" novalidate>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

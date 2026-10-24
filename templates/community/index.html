@@ -67,6 +67,7 @@
     </main>
 
     <aside class="cm-aside" aria-label="About the community">
+      {% if identity_network_enabled %}<a class="cm-btn cm-queue-link" href="{{ url_for('identity_network.appeal') }}">Private network review</a>{% endif %}
       {% if current_user.is_admin %}
       <a class="cm-btn cm-queue-link" href="{{ url_for('admin_community') }}"><i class="fas fa-shield-halved" aria-hidden="true"></i>Moderation queue</a>
       {% endif %}

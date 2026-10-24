@@ -52,6 +52,41 @@ def register_user(email: str, password: str, display_name: Optional[str] = None)
         return False
 
     display_name = display_name.strip() if display_name else None
+    from services import identity_signup as signup
+    from services import identity_network as network
+    from flask import g, request
+    if network.enabled() and request.endpoint != 'admin_create_user':
+        ok, message = validate_password_policy(password)
+        if not ok:
+            g.identity_signup_error = message
+            return False
+        if network.signup_block():
+            g.identity_signup_error = 'Turn off your VPN, proxy or Private Relay before registering. You can request a private signup review if you need help.'
+            if signup.enabled():
+                try:
+                    signup.record_attempt(signup.normalize_email(email), signup.Refused(['network_restricted']))
+                except Exception:
+                    logging.warning('Network-refused signup could not be recorded')
+            return False
+    if signup.enabled():
+        from flask import g
+        from utils.identity_rules import InvalidEmail
+        ok, message = validate_password_policy(password)
+        if not ok:
+            g.identity_signup_error = message
+            return False
+        try:
+            g.identity_signup_email = signup.create_user(email, password, display_name)
+            return True
+        except InvalidEmail as exc:
+            g.identity_signup_error = signup.MESSAGES.get(exc.code, 'Enter a valid email address.')
+        except signup.Refused as exc:
+            g.identity_signup_error = signup.MESSAGES.get(exc.reasons[0], signup.MESSAGES['identity_unavailable'])
+        except Exception:
+            logging.warning('Signup checks unavailable; registration refused')
+            g.identity_signup_error = signup.MESSAGES['unavailable']
+        return False
+
 
     # C4: Enforce unified password policy
     ok, msg = validate_password_policy(password)
@@ -173,6 +208,8 @@ def delete_user(email: str, requesting_user_email: str = None) -> bool:
         return False
 
     try:
+        from services.identity_signup import mark_deleted
+        mark_deleted(db.session, user)
         db.session.delete(user)
         db.session.commit()
         if requesting_user_email:
@@ -224,6 +261,21 @@ def update_user_email(old_email: str, new_email: str, admin_email: str = None) -
         if db.engine.dialect.name == "sqlite":
             db.session.execute(text("PRAGMA defer_foreign_keys = ON"))
 
+        from services import identity_signup as signup
+        identity = None
+        if signup.enabled():
+            from utils.identity_reservations import reserve_new_email
+            from sqlalchemy import select
+            # Acquire the write lock through reservation before checking markers.
+            identity = reserve_new_email(db.session.connection(), new_email)
+            new_email = identity.address
+            if db.session.execute(select(signup.M.c.identity_hash).where(
+                    signup.M.c.key_id != signup.devices.key_id(signup.key())).limit(1)).first():
+                raise ValueError('Identity key configuration needs operator recovery.')
+            if db.session.execute(select(signup.M).where(
+                    signup.M.c.identity_hash == signup.identity_hash(identity))).first():
+                raise ValueError('This email requires identity review before it can be used.')
+
         # Use raw SQL to update the primary key and all FK references in one transaction
         # This is safer than delete+recreate and keeps user-linked records consistent.
         db.session.execute(text("UPDATE teams SET user_id = :new WHERE user_id = :old"), {"new": new_email, "old": old_email})
@@ -245,6 +297,9 @@ def update_user_email(old_email: str, new_email: str, admin_email: str = None) -
         # Update the primary key last
         db.session.execute(text("UPDATE users SET id = :new WHERE id = :old"), {"new": new_email, "old": old_email})
 
+        if identity:
+            db.session.execute(text("UPDATE users SET canonical_email=:canonical, email_normalization_version=:version, email_normalization_error=NULL WHERE id=:email"),
+                {"canonical": identity.canonical, "version": identity.version, "email": new_email})
         db.session.commit()
 
         actor = f" by {admin_email}" if admin_email else ""

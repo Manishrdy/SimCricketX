@@ -1133,6 +1133,8 @@ def register_admin_routes(
         ok = register_user(email, password, display_name or None)
         if not ok:
             return jsonify({"error": "Failed to create user. Email may already be in use or password too weak."}), 400
+        from flask import g
+        email = getattr(g, "identity_signup_email", email)
         if make_admin:
             new_user = db.session.get(DBUser, email)
             if new_user:

@@ -1,0 +1,28 @@
+{% extends 'admin/layout.html' %}
+{% block extra_css %}{{ super() }}<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_identity.css') }}">{% endblock %}
+{% block admin_content %}
+<div class="identity-workspace">
+<header class="identity-header"><div><p class="identity-eyebrow">PRIVATE ADMIN WORKSPACE</p><h1>Signup reviews</h1><p>Review refused signups and grant specific, one-use exceptions.</p><p>Signup enforcement: {{ "enabled" if identity_signup_enforced else "disabled" }}.</p></div></header>
+<nav class="identity-tabs" aria-label="Identity sections"><a href="{{ url_for('admin_identity.overview') }}">Identity overview</a><a href="{{ url_for('identity_signup.queue') }}">Requests and approvals</a><a href="{{ url_for('identity_signup.attempts') }}">Signup attempts</a></nav>
+{% if error %}<p role="alert" class="identity-card">{{ error }}</p>{% endif %}
+{% if view == 'queue' %}
+<form class="identity-filters"><label>Status<select name="status">{% for s in ['open','approved','rejected','revoked','used','expired','all'] %}<option value="{{ s }}" {% if s==state %}selected{% endif %}>{{ s|capitalize }}</option>{% endfor %}</select></label><button class="identity-button">Filter</button></form>
+{% for item in rows %}<article class="identity-card"><h2><a href="{{ url_for('identity_signup.detail',appeal_id=item.id) }}">Request #{{ item.id }} · {{ item.email }}</a></h2><p>{{ 'Expired' if item.status=='approved' and item.expires_at<=at else item.status|capitalize }} · {{ item.created_at|localtime }}</p></article>{% else %}<p>No verified requests in this view.</p>{% endfor %}
+<div class="identity-pagination">{% if page>1 %}<a href="{{ url_for('identity_signup.queue',page=page-1,status=state) }}">Previous</a>{% endif %}<span>Page {{ page }}</span>{% if more %}<a href="{{ url_for('identity_signup.queue',page=page+1,status=state) }}">Next</a>{% endif %}</div>
+{% elif view == 'attempts' %}
+<p>Refusals create no usable account. Device matches need review; routine email/IP refusals only need action if appealed.</p>
+{% for item in rows %}<article class="identity-card"><h2>{{ item.email }}</h2><p>{{ item.reason|replace('_',' ')|capitalize }} · {{ item.count }} attempts</p><p>Last attempt {{ item.last_seen|localtime }} · Evidence expires {{ item.expires_at|localtime }}</p></article>{% else %}<p>No retained signup attempts.</p>{% endfor %}
+<div class="identity-pagination">{% if page>1 %}<a href="{{ url_for('identity_signup.attempts',page=page-1) }}">Previous</a>{% endif %}<span>Page {{ page }}</span>{% if more %}<a href="{{ url_for('identity_signup.attempts',page=page+1) }}">Next</a>{% endif %}</div>
+{% elif view == 'detail' %}
+<section class="identity-card"><h2>Request #{{ row.id }} · {{ row.email }}</h2><p>{{ 'Expired' if row.status=='approved' and row.expires_at<=at else row.status|capitalize }} · Mailbox verified {{ row.verified_at|localtime }}</p><p class="identity-note">{{ row.message }}</p>{% if row.expires_at %}<p>Expires {{ row.expires_at|localtime }}</p>{% endif %}</section>
+<h2>Current signup evidence</h2>{% for item,matches in evidence %}<section class="identity-card"><h3>{{ item.reason|replace('_',' ')|capitalize }}</h3><p>Last observed {{ item.last_seen|localtime }} · Expires {{ item.expires_at|localtime }}</p>{% for match in matches %}<p><a href="{{ url_for('admin_identity.account',stable_id=match.account) }}">Matched account {{ match.account }}</a></p>{% endfor %}</section>{% else %}<p>No unexpired attempt evidence. Ask the applicant to retry if fresh evidence is needed.</p>{% endfor %}
+{% if row.status=='open' or (row.status=='approved' and row.expires_at>at) %}
+<form method="post" class="identity-card identity-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="version" value="{{ row.version }}">
+<label>Decision<select name="action">{% if row.status=='approved' %}<option value="revoke">Revoke unused approval</option>{% else %}<option value="reject">Reject request</option><option value="approve">Approve selected exceptions for seven days</option>{% endif %}</select></label>
+{% if row.status=='open' %}<fieldset><legend>Exceptions (only for approval)</legend>{% for scope in scopes %}<label class="identity-check"><input type="checkbox" name="scopes" value="{{ scope }}">{{ signup_scope_labels[scope] }}</label>{% endfor %}</fieldset>{% endif %}
+<label>Reason and ownership-review evidence<textarea name="reason" required rows="4" maxlength="2000"></textarea></label>
+<label class="identity-check"><input type="checkbox" name="confirmed" value="yes" required>I reviewed mailbox ownership, the requested exceptions and their effects.</label>
+<p>Approval is email-bound and can be used once. Return creates an empty account. Other checks still apply; this cannot bypass an existing account, banned identity or invalid email policy.</p><button class="identity-button">Save decision</button></form>{% endif %}
+<h2>Recent history</h2>{% for item in history %}<article class="identity-card"><h3>{{ item.action|capitalize }}</h3><p class="identity-note">{{ item.reason }}</p><p>{{ item.created_at|localtime }} · {{ item.actor_id or 'Applicant / system' }}</p></article>{% else %}<p>No retained history.</p>{% endfor %}
+{% endif %}</div>
+{% endblock %}

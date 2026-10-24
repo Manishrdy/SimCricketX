@@ -26,3 +26,7 @@
 .identity-workspace dt {font-weight:700;margin-top:1rem}.identity-workspace dd {margin:.4rem 0 1rem}
 .identity-workspace :focus-visible {outline:3px solid #d69c35;outline-offset:3px}
 @media(max-width:600px){.identity-stats {grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem}.identity-pair{grid-template-columns:1fr;gap:0}.identity-card{padding:1rem}.identity-filters{display:grid;grid-template-columns:1fr}.identity-button{width:100%}.identity-header h1{font-size:1.5rem}}
+.identity-form label.identity-check {display:flex;align-items:flex-start;gap:.65rem;padding:.4rem 0}
+.identity-form label.identity-check input {width:auto;min-width:1rem;height:1rem;flex:0 0 auto;margin:.2rem 0 0}
+.identity-form fieldset {min-width:0;padding:.7rem 1rem;border:1px solid var(--card-border);border-radius:8px}
+.identity-form legend {padding:0 .35rem;font-weight:600}
