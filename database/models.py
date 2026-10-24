@@ -1663,3 +1663,134 @@ class IdentityReviewAction(db.Model):
     created_at = db.Column(db.DateTime, nullable=False)
     # Open-case history/notes also expire, retaining only minimal case metadata.
     expires_at = db.Column(db.DateTime, nullable=False, index=True)
+
+
+class IdentitySignupSuccess(db.Model):
+    __tablename__ = 'identity_signup_successes'
+    id = db.Column(db.Integer, primary_key=True)
+    ip_hash = db.Column(db.String(64), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, index=True)
+
+
+class IdentitySignupAttempt(db.Model):
+    __tablename__ = 'identity_signup_attempts'
+    id = db.Column(db.Integer, primary_key=True)
+    identity_hash = db.Column(db.String(64), nullable=False)
+    email = db.Column(db.String(254), nullable=False)
+    reason = db.Column(db.String(40), nullable=False)
+    evidence = db.Column(db.Text, nullable=False, default='[]')
+    first_seen = db.Column(db.DateTime, nullable=False)
+    last_seen = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    count = db.Column(db.Integer, nullable=False, default=1)
+    __table_args__ = (db.UniqueConstraint('identity_hash', 'reason', name='uq_signup_attempt'),)
+
+
+class IdentitySignupAppeal(db.Model):
+    __tablename__ = 'identity_signup_appeals'
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(254), nullable=False)
+    identity_hash = db.Column(db.String(64), nullable=False, index=True)
+    open_key = db.Column(db.String(64), unique=True, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='pending')
+    message = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+    verified_at = db.Column(db.DateTime, nullable=True)
+    expires_at = db.Column(db.DateTime, nullable=True, index=True)
+    scopes = db.Column(db.Text, nullable=False, default='[]')
+    marker_generation = db.Column(db.String(36), nullable=True)
+    version = db.Column(db.Integer, nullable=False, default=1)
+    closed_at = db.Column(db.DateTime, nullable=True)
+
+
+class IdentitySignupAction(db.Model):
+    __tablename__ = 'identity_signup_actions'
+    id = db.Column(db.Integer, primary_key=True)
+    appeal_id = db.Column(db.Integer, nullable=True, index=True)
+    actor_id = db.Column(db.String(36), nullable=True)
+    action = db.Column(db.String(40), nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+
+
+class IdentityDeletionMarker(db.Model):
+    __tablename__ = 'identity_deletion_markers'
+    identity_hash = db.Column(db.String(64), primary_key=True)
+    key_id = db.Column(db.String(16), nullable=False)
+    reason = db.Column(db.String(20), nullable=False)
+    generation = db.Column(db.String(36), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+
+
+class IdentityAppealDelivery(db.Model):
+    """Persistent hourly cap and mailbox token; never store raw tokens."""
+    __tablename__ = 'identity_appeal_deliveries'
+    id = db.Column(db.Integer, primary_key=True)
+    ip_hash = db.Column(db.String(64), nullable=False, index=True)
+    email = db.Column(db.String(254), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    token_hash = db.Column(db.String(64), nullable=False, unique=True)
+    created_at = db.Column(db.DateTime, nullable=False, index=True)
+    used = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class IdentityNetworkCache(db.Model):
+    __tablename__ = 'identity_network_cache'
+    ip_hash = db.Column(db.String(64), primary_key=True)
+    state = db.Column(db.String(16), nullable=False)
+    categories = db.Column(db.Text, nullable=False, default='[]')
+    source = db.Column(db.String(32), nullable=False)
+    checked_at = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+
+
+class IdentityNetworkBudget(db.Model):
+    __tablename__ = 'identity_network_budget'
+    day = db.Column(db.String(10), primary_key=True)
+    attempts = db.Column(db.Integer, nullable=False, default=0)
+    last_status = db.Column(db.String(32), nullable=False)
+    updated_at = db.Column(db.DateTime, nullable=False)
+
+
+class IdentityRelayFeed(db.Model):
+    __tablename__ = 'identity_relay_feed'
+    id = db.Column(db.Integer, primary_key=True)
+    networks = db.Column(db.Text, nullable=False)
+    imported_at = db.Column(db.DateTime, nullable=False)
+    checksum = db.Column(db.String(64), nullable=False)
+
+
+class IdentityNetworkAppeal(db.Model):
+    __tablename__ = 'identity_network_appeals'
+    id = db.Column(db.Integer, primary_key=True)
+    user_stable_id = db.Column(db.String(36), db.ForeignKey('users.stable_id', ondelete='CASCADE'), nullable=False, index=True)
+    open_key = db.Column(db.String(36), unique=True, nullable=True)
+    status = db.Column(db.String(16), nullable=False, default='open')
+    message = db.Column(db.Text, nullable=False)
+    categories = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    closed_at = db.Column(db.DateTime, nullable=True)
+    version = db.Column(db.Integer, nullable=False, default=1)
+
+
+class IdentityNetworkAction(db.Model):
+    __tablename__ = 'identity_network_actions'
+    id = db.Column(db.Integer, primary_key=True)
+    appeal_id = db.Column(db.Integer, db.ForeignKey('identity_network_appeals.id', ondelete='CASCADE'), nullable=False, index=True)
+    actor_id = db.Column(db.String(36), nullable=True)
+    action = db.Column(db.String(16), nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+
+
+class IdentityNetworkEvent(db.Model):
+    __tablename__ = 'identity_network_events'
+    id = db.Column(db.Integer, primary_key=True)
+    user_stable_id = db.Column(db.String(36), db.ForeignKey('users.stable_id', ondelete='CASCADE'), nullable=False, index=True)
+    state = db.Column(db.String(16), nullable=False)
+    categories = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)

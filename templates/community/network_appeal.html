@@ -1,0 +1,12 @@
+{% extends 'layout.html' %}
+{% block title %}Private network appeal · SimCricketX{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_identity.css') }}">{% endblock %}
+{% block content %}
+<div class="identity-workspace" style="max-width:720px">
+<p class="identity-eyebrow">COMMUNITY · PRIVATE SUPPORT</p><h1>Network access review</h1>
+<p>Only you and admins can see this request. Turn off your VPN, proxy or Private Relay and try again, or explain why you need an exception.</p>
+{% if error %}<p class="identity-card" role="alert">{{ error }}</p>{% endif %}
+{% if appeal %}<section class="identity-card"><h2>{{ state|capitalize }}</h2><p>Submitted {{ appeal.created_at|localtime }}</p><p class="identity-note">{{ appeal.message }}</p>{% if state=='approved' %}<p>Your exception lasts until {{ appeal.expires_at|localtime }}. It covers only the network restriction; other account rules still apply.</p><a href="{{ url_for('home') }}">Return to dashboard</a>{% elif state=='open' %}<p>An admin will review your request. Check this page for the result.</p>{% endif %}</section>{% endif %}
+{% if can_submit %}<form method="post" class="identity-card identity-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Why do you need network access?<textarea name="message" required minlength="10" maxlength="2000" rows="5" placeholder="Describe your situation. Do not include passwords or identity documents."></textarea></label><p>You can submit this private appeal even during the first 24 hours or a Community mute. Normal posting rules still apply elsewhere.</p><button class="identity-button">Send private appeal</button></form>{% endif %}
+<p>Closed requests and review history are retained for 180 days. <a href="{{ url_for('identity_network.privacy') }}">How network checks work</a></p><a href="{{ url_for('community_index') }}">Back to Community</a>
+</div>{% endblock %}

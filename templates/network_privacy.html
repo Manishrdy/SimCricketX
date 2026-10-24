@@ -1,0 +1,8 @@
+{% extends 'layout.html' %}
+{% block title %}Network checks · SimCricketX{% endblock %}
+{% block content %}<article style="max-width:760px;margin:auto;line-height:1.7"><h1>Network checks and access</h1>
+<p>When network enforcement is enabled, SimCricketX checks the network used for registration and authenticated access. Detected VPNs, proxies, Tor, hosting networks and iCloud Private Relay cannot register new accounts. Existing verified users can still use Community to ask for help. A detected corporate VPN is covered by the same policy.</p>
+<p>We send your IP address to ProxyCheck over HTTPS. We do not send your email, account identifier, password, browser fingerprint or activity details. We also use Apple’s published Private Relay network list. Classification is an estimate and can be wrong; an unknown result or lookup failure does not restrict access under this rule.</p>
+<p>Results are cached for up to 15 minutes for a clean network, five minutes for a detected network, and one minute for an unknown result. Cache keys are protected hashes of IP addresses. We retain minimal account-linked detection categories and timestamps for 180 days, without storing the full provider response or location data.</p>
+<p>Private network appeals remain while open; closed appeals and their review history are retained for 180 days after closure or exception expiry. Admin exceptions last seven days and can be revoked. They do not override account bans, email verification or other account restrictions.</p>
+<p><a href="{{ url_for('identity_network.appeal') }}">Private Community network review</a> · <a href="{{ url_for('identity_device_privacy') }}">Device data</a></p></article>{% endblock %}

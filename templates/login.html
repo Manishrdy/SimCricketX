@@ -137,7 +137,7 @@
                     <span id="btnText">Sign In</span>
                 </button>
                 <button type="button" class="auth-cancel-link" id="cancelCheckBtn">Cancel</button>
-                {% include "partials/device_notice.html" %}
+                {% include "partials/device_notice.html" %}{% if identity_network_enabled %}<p class="auth-form-sub">We check your IP through ProxyCheck. Detected VPNs and proxies limit access to Community. <a href="{{ url_for('identity_network.privacy') }}">Network privacy details</a></p>{% endif %}
             </form>
 
             <div class="auth-link-row" style="margin-top:14px;">

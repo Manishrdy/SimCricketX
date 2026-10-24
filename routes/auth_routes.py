@@ -6,7 +6,7 @@ import secrets
 import hashlib
 from datetime import datetime, timedelta
 
-from flask import flash, jsonify, redirect, render_template, request, session, url_for
+from flask import g, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from utils.turnstile import verify_turnstile
 from utils.identity_devices import collect as collect_device
@@ -150,7 +150,9 @@ def register_auth_routes(
                 return render_template("register.html", error=policy_error)
 
             if register_user(email, password, display_name=display_name):
-                collect_device(db.session.get(DBUser, email), request.form.get("device_fingerprint"))
+                email = getattr(g, 'identity_signup_email', email)
+                if not app.config.get('IDENTITY_SIGNUP_ENFORCE'):
+                    collect_device(db.session.get(DBUser, email), request.form.get("device_fingerprint"))
                 # Send verification email immediately after registration.
                 # generate_email_verify_token returns the raw token; the DB stores
                 # its SHA-256 hash. Passing user.email_verify_token (the hash) directly
@@ -176,7 +178,7 @@ def register_auth_routes(
                 return redirect(url_for("verify_email_pending"))
             return render_template(
                 "register.html",
-                error="Registration failed. Please try a different email.",
+                error=getattr(g, "identity_signup_error", "Registration failed. Please try a different email."),
             )
         except Exception as e:
             log_exception(e)
@@ -352,6 +354,10 @@ def register_auth_routes(
                     if user.force_password_reset:
                         session["force_password_reset"] = True
                         return redirect(url_for("force_change_password"))
+
+                    from services.identity_network import evaluate, enabled as network_enabled
+                    if network_enabled() and evaluate(force=True)['state'] == 'restricted':
+                        return redirect(url_for('community_index'))
 
                     app.logger.info(f"Successful login for {email}")
                     return redirect(url_for("home"))

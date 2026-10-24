@@ -1,0 +1,26 @@
+{% extends 'layout.html' %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_identity.css') }}">
+<div class="identity-workspace" style="max-width:680px;padding:1rem">
+<h1>Signup review</h1>
+<p>A private way to ask an admin for help. Submitting a request does not create an account.</p>
+{% if error %}<p role="alert" class="identity-card">{{ error }}</p>{% endif %}
+{% if view == 'form' %}
+<form method="post" class="identity-card identity-form" id="signupReviewForm">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="challenge_id" id="challenge_id"><input type="hidden" name="challenge_counter" id="challenge_counter"><input type="hidden" name="challenge_digest" id="challenge_digest">
+<div hidden aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+<label>Email address<input type="email" name="email" required maxlength="254" autocomplete="email"></label>
+<label>How can we help?<textarea name="message" required maxlength="2000" rows="5"></textarea></label>
+<p>We will email a verification link. Use this form again to receive a fresh link to your existing request. Do not include passwords or sensitive documents.</p>
+<p>Signup evidence is retained for up to 180 days. Review details are retained while open and for 180 days after closure or approval expiry. A minimal protected email marker remains after account deletion until an admin removes it, so returning requires approval.</p>
+{% if cf_turnstile_site_key %}<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script><div class="cf-turnstile" data-sitekey="{{ cf_turnstile_site_key }}"></div>{% endif %}
+<button class="identity-button">Email verification link</button>
+</form>
+<script src="{{ url_for('static', filename='js/signup_review.js') }}" defer></script>
+{% elif view == 'sent' %}<div class="identity-card"><h2>Check your email</h2><p>Open the verification link to submit or view your request. It expires in one hour.</p></div>
+{% elif view == 'verify' %}<form method="post" class="identity-card identity-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="token" value="{{ token }}"><p>Confirm to verify your email and open your private review status.</p><button class="identity-button">Verify and view request</button></form>
+{% elif view == 'status' %}<div class="identity-card"><h2>{{ state|capitalize }}</h2>{% if state == 'approved' %}<p>Your one-use approval expires {{ expires|localtime }}. It covers: {% for scope in scopes %}{{ signup_scope_labels[scope] }}{% if not loop.last %}, {% endif %}{% endfor %}.</p><p>Continue in this browser within 30 minutes using the same email. All other signup rules still apply.</p><a href="{{ url_for('register') }}">Continue to registration</a>{% elif state == 'open' %}<p>Your verified request is waiting for admin review. Request a new email link later to check the result.</p>{% else %}<p>You can request a new review if you still need help.</p>{% endif %}</div>{% endif %}
+<p><a href="{{ url_for('identity_signup.appeal') }}">Request a new verification link</a> · <a href="{{ url_for('login') }}">Sign in</a></p>
+</div>
+{% endblock %}

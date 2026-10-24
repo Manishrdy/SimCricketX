@@ -987,8 +987,15 @@ def create_app():
 
 
     @app.before_request
+    def enforce_network_policy():
+        from services.identity_network import guard
+        return guard()
+
+    @app.before_request
     def check_display_name():
         """Redirect users who don't have a display name set."""
+        if getattr(g, "network_restricted", False):
+            return None
         try:
             if app.config.get("TESTING"):
                 return None
@@ -1058,6 +1065,8 @@ def create_app():
     @app.before_request
     def check_oversize_squads():
         """Block users whose teams have any profile with >25 players, until they trim."""
+        if getattr(g, "network_restricted", False):
+            return None
         try:
             if app.config.get("TESTING"):
                 return None
@@ -2478,6 +2487,10 @@ def create_app():
     init_identity_devices(app, limiter)
     from routes.admin_identity_routes import init_app as init_identity_review
     init_identity_review(app)
+    from routes.identity_signup_routes import init_app as init_identity_signup
+    init_identity_signup(app, limiter, verify_auth_pow_solution)
+    from routes.identity_network_routes import init_app as init_identity_network
+    init_identity_network(app, limiter)
 
     # --- Auth Routes (Phase 3 extraction) ---
     register_auth_routes(
@@ -2683,6 +2696,12 @@ def create_app():
                           ping_interval=25, ping_timeout=60,
                           logger=False, engineio_logger=False)
 
+        @socketio.on('connect')
+        def _ws_network_connect(auth=None):
+            from services.identity_network import socket_error
+            if socket_error():
+                return False
+
         @socketio.on('next_ball')
         def _ws_next_ball(data):
             from flask_socketio import emit as ws_emit
@@ -2690,6 +2709,12 @@ def create_app():
 
             if not current_user.is_authenticated:
                 ws_emit('ws_error', {'message': 'Not authenticated'})
+                return
+
+            from services.identity_network import socket_error
+            restriction = socket_error()
+            if restriction:
+                ws_emit('ws_error', restriction)
                 return
 
             match_id = (data or {}).get('match_id', '')

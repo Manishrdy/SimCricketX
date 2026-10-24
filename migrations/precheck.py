@@ -204,6 +204,8 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     ("add_identity_foundation", _loader("migrations.add_identity_foundation")),
     ("add_identity_devices", _loader("migrations.add_identity_devices")),
     ("add_identity_review", _loader("migrations.add_identity_review")),
+    ("add_identity_signup", _loader("migrations.add_identity_signup")),
+    ("add_identity_network", _loader("migrations.add_identity_network")),
 ]
 
 
