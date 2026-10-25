@@ -37,7 +37,9 @@ SUPPORT = frozenset({
     'admin_stop_impersonation',
 })
 ALLOWED = COMMUNITY | SUPPORT
-PUBLIC = frozenset({'static', 'login', 'logout', 'auth_challenge', 'register',
+# Returning from impersonation must remain possible when the target is banned
+# or requires remediation; the existing route validates the original admin.
+PUBLIC = frozenset({'static', 'login', 'logout', 'auth_challenge', 'register', 'admin_stop_impersonation',
     'verify_email', 'verify_email_pending', 'resend_verification', 'forgot_password', 'reset_password',
     'identity_device_privacy', 'identity_network.privacy',
     'identity_signup.appeal', 'identity_signup.verify', 'identity_signup.status'})

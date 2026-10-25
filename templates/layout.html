@@ -887,7 +887,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_manage.css') }}">
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navigation.css') }}">
-    <style>.network-restriction-banner{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;padding:1rem max(1rem,calc((100vw - 1200px)/2));background:#fff0c2;color:#342700;border-bottom:2px solid #b8861b;line-height:1.5}.network-restriction-banner span{flex:1 1 360px}.network-restriction-banner a{color:inherit;font-weight:700}.network-restriction-banner form{margin:0}.network-restriction-banner button{background:#342700;color:#fff;border:0;border-radius:6px;padding:.6rem .85rem;cursor:pointer}[data-theme="dark"] .network-restriction-banner{background:#3c3013;color:#fff0c2}@media(max-width:480px){.network-restriction-banner span{flex-basis:100%}.network-restriction-banner{padding:1rem}}</style>
+    <style>.network-restricted-nav{flex-wrap:wrap;gap:.75rem}.network-restricted-nav .nav-items{flex-wrap:wrap;max-width:100%}.network-restriction-banner{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;padding:1rem max(1rem,calc((100vw - 1200px)/2));background:#fff0c2;color:#342700;border-bottom:2px solid #b8861b;line-height:1.5}.network-restriction-banner span{flex:1 1 360px}.network-restriction-banner a{color:inherit;font-weight:700}.network-restriction-banner form{margin:0}.network-restriction-banner button{background:#342700;color:#fff;border:0;border-radius:6px;padding:.6rem .85rem;cursor:pointer}[data-theme="dark"] .network-restriction-banner{background:#3c3013;color:#fff0c2}@media(max-width:480px){.network-restriction-banner span{flex-basis:100%}.network-restriction-banner{padding:1rem}}</style>
     {% block extra_css %}{% endblock %}
 </head>
 
@@ -895,7 +895,7 @@
 
     <!-- Navigation -->
     {% block site_navigation %}
-    <nav class="navbar scx-nav" aria-label="Main navigation">
+    <nav class="navbar scx-nav{% if network_restricted %} network-restricted-nav{% endif %}" aria-label="Main navigation">
         <a href="{{ url_for('community_index' if network_restricted else 'home') }}" class="nav-brand">
             <span class="nav-brand-mark" aria-hidden="true"><i class="fas fa-baseball-ball"></i></span>
             <span class="nav-logo-text">SimCricketX</span>
@@ -906,7 +906,7 @@
             {% if network_restricted %}
             <a href="{{ url_for('community_index') }}" class="nav-control">Community</a>
             <a href="{{ url_for('identity_network.appeal') }}" class="nav-control">Private review</a>
-            <button id="theme-btn" class="nav-control" type="button" aria-label="Toggle theme">Theme</button>
+            <button id="theme-btn" class="nav-control" type="button" aria-label="Toggle theme"><i class="fas fa-moon" aria-hidden="true"></i></button>
             {% else %}
             {% if current_user.is_authenticated %}
             {% if request.endpoint != 'home' %}
