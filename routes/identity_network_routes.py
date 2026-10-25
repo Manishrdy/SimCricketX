@@ -1,4 +1,5 @@
 """Community network appeals and admin-only network policy review."""
+from datetime import timedelta
 import json
 import os
 
@@ -98,7 +99,7 @@ def overview():
     counts = dict(db.session.execute(select(Event.state, func.count()).where(Event.expires_at > at).group_by(Event.state)).all())
     return render_template('admin/identity_network.html', view='overview', rows=rows[:30], people=people,
         more=len(rows)>30, page=page, status=status, at=at, budget=budget, feed=feed,
-        feed_fresh=bool(feed and at-network.timedelta(hours=48) < feed <= at), counts=counts,
+        feed_fresh=bool(feed and at-timedelta(hours=48) < feed <= at), counts=counts,
         configured=bool(current_app.config.get('PROXYCHECK_API_KEY')))
 
 

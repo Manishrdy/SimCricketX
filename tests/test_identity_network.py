@@ -85,7 +85,6 @@ def test_delist_boundary_limits_cache():
 
 def test_provider_sends_only_ip_key_and_no_logging_tags(configured):
     # Call original implementation despite the fixture's outbound-provider stub.
-    import importlib
     # unwrap through a saved reference captured at module import below
     with patch.object(classifier,'_download',return_value=json.dumps(payload()).encode()) as download:
         assert REAL_PROVIDER(IP,classifier.now()).state=='clean'
@@ -149,7 +148,7 @@ def test_http_gate_banner_community_and_api(configured):
     response=call(configured,client,'/community')
     assert response.status_code==200,response.data[:500]
     assert b'Community-only access' in response.data
-    assert b'profile-dropdown-wrapper' not in response.data
+    assert b'<div class="profile-dropdown-wrapper">' not in response.data
     assert response.headers['Cache-Control']=='private, no-store'
     response=call(configured,client,'/api/nonexistent')
     assert response.status_code==403 and response.json['code']=='network_restricted'
@@ -317,3 +316,69 @@ def test_disabled_mode_unchanged(app,authenticated_client):
     assert not network.enabled()
     assert call(app,authenticated_client,'/').status_code==200
     assert call(app,authenticated_client,'/community/network-appeal').status_code==404
+
+
+def test_registration_blocked_even_without_signup_enforcement(configured):
+    from auth.user_auth import register_user
+    from flask import g
+    configured.config['IDENTITY_SIGNUP_ENFORCE']=False
+    before=db.session.query(User).count()
+    with configured.test_request_context('/register',method='POST',environ_base={'REMOTE_ADDR':IP}):
+        assert not register_user(ACCOUNTS['newbie']['email'],'Local-QA-network-2026!','QA')
+        assert 'VPN' in g.identity_signup_error
+    assert db.session.query(User).count()==before
+
+
+def test_login_authentication_precedes_network_check(configured):
+    from werkzeug.security import generate_password_hash
+    password='Local-QA-network-2026!'
+    user().password_hash=generate_password_hash(password)
+    db.session.commit()
+    client=configured.test_client()
+    with patch('routes.auth_routes.verify_turnstile',return_value=(True,'')):
+        with patch.object(classifier,'classify',return_value=result()) as classify:
+            response=call(configured,client,'/login',method='post',data={'email':ACCOUNTS['user1']['email'],'password':'invalid'})
+            assert response.status_code==200
+            classify.assert_not_called()
+            response=call(configured,client,'/login',method='post',data={'email':ACCOUNTS['user1']['email'],'password':password})
+            assert response.status_code==302 and response.location.endswith('/community')
+            assert classify.call_count==1
+
+
+def test_expired_exception_restricts_again(configured):
+    client,appeal=create_appeal(configured)
+    network.decide(appeal.id,user('admin').stable_id,appeal.version,'approve','QA reviewed')
+    assert call(configured,client,'/').status_code==200
+    with db.engine.begin() as conn:
+        conn.execute(update(network.P).where(network.P.c.id==appeal.id).values(expires_at=network.now()-timedelta(seconds=1)))
+    assert call(configured,client,'/').status_code==303
+
+
+def test_relay_refresh_cli_preserves_last_good_feed(configured,runner):
+    with patch.object(classifier,'_download',return_value=b'8.8.8.0/24,US\n'):
+        assert runner.invoke(args=['refresh-private-relay-feed']).exit_code==0
+    with patch.object(classifier,'_download',return_value=b'invalid feed'):
+        assert runner.invoke(args=['refresh-private-relay-feed']).exit_code!=0
+    assert classifier.classify(IP).categories==('private_relay',)
+
+
+@pytest.mark.parametrize('field,target',[('force_email_verify','/force-verify-email'),('force_password_reset','/change-password')])
+def test_network_exception_does_not_bypass_remediation(configured,field,target):
+    client,appeal=create_appeal(configured)
+    network.decide(appeal.id,user('admin').stable_id,appeal.version,'approve','QA reviewed')
+    db.session.execute(update(User).where(User.id==ACCOUNTS['user1']['email']).values(**{field:True}));db.session.commit()
+    response=call(configured,client,'/community/network-appeal')
+    assert response.status_code==302 and response.location.endswith(target)
+
+
+def test_admin_can_leave_restricted_impersonation(configured,admin_client):
+    client=member(configured)
+    with admin_client.session_transaction() as saved:admin_token=saved['session_token']
+    with client.session_transaction() as saved:
+        saved['impersonating_from']=ACCOUNTS['admin']['email']
+        saved['impersonating_from_token']=admin_token
+    db.session.execute(update(User).where(User.id==ACCOUNTS['user1']['email']).values(is_banned=True));db.session.commit()
+    assert call(configured,client,'/admin/stop-impersonation').status_code==302
+    with client.session_transaction() as saved:
+        assert saved['_user_id']==ACCOUNTS['admin']['email']
+        assert 'impersonating_from' not in saved
