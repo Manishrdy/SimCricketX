@@ -2127,7 +2127,7 @@ def register_match_routes(
 
             # Verify ownership
             created_by = match_meta.get("created_by")
-            if created_by != current_user.id:
+            if created_by != current_user.id and not (match_meta.get("current_state") == "completed" and DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first()):
                 app.logger.warning(f"[DownloadArchive] Unauthorized access: user='{current_user.id}' attempted to archive match='{match_id}'")
                 return jsonify({"error": "Unauthorized"}), 403
 

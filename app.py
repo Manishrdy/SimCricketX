@@ -978,7 +978,7 @@ def create_app():
             return None
         if request.path.startswith('/static'):
             return None
-        if request.endpoint in ('force_change_password', 'logout', 'static', 'admin_stop_impersonation', 'identity_device_privacy'):
+        if request.endpoint in ('force_change_password', 'logout', 'static', 'admin_stop_impersonation', 'identity_device_privacy', 'identity_email.verify'):
             return None
         if getattr(current_user, 'force_password_reset', False):
             session['force_password_reset'] = True
@@ -1010,6 +1010,7 @@ def create_app():
             # Allow auth and setup routes to avoid redirect loops.
             if request.endpoint in (
                 'identity_device_privacy',
+                'identity_email.verify',
                 'set_display_name',
                 'logout',
                 'login',
@@ -1390,6 +1391,12 @@ def create_app():
             log_exception(source="backend")
             return False
 
+    def _owns_match_snapshot(data, match_id):
+        if data.get("created_by") == current_user.id:
+            return True
+        return (data.get("current_state") == "completed" and
+                DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first() is not None)
+
     def _load_match_file_for_user(match_id):
         if not _is_valid_match_id(match_id):
             return None, None, (jsonify({"error": "Invalid match id"}), 400)
@@ -1406,7 +1413,7 @@ def create_app():
             try:
                 with open(direct_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                if data.get("created_by") != current_user.id:
+                if not _owns_match_snapshot(data, match_id):
                     return None, None, (jsonify({"error": "Unauthorized"}), 403)
                 return data, direct_path, None
             except Exception as e:
@@ -1422,7 +1429,7 @@ def create_app():
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 if data.get("match_id") == match_id:
-                    if data.get("created_by") != current_user.id:
+                    if not _owns_match_snapshot(data, match_id):
                         return None, None, (jsonify({"error": "Unauthorized"}), 403)
                     return data, path, None
             except Exception as e:
@@ -2491,6 +2498,8 @@ def create_app():
     init_identity_signup(app, limiter, verify_auth_pow_solution)
     from routes.identity_network_routes import init_app as init_identity_network
     init_identity_network(app, limiter)
+    from routes.identity_email_routes import init_app as init_identity_email
+    init_identity_email(app, limiter)
 
     # --- Auth Routes (Phase 3 extraction) ---
     register_auth_routes(
@@ -2696,13 +2705,17 @@ def create_app():
                           ping_interval=25, ping_timeout=60,
                           logger=False, engineio_logger=False)
 
+        from services.identity_email_change import socket_admission
+
         @socketio.on('connect')
+        @socket_admission
         def _ws_network_connect(auth=None):
             from services.identity_network import socket_error
             if socket_error():
                 return False
 
         @socketio.on('next_ball')
+        @socket_admission
         def _ws_next_ball(data):
             from flask_socketio import emit as ws_emit
             from flask_login import current_user

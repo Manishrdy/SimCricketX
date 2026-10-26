@@ -1794,3 +1794,33 @@ class IdentityNetworkEvent(db.Model):
     categories = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False, index=True)
+
+
+class IdentityEmailChange(db.Model):
+    """Verified admin-mediated change and durable identity-action receipt.
+
+    Addresses are historical snapshots, not foreign keys. No raw mailbox tokens.
+    """
+    __tablename__ = 'identity_email_changes'
+    id = db.Column(db.String(36), primary_key=True)
+    user_stable_id = db.Column(db.String(36), nullable=False, index=True)
+    open_key = db.Column(db.String(36), nullable=True, unique=True)
+    old_email = db.Column(db.String(254), nullable=False)
+    new_email = db.Column(db.String(254), nullable=False)
+    actor_id = db.Column(db.String(36), nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    recovery_evidence = db.Column(db.Text, nullable=False, default='')
+    self_service = db.Column(db.Boolean, nullable=False, default=False)
+    status = db.Column(db.String(16), nullable=False, default='pending')
+    version = db.Column(db.Integer, nullable=False, default=1)
+    created_at = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    old_token_hash = db.Column(db.String(64), nullable=True)
+    new_token_hash = db.Column(db.String(64), nullable=True)
+    old_verified_at = db.Column(db.DateTime, nullable=True)
+    new_verified_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    receipt_json = db.Column(db.Text, nullable=True)
+    proof_delivery = db.Column(db.String(32), nullable=False, default='pending')
+    old_notice_sent = db.Column(db.Boolean, nullable=False, default=False)
+    new_notice_sent = db.Column(db.Boolean, nullable=False, default=False)

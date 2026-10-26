@@ -67,3 +67,7 @@ IMPROVEMENT_PLAN.md
 
 # Local planning notes
 todo/
+
+# Identity operation coordination and private database backups
+instance/identity-*.lock
+instance/identity-email-backups/

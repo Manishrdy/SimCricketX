@@ -69,6 +69,7 @@ def register_auth_routes(
 
     # Endpoints exempt from the force-email-verify redirect
     _FORCE_VERIFY_EXEMPT = {
+        'identity_email.verify',
         'identity_device_privacy',
         'force_verify_email',
         'force_verify_email_send',
@@ -660,59 +661,24 @@ def register_auth_routes(
             flash("That's already your current email. Use 'Verify existing email' instead.", "warning")
             return redirect(url_for("force_verify_email"))
 
-        # Change the email in the DB (cascades to all FK tables)
-        ok, msg = update_user_email(old_email, new_email)
-        if not ok:
-            flash(f"Could not change email: {msg}", "danger")
-            return redirect(url_for("force_verify_email"))
-
-        # Reload the user record under the new PK and reset verification flags
-        new_user = db.session.get(DBUser, new_email)
-        if not new_user:
-            app.logger.error(f"[Auth] force_verify_email_change: couldn't reload user after rename {old_email} -> {new_email}")
-            flash("Email changed but your account couldn't be reloaded. Please sign in again.", "warning")
-            logout_user()
-            return redirect(url_for("login"))
-
+        # Preserve the approved mandatory self-correction exception, but verify
+        # the replacement mailbox BEFORE repointing any account data.
+        from services import identity_email_change as changes
         try:
-            new_user.email_verified = False
-            new_user.force_email_verify = True
-            db.session.commit()
-        except Exception as e:
-            log_exception(e)
-            db.session.rollback()
-            app.logger.error(f"[Auth] force_verify_email_change: flag reset failed: {e}")
-
-        # Generate verification token for the new email
-        token = generate_email_verify_token(new_email)
-
-        # Re-authenticate under the new identity (PK changed)
-        logout_user()
-        refreshed = db.session.get(DBUser, new_email)
-        if refreshed:
-            login_user(refreshed, remember=True, duration=app.config.get("REMEMBER_COOKIE_DURATION"))
-            session.permanent = True
-            session["force_email_verify"] = True
-
-        # Send verification email to the new address
-        if token:
-            verify_link = url_for("verify_email", token=token, _external=True)
-            sent = send_verification_email(new_email, (refreshed.display_name if refreshed else None) or new_email, verify_link)
-            if sent:
-                app.logger.info(f"[Auth] Email changed {old_email} -> {new_email}; verification sent")
-                flash(f"Email updated to {new_email}. A verification link has been sent — check your inbox.", "success")
-            else:
-                _log_auth_event(
-                    'email_send_failure',
-                    new_email,
-                    details="force_verify_email_change: send_verification_email returned False after email change",
-                    user_id=new_email,
-                )
-                flash(f"Email updated to {new_email}, but we couldn't send the verification email. Use 'Verify existing email' to retry.", "warning")
-        else:
-            flash(f"Email updated to {new_email}, but verification token generation failed. Please try again.", "warning")
-
-        return redirect(url_for("force_verify_email"))
+            cid = changes.create(current_user.stable_id, old_email, new_email,
+                'Mandatory email correction requested by authenticated owner.',
+                'Existing mandatory correction exception: authenticated account owner.', self_service=True)
+            with db.engine.connect() as conn:
+                sent = changes.get_change(conn, cid)['proof_delivery'] == 'sent'
+            flash('Check the new mailbox to confirm the change. Your current email remains unchanged until verification.'
+                  if sent else 'Could not send verification. Retry this form to send a fresh link.',
+                  'success' if sent else 'warning')
+        except ValueError as exc:
+            flash(str(exc), 'danger')
+        except Exception:
+            app.logger.warning('Mandatory email correction request failed.')
+            flash('Could not request correction. Please retry or contact support.', 'danger')
+        return redirect(url_for('force_verify_email'))
 
     @app.route("/resend-verification", methods=["POST"])
     @limiter.limit("10 per hour", methods=["POST"])  # broad IP guard; per-email logic below
