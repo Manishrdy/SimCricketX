@@ -42,7 +42,7 @@ ALLOWED = COMMUNITY | SUPPORT
 PUBLIC = frozenset({'static', 'login', 'logout', 'auth_challenge', 'register', 'admin_stop_impersonation',
     'verify_email', 'verify_email_pending', 'resend_verification', 'forgot_password', 'reset_password',
     'identity_device_privacy', 'identity_network.privacy',
-    'identity_signup.appeal', 'identity_signup.verify', 'identity_signup.status'})
+    'identity_signup.appeal', 'identity_signup.verify', 'identity_signup.status', 'identity_email.verify'})
 
 
 def enabled():

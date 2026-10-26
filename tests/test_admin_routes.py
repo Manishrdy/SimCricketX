@@ -86,7 +86,8 @@ class TestUserManagement:
             data={"new_email": "newemail@example.com"},
             follow_redirects=True,
         )
-        assert response.status_code == 200
+        assert response.status_code == 400
+        assert "Email changes" in response.get_json()["error"]
 
     def test_admin_reset_user_password(self, admin_client, regular_user):
         """Test resetting user password as admin."""

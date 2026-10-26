@@ -451,9 +451,11 @@ def test_legacy_email_writer_reserves_and_checks_markers(configured):
         assert db.session.get(User,source)
         with db.engine.begin() as conn: conn.execute(delete(signup.M))
         ok,message=update_user_email(source,target)
-        assert ok,message
-        assert db.session.get(User,target).canonical_email==target
-        assert db.session.get(IdentityEmailReservation,target)
+        assert not ok
+        assert 'Email changes' in message
+        assert db.session.get(User,source)
+        assert not db.session.get(User,target)
+        assert not db.session.get(IdentityEmailReservation,target)
 
 
 def test_invalid_legacy_email_marker_does_not_block_deletion(configured):
