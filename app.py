@@ -1392,10 +1392,8 @@ def create_app():
             return False
 
     def _owns_match_snapshot(data, match_id):
-        if data.get("created_by") == current_user.id:
-            return True
-        return (data.get("current_state") == "completed" and
-                DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first() is not None)
+        from utils.match_ownership import owns_match_snapshot
+        return owns_match_snapshot(data, current_user.id, match_id)
 
     def _load_match_file_for_user(match_id):
         if not _is_valid_match_id(match_id):

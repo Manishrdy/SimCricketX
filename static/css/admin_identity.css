@@ -30,3 +30,6 @@
 .identity-form label.identity-check input {width:auto;min-width:1rem;height:1rem;flex:0 0 auto;margin:.2rem 0 0}
 .identity-form fieldset {min-width:0;padding:.7rem 1rem;border:1px solid var(--card-border);border-radius:8px}
 .identity-form legend {padding:0 .35rem;font-weight:600}
+.identity-table-wrap {max-width:100%;overflow-x:auto}
+.identity-table {width:100%;border-collapse:collapse;text-align:left}
+.identity-table th,.identity-table td {padding:.65rem;border-bottom:1px solid var(--card-border);overflow-wrap:anywhere}

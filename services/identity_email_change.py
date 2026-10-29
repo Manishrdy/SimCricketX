@@ -44,6 +44,18 @@ HISTORICAL = frozenset({('failed_login_attempts', 'email'), ('auth_event_log', '
     ('auction_audit_logs', 'actor_label')})
 REVOKE = frozenset({('active_sessions', 'user_id')})
 
+# Non-FK address/actor columns intentionally retained, including historical
+# appeal identities and stable UUID actors. Never silently rewrite snapshots.
+NON_FK_PRESERVED = HISTORICAL | frozenset({
+    ('identity_review_actions', 'actor_id'), ('identity_signup_actions', 'actor_id'),
+    ('identity_network_actions', 'actor_id'), ('identity_signup_attempts', 'email'),
+    ('identity_signup_appeals', 'email'), ('identity_appeal_deliveries', 'email'),
+    ('identity_email_changes', 'old_email'), ('identity_email_changes', 'new_email'),
+    ('identity_email_changes', 'actor_id'),
+})
+NON_FK_MANAGED = frozenset({('users', 'canonical_email'), ('users', 'pending_email'),
+    ('identity_email_reservations', 'canonical_email')})
+
 
 def now():
     return datetime.utcnow()
@@ -122,6 +134,14 @@ def coverage(conn):
         for fk in inspector.get_foreign_keys(name):
             if fk['referred_table'] == 'users' and fk['referred_columns'] == ['id']:
                 actual.update((name, col) for col in fk['constrained_columns'])
+    candidates = set()
+    names = {'user_id', 'email', 'user_email', 'actor_label', 'blocked_by', 'owner_id', 'author_id', 'actor_id'}
+    for table in db.metadata.tables.values():
+        for column in table.c:
+            if not column.foreign_keys and (column.name in names or column.name.endswith('_email')):
+                candidates.add((table.name, column.name))
+    if candidates != NON_FK_CURRENT | NON_FK_PRESERVED | NON_FK_MANAGED:
+        raise ValueError('Non-FK account reference coverage changed; operator review is required.')
     if actual != OWNERSHIP | REVOKE:
         raise ValueError('Account reference coverage changed; operator review is required.')
 
@@ -357,6 +377,12 @@ def execute(actor, change_id, token, confirmed_email):
         conn.exec_driver_sql('PRAGMA defer_foreign_keys = ON')
         from sqlalchemy.dialects.sqlite import insert as sqlite_insert
         conn.execute(sqlite_insert(IdentityEmailReservation.__table__).values(canonical_email=identity.canonical).on_conflict_do_nothing())
+        try:
+            previous = normalize_email(row['old_email']).canonical
+        except InvalidEmail:
+            previous = None
+        if previous:
+            conn.execute(sqlite_insert(IdentityEmailReservation.__table__).values(canonical_email=previous).on_conflict_do_nothing())
         for table_name, column in sorted(OWNERSHIP | NON_FK_CURRENT):
             table = db.metadata.tables[table_name]
             conn.execute(update(table).where(table.c[column] == row['old_email']).values(**{column: identity.address}))
@@ -418,22 +444,33 @@ def socket_admission(function):
     from functools import wraps
     @wraps(function)
     def wrapped(*args, **kwargs):
-        try:
-            with admission():
-                # Old socket identities can outlive their HTTP session; verify
-                # existence even when network enforcement is disabled.
-                from flask_login import current_user
-                from flask import session
-                if current_user.is_authenticated:
-                    with db.engine.connect() as conn:
-                        active = conn.execute(select(ActiveSession.id).where(
-                            ActiveSession.user_id == current_user.id,
-                            ActiveSession.session_token == session.get('session_token', ''))).first()
-                    if not active:
-                        return False
-                return function(*args, **kwargs)
-        except ValueError:
+        from flask_socketio import emit
+        from flask_login import current_user
+        from flask import session
+
+        def refuse(code, message):
+            if request.event.get('message') != 'connect':
+                emit('ws_error', {'code': code, 'message': message})
             return False
+
+        guard = admission()
+        try:
+            guard.__enter__()
+        except ValueError:
+            return refuse('identity_update', 'An identity update is in progress. Retry shortly.')
+        try:
+            # Socket cookies may outlive HTTP sessions, including when the
+            # network policy is disabled. Never advance a revoked session.
+            if current_user.is_authenticated:
+                with db.engine.connect() as conn:
+                    active = conn.execute(select(ActiveSession.id).where(
+                        ActiveSession.user_id == current_user.id,
+                        ActiveSession.session_token == session.get('session_token', ''))).first()
+                if not active:
+                    return refuse('auth_required', 'Sign in again to continue.')
+            return function(*args, **kwargs)
+        finally:
+            guard.__exit__(None, None, None)
     return wrapped
 
 
