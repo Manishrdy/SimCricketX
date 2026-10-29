@@ -306,3 +306,112 @@ def test_same_canonical_rename_and_legacy_reservation(configured):
     _,token=change.preview(actor(),cid)
     change.execute(actor(),cid,token,'qaowner@googlemail.com')
     assert db.session.get(User,'qaowner@googlemail.com')
+
+
+def test_archived_snapshot_follows_db_owner_not_reused_email(configured):
+    from database.models import Match
+    from utils.match_ownership import owns_match_snapshot
+    snapshot={'match_id':'qa-archive', 'created_by':old(), 'current_state':'completed'}
+    db.session.add(Match(id='qa-archive',user_id=old()))
+    db.session.commit()
+    path=Path(configured.config['IDENTITY_EMAIL_MATCH_DIR'])/'match_qa-archive.json'
+    path.write_text(json.dumps(snapshot))
+    original=path.read_bytes()
+    cid,_=ready();apply(cid)
+    assert path.read_bytes()==original
+    assert owns_match_snapshot(snapshot, NEW)
+    assert not owns_match_snapshot(snapshot, old())
+    assert db.session.get(IdentityEmailReservation,change.normalize_email(old()).canonical)
+
+
+def test_backup_is_wal_consistent(configured):
+    import sqlite3
+    db.session.remove()
+    with db.engine.connect() as conn:
+        conn.exec_driver_sql('PRAGMA journal_mode=WAL')
+    with db.engine.begin() as conn:
+        conn.execute(update(User).where(User.id==old()).values(display_name='WAL-only committed update'))
+    cid,_=ready();receipt=apply(cid)
+    with sqlite3.connect(Path(configured.config['IDENTITY_EMAIL_BACKUP_DIR'])/receipt['backup']) as conn:
+        assert conn.execute('select display_name from users where id=?',(old(),)).fetchone()[0]=='WAL-only committed update'
+
+
+def test_preview_expiry_and_confirmation_mismatch(configured):
+    cid,_=ready();_,token=change.preview(actor(),cid)
+    with pytest.raises(ValueError,match='exact new email'):
+        change.execute(actor(),cid,token,NEW.upper())
+    with patch('itsdangerous.timed.time.time',return_value=__import__('time').time()+901),pytest.raises(ValueError,match='expired'):
+        change.execute(actor(),cid,token,NEW)
+
+
+def test_marker_blocks_new_email_with_signup_off(configured):
+    from services import identity_signup as signup
+    from utils import identity_devices as devices
+    configured.config.update(IDENTITY_SIGNUP_ENFORCE=False,IDENTITY_SIGNUP_KEY='s'*40)
+    with db.engine.begin() as conn:
+        conn.execute(insert(signup.M).values(identity_hash=signup.identity_hash(change.normalize_email(NEW)),
+            key_id=devices.key_id('s'*40),reason='deleted',generation='g',created_at=change.now()))
+    with pytest.raises(ValueError,match='review'):
+        change.create(actor(),old(),NEW,'Account owner request')
+
+
+def test_two_processes_cannot_repoint_to_same_email(configured):
+    import subprocess
+    import sys
+    jobs=[]
+    for email in [old(),ACCOUNTS['user2']['email']]:
+        captured={}
+        with patch.object(change,'deliver_proofs',side_effect=lambda cid,t:captured.update(t)):
+            cid=change.create(actor(),email,NEW,'Account owner requested this change')
+        change.verify(cid,'old',captured['old']);change.verify(cid,'new',captured['new'])
+        _,token=change.preview(actor(),cid)
+        jobs.append((cid,token))
+    script='''
+import sys
+from flask import Flask
+from database import db
+from services import identity_email_change as change
+from utils import email_service
+app=Flask('email-race',instance_path=sys.argv[2])
+app.config.update(SQLALCHEMY_DATABASE_URI=sys.argv[1],SECRET_KEY='test-secret-key',IDENTITY_EMAIL_BACKUP_DIR=sys.argv[3],IDENTITY_EMAIL_MATCH_DIR=sys.argv[4])
+db.init_app(app)
+email_service.send_email=lambda *a,**kw: True
+with app.app_context():
+    print('READY',flush=True)
+    input()
+    try:
+        change.execute(sys.argv[5],sys.argv[6],sys.argv[7],sys.argv[8])
+        print('changed')
+    except ValueError:
+        print('refused')
+'''
+    args=[str(db.engine.url),configured.instance_path,configured.config['IDENTITY_EMAIL_BACKUP_DIR'],
+          configured.config['IDENTITY_EMAIL_MATCH_DIR'],actor()]
+    processes=[subprocess.Popen([sys.executable,'-c',script,*args,cid,token,NEW],stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True) for cid,token in jobs]
+    try:
+        for proc in processes:
+            assert proc.stdout.readline().strip()=='READY'
+        for proc in processes:
+            proc.stdin.write('go\n');proc.stdin.flush()
+        outputs=[proc.communicate(timeout=30) for proc in processes]
+        assert all(proc.returncode==0 for proc in processes),outputs
+        assert sorted(out.strip() for out,_ in outputs)==['changed','refused'],outputs
+    finally:
+        for proc in processes:
+            if proc.poll() is None:
+                proc.kill();proc.wait()
+    db.session.expire_all()
+    assert db.session.query(User).filter_by(id=NEW).count()==1
+    assert len(list(Path(configured.config['IDENTITY_EMAIL_BACKUP_DIR']).glob('*.sqlite3')))==1
+
+
+def test_unknown_non_fk_reference_fails_coverage(configured):
+    from sqlalchemy import Table,Column,String
+    table=Table('future_reference',db.metadata,Column('user_email',String))
+    try:
+        cid,_=ready()
+        with pytest.raises(ValueError,match='Non-FK'):
+            change.preview(actor(),cid)
+    finally:
+        db.metadata.remove(table)

@@ -21,6 +21,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import or_
 from sqlalchemy.orm import joinedload
 from utils import support_prompt
+from utils.match_ownership import owns_match_snapshot
 from utils.exception_tracker import log_exception
 from werkzeug.utils import secure_filename
 
@@ -789,7 +790,7 @@ def register_match_routes(
         with MATCH_INSTANCES_LOCK:
             live_match = MATCH_INSTANCES.get(match_id)
 
-        if live_match and live_match.data.get("created_by") == current_user.id:
+        if live_match and owns_match_snapshot(live_match.data, current_user.id, match_id):
             if live_match.data.get("current_state") == "completed":
                 # Match finished in memory; if DB record exists go straight to scoreboard
                 db_match = DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first()
@@ -859,7 +860,7 @@ def register_match_routes(
             else:
                 return jsonify({"status": "not_in_memory"})
 
-        if match.data.get("created_by") != current_user.id:
+        if not owns_match_snapshot(match.data, current_user.id, match_id):
             return jsonify({"error": "Unauthorized"}), 403
 
         if wants_delivery:
@@ -1369,7 +1370,7 @@ def register_match_routes(
                 return jsonify({"success": True, "message": "Lineups will be loaded from updated file."}), 200
 
             match_instance = MATCH_INSTANCES[match_id]
-            if match_instance.data.get("created_by") != current_user.id:
+            if not owns_match_snapshot(match_instance.data, current_user.id, match_id):
                 return jsonify({"error": "Unauthorized"}), 403
             lineup_data = request.get_json() or {}
             home_final_xi = lineup_data.get("home_final_xi")
@@ -1509,7 +1510,7 @@ def register_match_routes(
         match, err = _get_or_restore_match_instance(match_id)
         if err:
             return err
-        if match.data.get("created_by") != current_user.id:
+        if not owns_match_snapshot(match.data, current_user.id, match_id):
             return jsonify(error="Unauthorized"), 403
         payload = request.get_json(silent=True) or {}
         if type(payload.get("active")) is not bool:
@@ -1704,7 +1705,7 @@ def register_match_routes(
         match, err = _get_or_restore_match_instance(match_id)
         if err:
             return None, err
-        if match.data.get("created_by") != user_id:
+        if not owns_match_snapshot(match.data, user_id, match_id):
             return None, (jsonify({"error": "Unauthorized"}), 403)
         try:
             return _delivery_for(match).advance(
@@ -1733,7 +1734,7 @@ def register_match_routes(
         match, err = _get_or_restore_match_instance(match_id)
         if err:
             return None, err
-        if match.data.get("created_by") != user_id:
+        if not owns_match_snapshot(match.data, user_id, match_id):
             return None, (jsonify({"error": "Unauthorized"}), 403)
 
         outcome = (match.next_ball(wait_for_decision=False)
@@ -1868,7 +1869,7 @@ def register_match_routes(
             if match is None:
                 # Nothing in memory means nothing is owed.
                 return jsonify({"acked": False, "reason": "not_in_memory"})
-            if match.data.get("created_by") != current_user.id:
+            if not owns_match_snapshot(match.data, current_user.id, match_id):
                 return jsonify({"error": "Unauthorized"}), 403
             pending = getattr(match, "pending_interval_card", None)
             if pending and pending.get("card_id") == card_id:
@@ -1912,7 +1913,7 @@ def register_match_routes(
         with MATCH_INSTANCES_LOCK:
             if match_id in MATCH_INSTANCES:
                 match = MATCH_INSTANCES[match_id]
-                if match.data.get("created_by") != current_user.id:
+                if not owns_match_snapshot(match.data, current_user.id, match_id):
                     return jsonify({"error": "Unauthorized"}), 403
                 match.simulation_mode = mode
                 match.data["simulation_mode"] = mode
@@ -1937,7 +1938,7 @@ def register_match_routes(
         if err:
             return err
 
-        if match.data.get("created_by") != current_user.id:
+        if not owns_match_snapshot(match.data, current_user.id, match_id):
             return jsonify({"error": "Unauthorized"}), 403
 
         if not match.pending_decision:
@@ -1958,7 +1959,7 @@ def register_match_routes(
         match, err = _get_or_restore_match_instance(match_id)
         if err:
             return err
-        if match.data.get("created_by") != current_user.id:
+        if not owns_match_snapshot(match.data, current_user.id, match_id):
             return jsonify({"error": "Unauthorized"}), 403
 
         data = request.get_json(silent=True) or {}
@@ -1978,7 +1979,7 @@ def register_match_routes(
         match, err = _get_or_restore_match_instance(match_id)
         if err:
             return err
-        if match.data.get("created_by") != current_user.id:
+        if not owns_match_snapshot(match.data, current_user.id, match_id):
             return jsonify({"error": "Unauthorized"}), 403
 
         data = request.get_json(silent=True) or {}
@@ -1997,7 +1998,7 @@ def register_match_routes(
         match, err = _get_or_restore_match_instance(match_id)
         if err:
             return err
-        if match.data.get("created_by") != current_user.id:
+        if not owns_match_snapshot(match.data, current_user.id, match_id):
             return jsonify({"error": "Unauthorized"}), 403
         try:
             result = match.next_super_over_ball()
@@ -2041,7 +2042,7 @@ def register_match_routes(
             # Store commentary for the match instance
             if match_id in MATCH_INSTANCES:
                 match_instance = MATCH_INSTANCES[match_id]
-                if match_instance.data.get("created_by") != current_user.id:
+                if not owns_match_snapshot(match_instance.data, current_user.id, match_id):
                     return jsonify({"error": "Unauthorized"}), 403
 
                 # Store the raw innerHTML so the HTML archive can clone it exactly
@@ -2118,7 +2119,7 @@ def register_match_routes(
                 # JSON cleaned up after archiving — try in-memory instance
                 with MATCH_INSTANCES_LOCK:
                     inst = MATCH_INSTANCES.get(match_id)
-                if inst and inst.data.get("created_by") == current_user.id:
+                if inst and owns_match_snapshot(inst.data, current_user.id, match_id):
                     match_meta = inst.data
                     app.logger.info(f"[DownloadArchive] Using in-memory match data for '{match_id}'")
                 else:
@@ -2126,8 +2127,7 @@ def register_match_routes(
                     return jsonify({"error": "Match not found"}), 404
 
             # Verify ownership
-            created_by = match_meta.get("created_by")
-            if created_by != current_user.id and not (match_meta.get("current_state") == "completed" and DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first()):
+            if not owns_match_snapshot(match_meta, current_user.id, match_id):
                 app.logger.warning(f"[DownloadArchive] Unauthorized access: user='{current_user.id}' attempted to archive match='{match_id}'")
                 return jsonify({"error": "Unauthorized"}), 403
 
@@ -2719,7 +2719,7 @@ def register_match_routes(
                 authorized = False
                 with MATCH_INSTANCES_LOCK:
                     if match_id in MATCH_INSTANCES:
-                        authorized = MATCH_INSTANCES[match_id].data.get("created_by") == current_user.id
+                        authorized = owns_match_snapshot(MATCH_INSTANCES[match_id].data, current_user.id, match_id)
                 if not authorized:
                     db_match = DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first()
                     authorized = db_match is not None
