@@ -5,7 +5,7 @@ serializes the plan, backup and updates; an inter-process admission lock exclude
 HTTP/socket work while the operation commits. No external match files are edited.
 """
 from contextlib import contextmanager, closing
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import fcntl
 import hashlib
@@ -20,7 +20,7 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature
 from sqlalchemy import select, update, delete, insert, inspect
 
 from database import db
-from database.models import User, IdentityEmailChange, ActiveSession, IdentityEmailReservation
+from database.models import User, IdentityEmailChange, ActiveSession, IdentityEmailReservation, IdentityArchiveOwner
 from utils.identity_rules import validate_new_email, normalize_email, InvalidEmail
 
 U = User.__table__
@@ -293,6 +293,20 @@ def artifacts(conn, email):
     return result
 
 
+def archive_exports(conn, user):
+    from utils.match_ownership import owns_archive
+    root = Path(current_app.config['ARCHIVES_FOLDER'])
+    exports = []
+    for path in sorted(root.glob('*.zip')):
+        if owns_archive(path, user['id'], conn=conn):
+            if path.is_symlink():
+                raise ValueError('An archive is a symlink. Operator review is required.')
+            with path.open('rb') as stream:
+                content_hash = hashlib.file_digest(stream, 'sha256').hexdigest()
+            exports.append({'filename': path.name, 'sha256': content_hash})
+    return exports
+
+
 def plan(conn, row):
     user = target(conn, row)
     available(conn, row['new_email'], row['old_email'])
@@ -312,7 +326,7 @@ def plan(conn, row):
         fingerprints[name] = digest(json.dumps(sorted(values, key=lambda r: json.dumps(r, sort_keys=True, default=str)), sort_keys=True, default=str))
     state = {k: v for k, v in dict(user).items() if k not in ('last_login',)}
     result = {'request': row['id'], 'version': row['version'], 'old': row['old_email'], 'new': row['new_email'],
-        'counts': counts, 'artifacts': artifacts(conn, row['old_email'])}
+        'counts': counts, 'artifacts': artifacts(conn, row['old_email']), 'archives': archive_exports(conn, user)}
     result['fingerprint'] = digest(json.dumps({'plan': result, 'user': state, 'rows': fingerprints, 'reason': row['reason'], 'recovery': row['recovery_evidence'], 'self_service': row['self_service']}, sort_keys=True, default=str))
     return result
 
@@ -376,6 +390,9 @@ def execute(actor, change_id, token, confirmed_email):
         identity = available(conn, row['new_email'], row['old_email'])
         conn.exec_driver_sql('PRAGMA defer_foreign_keys = ON')
         from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+        for archive in result['archives']:
+            conn.execute(sqlite_insert(IdentityArchiveOwner.__table__).values(filename=archive['filename'],
+                user_stable_id=row['user_stable_id'], content_hash=archive['sha256']).on_conflict_do_nothing())
         conn.execute(sqlite_insert(IdentityEmailReservation.__table__).values(canonical_email=identity.canonical).on_conflict_do_nothing())
         try:
             previous = normalize_email(row['old_email']).canonical
@@ -428,7 +445,7 @@ def notify_completion(change_id):
 
 
 def purge_backups():
-    cutoff = now().timestamp() - timedelta(days=30).total_seconds()
+    cutoff = now().replace(tzinfo=timezone.utc).timestamp() - timedelta(days=30).total_seconds()
     count = 0
     for path in directory().glob('email-*.sqlite3'):
         if not path.is_symlink() and path.stat().st_mtime <= cutoff:

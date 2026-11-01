@@ -1824,3 +1824,15 @@ class IdentityEmailChange(db.Model):
     proof_delivery = db.Column(db.String(32), nullable=False, default='pending')
     old_notice_sent = db.Column(db.Boolean, nullable=False, default=False)
     new_notice_sent = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class IdentityArchiveOwner(db.Model):
+    """Pin a legacy exported ZIP to an account across email changes.
+
+    A deleted owner stays NULL until the file expires; a reused email must not
+    inherit that person's exports. Files and historical ZIP contents never move.
+    """
+    __tablename__ = 'identity_archive_owners'
+    filename = db.Column(db.String(512), primary_key=True)
+    user_stable_id = db.Column(db.String(36), db.ForeignKey('users.stable_id', ondelete='SET NULL'), nullable=True, index=True)
+    content_hash = db.Column(db.String(64), nullable=False)

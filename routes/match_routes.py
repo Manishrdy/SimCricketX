@@ -21,7 +21,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import or_
 from sqlalchemy.orm import joinedload
 from utils import support_prompt
-from utils.match_ownership import owns_match_snapshot
+from utils.match_ownership import owns_match_snapshot, owns_archive
 from utils.exception_tracker import log_exception
 from werkzeug.utils import secure_filename
 
@@ -2173,7 +2173,8 @@ def register_match_routes(
 
             # ??? F) Instantiate MatchArchiver and create ZIP ????????????????????
             from match_archiver import MatchArchiver
-            archiver = MatchArchiver(match_meta, match_instance)
+            archive_meta = dict(match_meta, created_by=current_user.id)
+            archiver = MatchArchiver(archive_meta, match_instance)
             zip_name = f"{archiver.folder_name}.zip"
             app.logger.info(f"[DownloadArchive] Creating archive '{zip_name}' via MatchArchiver")
 
@@ -2282,7 +2283,7 @@ def register_match_routes(
             return ("T20", "T20")
 
         username    = current_user.id
-        files_dir   = os.path.join(PROJECT_ROOT, "data")
+        files_dir   = app.config['ARCHIVES_FOLDER']
         valid_files = []
         match_history = []
 
@@ -2299,7 +2300,7 @@ def register_match_routes(
                     # Only consider ".zip" and filenames containing "_<username>_"
                     if not fn.lower().endswith(".zip"):
                         continue
-                    if f"_{username}_" not in fn:
+                    if not owns_archive(os.path.join(files_dir, fn), username):
                         continue
 
                     full_path = os.path.join(files_dir, fn)
@@ -2503,7 +2504,7 @@ def register_match_routes(
         if current_user.id != username:
             app.logger.warning(f"Unauthorized download attempt by '{current_user.id}' for '{username}/{filename}'")
             return jsonify({"error": "Unauthorized"}), 403
-        if f"_{current_user.id}_" not in filename:
+        if not owns_archive(os.path.join(app.config['ARCHIVES_FOLDER'], filename), current_user.id):
             app.logger.warning(f"Unauthorized download attempt by '{current_user.id}' for filename '{filename}'")
             return jsonify({"error": "Unauthorized"}), 403
 
@@ -2513,7 +2514,7 @@ def register_match_routes(
             return jsonify({"error": "Invalid filename"}), 400
 
         # 3) Build the absolute path to the ZIP under data/
-        zip_path = os.path.join(PROJECT_ROOT, "data", filename)
+        zip_path = os.path.join(app.config['ARCHIVES_FOLDER'], filename)
         if not os.path.isfile(zip_path):
             app.logger.warning(f"Attempt to download non-existent file: {zip_path}")
             return jsonify({"error": "File not found"}), 404
@@ -2654,10 +2655,10 @@ def register_match_routes(
                 return jsonify({'error': 'Unauthorized'}), 403
         else:
             filename = archive_name
-            # If only filename is provided, we must verify it contains the username
-            if f"_{current_user.id}_" not in filename:
-                app.logger.warning(f"Unauthorized delete attempt by {current_user.id} for {filename}")
-                return jsonify({'error': 'Unauthorized'}), 403
+
+        if '/' in filename or '\\' in filename or not owns_archive(
+                os.path.join(app.config['ARCHIVES_FOLDER'], filename), current_user.id):
+            return jsonify({'error': 'Unauthorized'}), 403
 
         # 2. Normalize filename
         filename = os.path.basename(filename)

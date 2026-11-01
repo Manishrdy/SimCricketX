@@ -9,6 +9,15 @@ from database.models import User
 from app import db
 
 
+def _login_password(user, legacy_password):
+    # The optional QA fixture plugin uses locally generated credentials. Keep
+    # them out of test source and output; ordinary legacy fixtures still work.
+    from scripts.dev_test_accounts import ACCOUNTS, load_credentials
+    key = next((key for key, spec in ACCOUNTS.items() if spec['email'] == user.email), None)
+    return load_credentials()['accounts'][key]['password'] if key else legacy_password
+
+
+
 class TestRegistrationRoute:
     """Tests for user registration."""
 
@@ -131,7 +140,7 @@ class TestLoginRoute:
             "/login",
             data={
                 "email": regular_user.email,
-                "password": "Password123!",
+                "password": _login_password(regular_user, "Password123!"),
             },
             follow_redirects=False,  # Inspect redirect directly
         )
@@ -189,7 +198,7 @@ class TestLoginRoute:
             "/login",
             data={
                 "email": admin_user.email,
-                "password": "Admin123!",
+                "password": _login_password(admin_user, "Admin123!"),
             },
             follow_redirects=False,
         )
