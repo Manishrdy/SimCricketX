@@ -19,6 +19,9 @@ NEW = 'qa-renamed@example.com'
 def configured(app, admin_client, tmp_path, monkeypatch):
     root = tmp_path/'match-files'
     root.mkdir()
+    archives = tmp_path/'archives'
+    archives.mkdir()
+    app.config['ARCHIVES_FOLDER'] = str(archives)
     app.config.update(IDENTITY_EMAIL_BACKUP_DIR=str(tmp_path/'operation-backups'), IDENTITY_EMAIL_MATCH_DIR=str(root))
     monkeypatch.setattr('utils.email_service.send_email', lambda *a, **kw: True)
     return app
@@ -373,7 +376,7 @@ from database import db
 from services import identity_email_change as change
 from utils import email_service
 app=Flask('email-race',instance_path=sys.argv[2])
-app.config.update(SQLALCHEMY_DATABASE_URI=sys.argv[1],SECRET_KEY='test-secret-key',IDENTITY_EMAIL_BACKUP_DIR=sys.argv[3],IDENTITY_EMAIL_MATCH_DIR=sys.argv[4])
+app.config.update(SQLALCHEMY_DATABASE_URI=sys.argv[1],SECRET_KEY='test-secret-key',IDENTITY_EMAIL_BACKUP_DIR=sys.argv[3],IDENTITY_EMAIL_MATCH_DIR=sys.argv[4],ARCHIVES_FOLDER=sys.argv[9])
 db.init_app(app)
 email_service.send_email=lambda *a,**kw: True
 with app.app_context():
@@ -387,7 +390,7 @@ with app.app_context():
 '''
     args=[str(db.engine.url),configured.instance_path,configured.config['IDENTITY_EMAIL_BACKUP_DIR'],
           configured.config['IDENTITY_EMAIL_MATCH_DIR'],actor()]
-    processes=[subprocess.Popen([sys.executable,'-c',script,*args,cid,token,NEW],stdin=subprocess.PIPE,
+    processes=[subprocess.Popen([sys.executable,'-c',script,*args,cid,token,NEW,configured.config['ARCHIVES_FOLDER']],stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True) for cid,token in jobs]
     try:
         for proc in processes:
@@ -415,3 +418,136 @@ def test_unknown_non_fk_reference_fails_coverage(configured):
             change.preview(actor(),cid)
     finally:
         db.metadata.remove(table)
+
+
+def renamed_client(app):
+    import secrets
+    token=secrets.token_hex(32)
+    with db.engine.begin() as conn:
+        conn.execute(insert(ActiveSession).values(user_id=NEW,session_token=token,last_active=change.now()))
+    client=app.test_client()
+    with client.session_transaction() as session:
+        session['_user_id']=NEW;session['_fresh']=True;session['session_token']=token
+    return client
+
+
+def test_existing_export_survives_rename_and_no_filename_owner_bypass(configured):
+    import zipfile
+    from utils.match_ownership import owns_archive
+    filename=f'playing_QA_vs_QB_{old()}_20261031000000_fmt-T20.zip'
+    path=Path(configured.config['ARCHIVES_FOLDER'])/filename
+    with zipfile.ZipFile(path,'w') as archive:
+        archive.writestr('match.json',json.dumps({'created_by':old(),'match_format':'T20'}))
+    original=path.read_bytes()
+    cid,_=ready();receipt=apply(cid)
+    assert receipt['archives']==[{'filename':filename,'sha256':change.hashlib.sha256(original).hexdigest()}]
+    assert path.read_bytes()==original and owns_archive(path,NEW) and not owns_archive(path,old())
+    client=renamed_client(configured)
+    response=call(configured,client,f'/archives/{NEW}/{filename}')
+    assert response.status_code==200 and response.data==original
+    assert filename.encode() in call(configured,client,'/my-matches').data
+    with configured.app_context(): other=logged_in_client(configured,'user2')
+    response=call(configured,other,f"/archives/{ACCOUNTS['user2']['email']}/{filename}",method='delete')
+    assert response.status_code==403 and path.exists()
+    assert call(configured,client,f'/archives/{NEW}/{filename}',method='delete').status_code==200
+    assert not path.exists()
+
+
+def test_export_replacement_invalidates_preview(configured):
+    path=Path(configured.config['ARCHIVES_FOLDER'])/f'playing_QA_{old()}_export.zip'
+    path.write_bytes(b'original')
+    cid,_=ready();_,token=change.preview(actor(),cid)
+    path.write_bytes(b'replaced')
+    with pytest.raises(ValueError,match='fresh preview'):
+        change.execute(actor(),cid,token,NEW)
+    assert db.session.get(User,old())
+
+
+def test_export_pin_does_not_follow_reused_filename_or_deleted_owner(configured):
+    from utils.match_ownership import owns_archive
+    from database.models import IdentityArchiveOwner
+    path=Path(configured.config['ARCHIVES_FOLDER'])/f'playing_QA_{old()}_export.zip'
+    path.write_bytes(b'original')
+    cid,_=ready();apply(cid)
+    path.write_bytes(b'new file at same path')
+    assert not owns_archive(path,NEW) and not owns_archive(path,old())
+    path.write_bytes(b'original')
+    with db.engine.begin() as conn:
+        conn.execute(update(IdentityArchiveOwner).values(user_stable_id=None))
+    assert not owns_archive(path,NEW) and not owns_archive(path,old())
+
+
+def test_regenerated_archive_uses_current_owner_without_rewriting_snapshot(configured,monkeypatch,tmp_path):
+    import uuid
+    from types import SimpleNamespace
+    import app as app_module
+    import match_archiver
+    from database.models import Match
+    mid=str(uuid.uuid4())
+    snapshot={'match_id':mid,'created_by':old(),'current_state':'completed','match_format':'T20'}
+    db.session.add(Match(id=mid,user_id=old()));db.session.commit()
+    original=tmp_path/'snapshot.json';original.write_text(json.dumps(snapshot))
+    cid,_=ready();apply(cid)
+    client=renamed_client(configured)
+    app_module.MATCH_INSTANCES[mid]=SimpleNamespace(data=snapshot,commentary=['QA commentary'])
+    root=Path(configured.root_path)/'data'
+    generated=root/('qa-email-export-'+uuid.uuid4().hex+'.zip')
+    observed={}
+    class Archiver:
+        def __init__(self,data,instance):
+            observed.update(data)
+            self.folder_name=generated.stem
+        def create_archive(self,**kwargs):
+            generated.write_bytes(b'QA export')
+            return True
+    monkeypatch.setattr(match_archiver,'MatchArchiver',Archiver)
+    monkeypatch.setattr(match_archiver,'find_original_json_file',lambda mid:str(original))
+    try:
+        response=call(configured,client,f'/match/{mid}/download-archive',method='post',json={})
+        assert response.status_code==200,response.data
+        assert observed['created_by']==NEW
+        assert snapshot['created_by']==old() and json.loads(original.read_text())['created_by']==old()
+        assert db.session.get(Match,mid).user_id==NEW
+    finally:
+        generated.unlink(missing_ok=True)
+        app_module.MATCH_INSTANCES.pop(mid,None)
+
+
+def test_admin_confirm_post_revokes_existing_member_session(configured,admin_client):
+    from bs4 import BeautifulSoup
+    with configured.app_context(): member=logged_in_client(configured,'user1')
+    cid,_=ready()
+    detail=f'/admin/identity/email-changes/{cid}'
+    response=call(configured,admin_client,detail,method='post',data={'action':'preview'})
+    token=BeautifulSoup(response.data,'html.parser').select_one('input[name=token]')['value']
+    response=call(configured,admin_client,detail,method='post',data={
+        'action':'apply','token':token,'confirmed_email':NEW,'confirmed':'yes'})
+    assert response.status_code==303
+    response=call(configured,member,'/account/settings')
+    assert response.status_code==302 and '/login' in response.location
+    assert not db.session.query(ActiveSession).filter_by(user_id=old()).first()
+    assert b'Completed change' in call(configured,admin_client,detail).data
+
+
+def test_mailbox_confirmation_requires_csrf(configured):
+    tokens={}
+    with patch.object(change,'deliver_proofs',side_effect=lambda cid,t:tokens.update(t)):
+        cid=change.create(actor(),old(),NEW,'Account owner request')
+    configured.config['WTF_CSRF_ENABLED']=True
+    response=call(configured,configured.test_client(),f"/identity/email-change/verify/{cid}/new/{tokens['new']}",method='post')
+    assert response.status_code==400
+    with db.engine.connect() as conn:
+        assert not change.get_change(conn,cid)['new_verified_at']
+
+
+def test_migration_creates_missing_feature_tables_and_preserves_users(configured):
+    from database.models import IdentityEmailChange,IdentityArchiveOwner
+    from migrations.add_identity_email_change import run_migration
+    from migrations.verify import model_drift
+    before=[(u.id,u.stable_id) for u in db.session.query(User)]
+    with db.engine.begin() as conn:
+        IdentityArchiveOwner.__table__.drop(conn)
+        IdentityEmailChange.__table__.drop(conn)
+    run_migration(db,configured);run_migration(db,configured)
+    assert not model_drift(db.engine,db.metadata)
+    assert [(u.id,u.stable_id) for u in db.session.query(User)]==before
