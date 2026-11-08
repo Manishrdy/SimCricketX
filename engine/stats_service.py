@@ -10,7 +10,7 @@ from engine.batting_activity import has_batting_activity
 from engine.length_filter import parse_length_filter, length_predicate
 from sqlalchemy.orm import aliased
 from datetime import datetime
-from database.models import Match, MatchScorecard, Tournament, Player, Team, TeamProfile, TournamentPlayerStatsCache
+from database.models import Match, MatchScorecard, Tournament, Player, Team, TeamProfile
 from database import db
 from collections import defaultdict
 import csv
@@ -118,9 +118,9 @@ class StatsService:
         """
         Get statistics for a specific tournament.
 
-        Uses TournamentPlayerStatsCache when available (and no format filter
-        is applied, since the cache is format-agnostic). Falls back to full
-        scorecard computation otherwise.
+        Aggregate persisted scorecards, just like overall statistics. The
+        standings cache can be stale because match completion updates standings
+        before archiving scorecards; it is not a reliable source for this view.
 
         Args:
             user_id (str): User ID
@@ -135,7 +135,6 @@ class StatsService:
         # Tournaments are single-format (enforced at creation + match save).
         # When the requested format doesn't match the tournament's format,
         # there are zero matches to aggregate — short-circuit to empty.
-        # When it does match, the cache is correct by construction.
         tournament = db.session.get(Tournament, tournament_id)
         length = self.scheduled_overs if scheduled_overs is None else parse_length_filter(scheduled_overs)
         if tournament and tournament.format_type == "ListA" and length and (tournament.scheduled_overs or 50) != length:
@@ -147,13 +146,8 @@ class StatsService:
             )
             return self._empty_stats()
 
-        cached = self._try_cache_tournament_stats(
-            tournament_id, user_id, match_format=match_format or (tournament.format_type if tournament else None), scheduled_overs=scheduled_overs
-        )
-        if cached:
-            return cached
-
-        # Full computation fallback (super-over rows are not real innings)
+        # Use the same source and aggregation as overall stats, including for
+        # tournaments with partial, outdated, or absent player cache rows.
         query = (
             db.session.query(MatchScorecard, Match, Player, Team)
             .join(Match, MatchScorecard.match_id == Match.id)
@@ -174,126 +168,6 @@ class StatsService:
             return self._empty_stats()
 
         return self._calculate_stats_from_records(records, match_format=match_format)
-
-    def _try_cache_tournament_stats(self, tournament_id, user_id, match_format=None, scheduled_overs=None):
-        if match_format == "Hundred":
-            return None
-        """Attempt to serve tournament stats from TournamentPlayerStatsCache.
-
-        Returns the same dict shape as _calculate_stats_from_records() on
-        cache hit, or None on cache miss so the caller can fall back to the
-        full computation path.
-        """
-        tournament = db.session.get(Tournament, tournament_id)
-        length = self.scheduled_overs if scheduled_overs is None else parse_length_filter(scheduled_overs)
-        if tournament and tournament.format_type == 'ListA' and length and (tournament.scheduled_overs or 50) != length:
-            return None
-        cached = (
-            db.session.query(TournamentPlayerStatsCache, Player, Team)
-            .join(Player, TournamentPlayerStatsCache.player_id == Player.id)
-            .join(Team, TournamentPlayerStatsCache.team_id == Team.id)
-            .filter(TournamentPlayerStatsCache.tournament_id == tournament_id)
-            .filter(Team.user_id == user_id)
-            .all()
-        )
-        if not cached:
-            return None
-
-        self._log(f"Serving tournament {tournament_id} stats from cache ({len(cached)} players)")
-
-        batting_stats = []
-        bowling_stats = []
-        fielding_stats = []
-
-        for cache, player, team in cached:
-            matches = cache.matches_played or 0
-            if matches == 0:
-                continue
-
-            # Batting
-            innings = cache.innings_batted or 0
-            if innings > 0:
-                batting_stats.append({
-                    'player': player.name, 'team': team.name,
-                    'role': player.role or '', 'player_id': player.id,
-                    'matches': matches, 'innings': innings,
-                    'runs': cache.runs_scored or 0,
-                    'balls': cache.balls_faced or 0,
-                    'not_outs': cache.not_outs or 0,
-                    'strike_rate': cache.batting_strike_rate,
-                    'average': cache.batting_average,
-                    'highest_score': cache.highest_score or 0,
-                    'zeros': cache.ducks or 0,
-                    'ones': cache.ones or 0,
-                    'twos': cache.twos or 0,
-                    'threes': cache.threes or 0,
-                    'fours': cache.fours or 0,
-                    'sixes': cache.sixes or 0,
-                    'thirties': cache.thirties or 0,
-                    'fifties': cache.fifties or 0,
-                    'hundreds': cache.centuries or 0,
-                    'double_centuries': cache.double_centuries or 0,
-                    'triple_centuries': cache.triple_centuries or 0,
-                })
-
-            # Bowling
-            bowl_innings = cache.innings_bowled or 0
-            if bowl_innings > 0 or (cache.wickets_taken or 0) > 0:
-                best_w = cache.best_bowling_wickets or 0
-                best_r = cache.best_bowling_runs or 0
-                bowling_stats.append({
-                    'team': team.name, 'player': player.name,
-                    'role': player.role or '', 'player_id': player.id,
-                    'matches': matches, 'innings': bowl_innings,
-                    'overs': cache.overs_bowled or '0.0',
-                    'runs': cache.runs_conceded or 0,
-                    'wickets': cache.wickets_taken or 0,
-                    'best': f"{best_w}/{best_r}" if best_w > 0 else '-',
-                    'best_match': (
-                        f"{cache.best_match_bowling_wickets or 0}/{cache.best_match_bowling_runs or 0}"
-                        if (cache.best_match_bowling_wickets or 0) > 0 else '-'
-                    ),
-                    'average': cache.bowling_average,
-                    'economy': cache.bowling_economy,
-                    'strike_rate': cache.bowling_strike_rate,
-                    'maidens': cache.maidens or 0,
-                    'five_wicket_hauls': cache.five_wicket_hauls or 0,
-                    'ten_wicket_matches': cache.ten_wicket_matches or 0,
-                    'dots': cache.dot_balls_bowled or 0,
-                    'bowled': cache.wickets_bowled or 0,
-                    'lbw': cache.wickets_lbw or 0,
-                    'byes': cache.byes or 0,
-                    'leg_byes': cache.leg_byes or 0,
-                    'wides': cache.wides or 0,
-                    'no_balls': cache.noballs or 0,
-                })
-
-            # Fielding
-            fielding_stats.append({
-                'player': player.name, 'team': team.name,
-                'role': player.role or '', 'player_id': player.id,
-                'matches': matches,
-                'catches': cache.catches or 0,
-                'run_outs': cache.run_outs or 0,
-                'stumpings': cache.stumpings or 0,
-            })
-
-        batting_stats.sort(key=lambda x: x['runs'], reverse=True)
-        bowling_stats.sort(key=lambda x: (-x['wickets'], x['economy'] if x['economy'] is not None else float('inf')))
-        fielding_stats.sort(
-            key=lambda x: (x['catches'] + x['run_outs'] + x.get('stumpings', 0), x['matches']),
-            reverse=True
-        )
-
-        leaderboards = self._calculate_leaderboards(
-            batting_stats, bowling_stats, match_format=match_format
-        )
-        return {
-            'batting': batting_stats,
-            'bowling': bowling_stats,
-            'fielding': fielding_stats,
-            'leaderboards': leaderboards,
-        }
 
     def get_insights(self, user_id, tournament_id=None, match_format=None, scheduled_overs=None):
         """

@@ -776,8 +776,8 @@ class TestStatisticsRegressionFixes:
         assert "player,team,matches,innings,runs,balls" in content
         assert "A,X,1,1,12,8,0,150.0,12.0,0,2,1,0,2,0,0,0,0" in content
 
-    def test_tournament_cache_includes_stumpings_and_sorts_by_total_dismissals(self, regular_user):
-        """Cache-backed fielding rows should include stumpings and rank by total dismissals."""
+    def test_tournament_fielding_includes_stumpings_and_sorts_by_total_dismissals(self, regular_user):
+        """Tournament fielding rows include stumpings and rank by total dismissals."""
         team = DBTeam(user_id=regular_user.id, name="Cache Field XI", short_code="CFX")
         db.session.add(team)
         db.session.flush()
@@ -795,15 +795,31 @@ class TestStatisticsRegressionFixes:
         db.session.add(t)
         db.session.flush()
 
-        # Same catches+run_outs, different stumpings -> p2 should rank first.
+        # Persist the source scorecards. Cached fielding totals are deliberately
+        # stale: the statistics page must rank the current dismissals instead.
+        mid = str(uuid.uuid4())
+        db.session.add(DBMatch(
+            id=mid, user_id=regular_user.id, tournament_id=t.id,
+            home_team_id=team.id, away_team_id=team.id,
+            match_format='T20', date=datetime.utcnow(),
+        ))
+        db.session.flush()
+        db.session.add_all([
+            MatchScorecard(match_id=mid, player_id=p1.id, team_id=team.id,
+                           record_type='fielding', innings_number=1,
+                           catches=1, run_outs=1, stumpings=0),
+            MatchScorecard(match_id=mid, player_id=p2.id, team_id=team.id,
+                           record_type='fielding', innings_number=1,
+                           catches=1, run_outs=1, stumpings=2),
+        ])
         db.session.add_all([
             TournamentPlayerStatsCache(
                 tournament_id=t.id, player_id=p1.id, team_id=team.id,
-                matches_played=3, catches=1, run_outs=1, stumpings=0
+                matches_played=3, catches=1, run_outs=1, stumpings=5
             ),
             TournamentPlayerStatsCache(
                 tournament_id=t.id, player_id=p2.id, team_id=team.id,
-                matches_played=3, catches=1, run_outs=1, stumpings=2
+                matches_played=3, catches=1, run_outs=1, stumpings=0
             ),
         ])
         db.session.commit()

@@ -65,15 +65,12 @@ def test_zero_ball_spells_across_statistics(app, regular_user, test_team, test_t
         assert cache.bowling_economy is None
         assert cache.bowling_average == (1.0 if wickets else None)
         assert cache.bowling_strike_rate == (0.0 if wickets else None)
-        cached = service._try_cache_tournament_stats(tournament.id, regular_user.id, match_format=fmt)
-        if fmt == 'Hundred':
-            assert cached is None  # Hundred deliberately bypasses this cache reader.
-        else:
-            row = cached['bowling'][0]
-            assert (row['innings'], row['runs'], row['wickets']) == (1, runs, wickets)
-            assert row['economy'] is None
-            assert row['average'] == (1.0 if wickets else None)
-            assert row['strike_rate'] == (0.0 if wickets else None)
+        tournament_stats = service.get_tournament_stats(regular_user.id, tournament.id, match_format=fmt)
+        row = tournament_stats['bowling'][0]
+        assert (row['innings'], row['runs'], row['wickets']) == (1, runs, wickets)
+        assert row['economy'] is None
+        assert row['average'] == (1.0 if wickets else None)
+        assert row['strike_rate'] == (0.0 if wickets else None)
         # Verify UPDATE/rebuild as well as the initial INSERT above.
         engine.rebuild_player_stats_cache(tournament.id, {bowler.id})
         db.session.flush()
