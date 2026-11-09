@@ -978,7 +978,7 @@ def create_app():
             return None
         if request.path.startswith('/static'):
             return None
-        if request.endpoint in ('force_change_password', 'logout', 'static', 'admin_stop_impersonation', 'identity_device_privacy', 'identity_email.verify'):
+        if request.endpoint in ('force_change_password', 'logout', 'static', 'admin_stop_impersonation', 'identity_device_privacy', 'identity_email.verify', 'identity_merge.verify', 'identity_campaign.member', 'force_verify_email', 'force_verify_email_change'):
             return None
         if getattr(current_user, 'force_password_reset', False):
             session['force_password_reset'] = True
@@ -1010,7 +1010,10 @@ def create_app():
             # Allow auth and setup routes to avoid redirect loops.
             if request.endpoint in (
                 'identity_device_privacy',
-                'identity_email.verify',
+                'identity_email.verify', 'identity_merge.verify',
+                'identity_campaign.member',
+                'force_verify_email',
+                'force_verify_email_change',
                 'set_display_name',
                 'logout',
                 'login',
@@ -2498,6 +2501,10 @@ def create_app():
     init_identity_network(app, limiter)
     from routes.identity_email_routes import init_app as init_identity_email
     init_identity_email(app, limiter)
+    from routes.identity_campaign_routes import init_app as init_identity_campaign
+    init_identity_campaign(app, limiter)
+    from routes.identity_merge_routes import init_app as init_identity_merge
+    init_identity_merge(app, limiter)
 
     # --- Auth Routes (Phase 3 extraction) ---
     register_auth_routes(

@@ -5,6 +5,9 @@ from database.models import Match
 
 def owns_match_snapshot(data, user_id, match_id=None):
     match_id = match_id or data.get('match_id')
+    from database.models import IdentityCampaignFile
+    if match_id and db.session.query(IdentityCampaignFile.id).filter_by(match_key=str(match_id)).first():
+        return False
     if match_id:
         archived = db.session.get(Match, match_id)
         if archived is not None:
@@ -22,6 +25,9 @@ def owns_archive(path, user_id, *, conn=None):
     if not path.name.lower().endswith('.zip') or path.is_symlink():
         return False
     executor = conn if conn is not None else db.session
+    from database.models import IdentityCampaignFile
+    if executor.execute(select(IdentityCampaignFile.id).where(IdentityCampaignFile.area == 'archives', IdentityCampaignFile.name == path.name, IdentityCampaignFile.cleaned_at.is_(None))).first():
+        return False
     table = IdentityArchiveOwner.__table__
     row = executor.execute(select(table).where(table.c.filename == path.name)).mappings().first()
     if row is None:

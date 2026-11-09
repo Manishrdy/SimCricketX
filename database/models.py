@@ -1836,3 +1836,78 @@ class IdentityArchiveOwner(db.Model):
     filename = db.Column(db.String(512), primary_key=True)
     user_stable_id = db.Column(db.String(36), db.ForeignKey('users.stable_id', ondelete='SET NULL'), nullable=True, index=True)
     content_hash = db.Column(db.String(64), nullable=False)
+
+
+class IdentityEmailCampaign(db.Model):
+    __tablename__ = 'identity_email_campaigns'
+    id = db.Column(db.String(36), primary_key=True)
+    started_at = db.Column(db.DateTime, nullable=False)
+    deadline = db.Column(db.DateTime, nullable=False)
+    deletion_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    created_by = db.Column(db.String(36), nullable=False)
+
+
+class IdentityCampaignMember(db.Model):
+    __tablename__ = 'identity_campaign_members'
+    id = db.Column(db.String(36), primary_key=True)
+    campaign_id = db.Column(db.String(36), db.ForeignKey('identity_email_campaigns.id'), nullable=False)
+    subject = db.Column(db.String(36), nullable=False, index=True)
+    address = db.Column(db.String(254), nullable=True)
+    reason = db.Column(db.String(60), nullable=False)
+    status = db.Column(db.String(24), nullable=False, default='pending')
+    prior_force_verify = db.Column(db.Boolean, nullable=False, default=False)
+    hold_until = db.Column(db.DateTime, nullable=True)
+    closed_at = db.Column(db.DateTime, nullable=True)
+    support = db.Column(db.Text, nullable=False, default='')
+    response = db.Column(db.Text, nullable=False, default='')
+    notices = db.Column(db.Text, nullable=False, default='{}')
+    receipt = db.Column(db.Text, nullable=True)
+    error = db.Column(db.String(200), nullable=True)
+    __table_args__ = (db.UniqueConstraint('campaign_id', 'subject'),)
+
+
+class IdentityCampaignAction(db.Model):
+    __tablename__ = 'identity_campaign_actions'
+    id = db.Column(db.Integer, primary_key=True)
+    member_id = db.Column(db.String(36), nullable=True, index=True)
+    campaign_id = db.Column(db.String(36), nullable=False)
+    actor = db.Column(db.String(36), nullable=True)
+    action = db.Column(db.String(40), nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+
+
+class IdentityCampaignFile(db.Model):
+    __tablename__ = 'identity_campaign_files'
+    id = db.Column(db.Integer, primary_key=True)
+    member_id = db.Column(db.String(36), nullable=False, index=True)
+    area = db.Column(db.String(20), nullable=False)
+    name = db.Column(db.String(300), nullable=False)
+    content_hash = db.Column(db.String(64), nullable=False)
+    match_key = db.Column(db.String(100), nullable=True, index=True)
+    cleaned_at = db.Column(db.DateTime, nullable=True)
+    error = db.Column(db.String(120), nullable=True)
+
+
+class IdentityMerge(db.Model):
+    """Mailbox-reviewed merge request and durable source/survivor receipt."""
+    __tablename__ = 'identity_merges'
+    id = db.Column(db.String(36), primary_key=True)
+    case_key = db.Column(db.Integer, nullable=False, index=True)
+    source = db.Column(db.String(36), nullable=False, index=True)
+    survivor = db.Column(db.String(36), nullable=False, index=True)
+    source_address = db.Column(db.String(254), nullable=False)
+    survivor_address = db.Column(db.String(254), nullable=False)
+    administrator = db.Column(db.String(36), nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    recovery = db.Column(db.Text, nullable=False, default='')
+    status = db.Column(db.String(16), nullable=False, default='pending')
+    created_at = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    source_proof = db.Column(db.String(64), nullable=True)
+    survivor_proof = db.Column(db.String(64), nullable=True)
+    source_verified = db.Column(db.DateTime, nullable=True)
+    survivor_verified = db.Column(db.DateTime, nullable=True)
+    delivery = db.Column(db.String(16), nullable=False, default='pending')
+    completed_at = db.Column(db.DateTime, nullable=True)
+    receipt_json = db.Column(db.Text, nullable=True)

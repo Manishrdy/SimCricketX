@@ -287,6 +287,8 @@
                 Please verify your email to continue.
             </p>
 
+            {% if campaign %}<section class="fv-card" role="status"><h2>Replacement email required</h2><p>Verify a valid replacement by <strong>{{ campaign.deadline.strftime('%Y-%m-%d %H:%M') }} UTC</strong>. Your account is due for deletion after this deadline unless corrected or covered by an admin hold.</p><p>{% if campaign.hold_until %}Hold expiry: {{ campaign.hold_until.strftime('%Y-%m-%d %H:%M') }} UTC.{% else %}No hold is active.{% endif %}</p><a href="{{ url_for('identity_campaign.member') }}">Private correction support</a><p>Sending a support request does not pause deletion.</p></section>{% endif %}
+            {% if not campaign %}
             <!-- Option 1: Verify existing email -->
             <div class="fv-card" id="card1">
                 <div class="fv-card-header" onclick="toggleCard('card1', 'card2')" onkeydown="handleAccordionKeydown(event, 'card1', 'card2')"
@@ -322,8 +324,9 @@
 
             <div class="fv-divider">or</div>
 
+            {% endif %}
             <!-- Option 2: Change email -->
-            <div class="fv-card" id="card2">
+            <div class="fv-card{% if campaign %} fv-card--active{% endif %}" id="card2">
                 <div class="fv-card-header" onclick="toggleCard('card2', 'card1')" onkeydown="handleAccordionKeydown(event, 'card2', 'card1')"
                      role="button" tabindex="0" aria-expanded="false" aria-controls="card2-body">
                     <div class="fv-card-icon fv-card-icon--blue">

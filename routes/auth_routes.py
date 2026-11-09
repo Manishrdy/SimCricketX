@@ -10,6 +10,7 @@ from flask import g, flash, jsonify, redirect, render_template, request, session
 from flask_login import current_user, login_required, login_user, logout_user
 from utils.turnstile import verify_turnstile
 from utils.identity_devices import collect as collect_device
+from services.identity_campaign import pending as pending_campaign
 from utils.email_service import (
     send_verification_email,
     send_password_reset_email,
@@ -69,6 +70,8 @@ def register_auth_routes(
 
     # Endpoints exempt from the force-email-verify redirect
     _FORCE_VERIFY_EXEMPT = {
+        'identity_campaign.member',
+        'force_change_password',
         'identity_email.verify',
         'identity_device_privacy',
         'force_verify_email',
@@ -259,7 +262,7 @@ def register_auth_routes(
             if verify_user(email, password):
                 user = db.session.get(DBUser, email)
                 if user:
-                    if not user.email_verified:
+                    if not user.email_verified and not pending_campaign(user.stable_id):
                         session["pending_verify_email"] = email
                         return render_template(
                             "login.html",
@@ -579,6 +582,10 @@ def register_auth_routes(
             flash("Verification link has expired. Request a new one below.", "warning")
             return redirect(url_for("verify_email_pending"))
 
+        if pending_campaign(user.stable_id):
+            flash('Verify a replacement address using mandatory correction.', 'warning')
+            return redirect(url_for('force_verify_email') if current_user.is_authenticated else url_for('login'))
+
         try:
             user.email_verified = True
             user.force_email_verify = False
@@ -609,12 +616,13 @@ def register_auth_routes(
     @login_required
     def force_verify_email():
         """Full-page prompt for users who must re-verify their email."""
-        if not current_user.force_email_verify:
+        if not current_user.force_email_verify and not pending_campaign(current_user.stable_id):
             return redirect(url_for("home"))
         return render_template(
             "force_verify_email.html",
             email=current_user.id,
             display_name=current_user.display_name or current_user.id,
+            campaign=pending_campaign(current_user.stable_id),
         )
 
     @app.route("/force-verify-email/send", methods=["POST"])
@@ -622,8 +630,11 @@ def register_auth_routes(
     @limiter.limit("5 per hour")
     def force_verify_email_send():
         """Send a verification link to the user's current email."""
-        if not current_user.force_email_verify:
+        if not current_user.force_email_verify and not pending_campaign(current_user.stable_id):
             return redirect(url_for("home"))
+        if pending_campaign(current_user.stable_id):
+            flash('A replacement email is required for this campaign.', 'warning')
+            return redirect(url_for('force_verify_email'))
         email = current_user.id
         token = generate_email_verify_token(email)
         if token:
@@ -648,7 +659,7 @@ def register_auth_routes(
     @limiter.limit("5 per hour")
     def force_verify_email_change():
         """Let the user switch to a new email, then send verification to it."""
-        if not current_user.force_email_verify:
+        if not current_user.force_email_verify and not pending_campaign(current_user.stable_id):
             return redirect(url_for("home"))
 
         new_email = request.form.get("new_email", "").strip().lower()
