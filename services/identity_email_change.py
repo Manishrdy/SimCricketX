@@ -98,7 +98,7 @@ def admission(exclusive=False):
 
 
 def enter_request():
-    if request.endpoint and request.endpoint.startswith('identity_email.'):
+    if request.endpoint and request.endpoint.startswith(('identity_email.', 'identity_campaign.', 'identity_merge.')):
         return None
     guard = admission()
     try:
@@ -205,7 +205,8 @@ def create(actor, old, new, reason, recovery='', *, self_service=False):
         user = conn.execute(select(U).where(U.c.id == old)).mappings().first()
         if not user or user['is_admin'] or not user['stable_id']:
             raise ValueError('Select a non-admin account with a stable identity.')
-        if self_service and (user['stable_id'] != actor or not user['force_email_verify']):
+        from services.identity_campaign import pending as pending_campaign
+        if self_service and (user['stable_id'] != actor or not (user['force_email_verify'] or pending_campaign(actor, conn))):
             raise ValueError('Mandatory correction is not required for this account.')
         identity = available(conn, new, old)
         conn.execute(update(C).where(C.c.status == 'pending', C.c.expires_at <= at).values(
@@ -410,6 +411,8 @@ def execute(actor, change_id, token, confirmed_email):
             email_verify_token=None, email_verify_token_expires=None, reset_token=None, reset_token_expires=None,
             pw_change_otp_hash=None, pw_change_otp_expires=None, pw_change_pending_hash=None)
         conn.execute(update(U).where(U.c.stable_id == row['user_stable_id']).values(**values))
+        from services.identity_campaign import corrected
+        corrected(conn, row['user_stable_id'])
         result.update(actor=actor, backup=backup, completed_at=now().isoformat(), stable_id=row['user_stable_id'],
                       reason=row['reason'], recovery_evidence=row['recovery_evidence'])
         conn.execute(update(C).where(C.c.id == change_id).values(status='completed', open_key=None,
@@ -478,13 +481,18 @@ def socket_admission(function):
         try:
             # Socket cookies may outlive HTTP sessions, including when the
             # network policy is disabled. Never advance a revoked session.
-            if current_user.is_authenticated:
+            user_key = session.get('_user_id')
+            if user_key:
                 with db.engine.connect() as conn:
+                    live_user = conn.execute(select(U.c.stable_id).where(U.c.id == user_key)).scalar_one_or_none()
                     active = conn.execute(select(ActiveSession.id).where(
-                        ActiveSession.user_id == current_user.id,
+                        ActiveSession.user_id == user_key,
                         ActiveSession.session_token == session.get('session_token', ''))).first()
-                if not active:
-                    return refuse('auth_required', 'Sign in again to continue.')
+                    if not live_user or not active:
+                        return refuse('auth_required', 'Sign in again to continue.')
+                    from services.identity_campaign import pending
+                    if pending(live_user, conn):
+                        return refuse('email_correction_required', 'Verify a replacement email before continuing.')
             return function(*args, **kwargs)
         finally:
             guard.__exit__(None, None, None)
@@ -497,7 +505,8 @@ def authorize_change(conn, actor, row):
         # require the original mandatory-remediation flag to remain set.
         if row['status'] != 'completed':
             user = target(conn, row)
-            if not user['force_email_verify']:
+            from services.identity_campaign import pending as pending_campaign
+            if not user['force_email_verify'] and not pending_campaign(actor, conn):
                 raise ValueError('Mandatory correction is no longer required.')
         return
     administrator(conn, actor)

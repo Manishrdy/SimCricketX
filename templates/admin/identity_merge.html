@@ -1,0 +1,41 @@
+{% extends 'admin/layout.html' %}
+{% block title %}Account merges · Admin{% endblock %}
+{% block extra_css %}{{ super() }}<link rel="stylesheet" href="{{ url_for('static',filename='css/admin_identity.css') }}">{% endblock %}
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+{% block admin_content %}
+<div class="identity-workspace">
+<header class="identity-header"><div><p class="identity-eyebrow">Identity administration</p><h1>Account merges</h1><p>Establish common ownership, verify mailboxes and review every change.</p></div></header>
+<nav class="identity-tabs"><a href="{{ url_for('admin_identity.duplicates') }}">Duplicate reviews</a><a href="{{ url_for('identity_merge.overview') }}">Merge requests</a></nav>
+{% if error %}<section class="identity-card" role="alert">{{ error }}</section>{% endif %}
+{% if view=='overview' %}
+<section class="identity-card"><h2>Request a merge</h2><p>Admin accounts are excluded. The survivor keeps its email, password and profile. Mailbox proofs expire after 24 hours. No accounts change at this step.</p>
+<form method="post" class="identity-form">{{ csrf() }}
+<label>Duplicate review number<input name="case_key" type="number" min="1" required value="{{ request.args.get('case','') }}"></label>
+<label>Source email — login to retire<input name="source" required maxlength="254"></label>
+<label>Survivor email — login to keep<input name="survivor" type="email" required maxlength="254"></label>
+<label>Common ownership evidence and reason<textarea name="reason" minlength="20" maxlength="2000" rows="3" required></textarea></label>
+<label>Source mailbox recovery exception (optional)<textarea name="recovery" minlength="20" maxlength="2000" rows="3" placeholder="Only if the source mailbox is unavailable: document how ownership was established. Never include passwords or tokens."></textarea></label>
+<label class="identity-check"><input type="checkbox" name="ownership" value="yes" required>I established common ownership. Shared IP, device or fingerprint alone is insufficient.</label>
+<button class="identity-button">Request mailbox confirmations</button></form></section>
+<h2>Requests and receipts</h2>
+{% for row in rows %}<article class="identity-card"><a href="{{ url_for('identity_merge.detail',mid=row.id) }}">{{ row.source_address }} → {{ row.survivor_address }}</a><p>{{ 'expired' if row.status=='pending' and row.expires_at<=at else row.status }} · {{ row.created_at|localtime }}</p></article>{% else %}<p>No merge requests.</p>{% endfor %}
+<div class="identity-pagination">{% if page>1 %}<a href="{{ url_for('identity_merge.overview',page=page-1) }}">Previous</a>{% endif %}<span>Page {{ page }}</span>{% if more %}<a href="{{ url_for('identity_merge.overview',page=page+1) }}">Next</a>{% endif %}</div>
+{% else %}
+<section class="identity-card"><h2>{{ row.source_address }} → {{ row.survivor_address }}</h2>
+<p>Status: {{ 'expired' if row.status=='pending' and row.expires_at<=at else row.status }}</p><p>Ownership evidence: {{ row.reason }}</p>
+{% if row.recovery %}<p>Source recovery exception: {{ row.recovery }}</p>{% endif %}
+<p>Source mailbox: {{ 'recovery approved' if row.recovery else ('verified' if row.source_verified else 'waiting') }}. Survivor mailbox: {{ 'verified' if row.survivor_verified else 'waiting' }}.</p><p>Verification delivery: {{ row.delivery }}. Expires {{ row.expires_at|localtime }}.</p>
+{% if row.delivery=='failed' %}<p role="alert">Delivery failed. Cancel and create a new request to retry.</p>{% endif %}
+{% if row.status=='pending' and row.expires_at>at %}<form method="post">{{ csrf() }}<button class="identity-button" name="action" value="preview">Preview merge</button> <button class="identity-button" name="action" value="cancel">Cancel request</button></form>{% endif %}</section>
+{% if plan %}<section class="identity-card"><h2>Review merge impact</h2>
+<p><strong>{{ plan.source }} loses login access. {{ plan.survivor }} keeps its password, profile and stable account identity.</strong> Both accounts are signed out and their outstanding security tokens revoked. Source network exemptions are revoked; the stronger Community mute is preserved.</p>
+<p>All source private Community history becomes accessible to the survivor. Distinct gameplay objects remain distinct. Historical provenance is retained in the receipt. Matching device sightings are combined, preserving their earliest and latest timestamps. Pending email changes and signup approvals are cancelled.</p>
+<p>A verified private database backup is required and kept for 30 days. Files are preserved; their ownership moves in the database. Recovery requires an operator restore of the full recovery point, with any intervening writes reconciled. There is no per-account undo.</p>
+<div class="identity-table-wrap"><table class="identity-table"><thead><tr><th>Source references</th><th>Rows</th></tr></thead><tbody>{% for name,count in plan.counts.items() if count %}<tr><td>{{ name.split('.')[0]|replace('identity_', '')|replace('_',' ')|title }}{% if name.startswith('community_mentions.') %} · {{ 'Author' if name.endswith('author_id') else 'Recipient' }}{% endif %}</td><td>{{ count }}</td></tr>{% else %}<tr><td colspan="2">No source rows to transfer or revoke.</td></tr>{% endfor %}</tbody></table></div>
+<p>{{ plan.artifacts.source|length }} source match snapshots and {{ plan.archives.source|length }} exported archives retain their bytes and move access to the survivor.</p>
+<h3>Renames ({{ plan.renames|length }})</h3>{% for item in plan.renames %}<p>{{ item.table|replace('_',' ') }} · {{ item.key }} · {{ item.field }}: {{ item.old }} → {{ item.new }}</p>{% else %}<p>No naming conflicts.</p>{% endfor %}
+<h3>Discarded duplicate rows ({{ plan.losses|length }})</h3><p>Each listed source row is discarded; the survivor's value wins.</p>{% for item in plan.losses %}<p>{{ item.table|replace('_',' ') }} · source {{ item.key }} → survivor {{ item.survivor_key }} · {{ item.reason }}</p>{% else %}<p>No conflicting rows are discarded.</p>{% endfor %}
+<form method="post" class="identity-form">{{ csrf() }}<input type="hidden" name="action" value="apply"><input type="hidden" name="token" value="{{ token }}"><label>Type the exact survivor email<input name="confirmed_email" required autocomplete="off"></label><label class="identity-check"><input type="checkbox" name="confirmed" value="yes" required>I reviewed common ownership, private-history access, renames, data losses and recovery limitations.</label><p>Preview expires in 15 minutes. Changed data requires a fresh preview.</p><button class="identity-button">Confirm account merge</button></form></section>{% endif %}
+{% if receipt %}<section class="identity-card"><h2>Merge completed</h2><p>Completed {{ row.completed_at|localtime }}. Source login is retired and both accounts' sessions revoked.</p><p>Receipt: {{ row.id }} · Plan version {{ receipt.version }}</p><p>{{ receipt.renames|length }} renamed fields · {{ receipt.losses|length }} discarded duplicate rows.</p><a href="{{ url_for('admin_user_detail',user_email=row.survivor_address) }}">Open survivor account</a></section>{% endif %}
+{% endif %}</div>
+{% endblock %}

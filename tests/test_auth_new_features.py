@@ -33,6 +33,13 @@ from database.models import (
 
 def _post_login(client, email, password, remember_me=False):
     """POST to /login with the given credentials."""
+    # Shared QA fixtures use locally generated credentials, never a fixed
+    # password. Preserve deliberately incorrect-password inputs.
+    if password == "Password123!":
+        from scripts.dev_test_accounts import ACCOUNTS, load_credentials
+        key = next((key for key, spec in ACCOUNTS.items() if spec['email'] == email), None)
+        if key:
+            password = load_credentials()['accounts'][key]['password']
     data = {"email": email, "password": password}
     if remember_me:
         data["remember_me"] = "on"
@@ -562,8 +569,8 @@ class TestEmailChange:
             user = db.session.get(User, regular_user.id)
             assert user.pending_email is None
 
-    def test_request_email_change_success_sets_pending_fields(self, authenticated_client, regular_user, app):
-        """A valid request sets pending_email and pending_email_token on the user row."""
+    def test_retired_email_change_request_does_not_issue_proof(self, authenticated_client, regular_user, app):
+        """Ordinary voluntary changes now require the admin ownership workflow."""
         authenticated_client.post(
             "/account/settings/request-email-change",
             data={
@@ -575,12 +582,9 @@ class TestEmailChange:
 
         with app.app_context():
             user = db.session.get(User, regular_user.id)
-            assert user.pending_email == "brand-new@example.com"
-            assert user.pending_email_token is not None
-            assert user.pending_email_token_expires is not None
-            # Token should expire ~6 hours from now
-            delta = user.pending_email_token_expires - datetime.utcnow()
-            assert timedelta(hours=5, minutes=58) < delta < timedelta(hours=6, minutes=2)
+            assert user.pending_email is None
+            assert user.pending_email_token is None
+            assert user.pending_email_token_expires is None
 
     def test_confirm_email_change_invalid_token_rejected(self, client):
         """An invalid token to /account/confirm-email-change must flash an error."""
@@ -611,8 +615,8 @@ class TestEmailChange:
         assert response.status_code == 200
         assert b"expired" in response.data.lower()
 
-    def test_confirm_email_change_valid_token_changes_pk(self, client, app, regular_user):
-        """Clicking a valid confirmation link changes the user's email (PK) and logs them out."""
+    def test_retired_confirmation_cannot_change_identity(self, client, app, regular_user):
+        """A legacy proof cannot bypass the verified Feature 8 workflow."""
         new_email = "confirmed-new@example.com"
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
@@ -631,22 +635,11 @@ class TestEmailChange:
         assert response.status_code == 200
 
         with app.app_context():
-            # Old email must no longer exist
-            old_user = db.session.get(User, regular_user.id)
-            assert old_user is None
+            assert db.session.get(User, regular_user.id) is not None
+            assert db.session.get(User, new_email) is None
 
-            # New email must now be the PK
-            new_user = db.session.get(User, new_email)
-            assert new_user is not None
-
-    def test_confirm_email_change_with_existing_team_succeeds(self, client, app, regular_user):
-        """Regression: confirming an email change must not trip the FK on teams.user_id.
-
-        Previously the cascade UPDATEs ran in child-first order while SQLite enforced
-        FKs per-statement, so the very first child UPDATE blew up with a FOREIGN KEY
-        constraint failure when the user owned any teams. The function now defers FK
-        checks to commit time on SQLite. See Issue #159.
-        """
+    def test_retired_confirmation_preserves_team_owner(self, client, app, regular_user):
+        """Legacy confirmation cannot transfer the account or its owned teams."""
         new_email = "team-owner-new@example.com"
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
@@ -666,14 +659,14 @@ class TestEmailChange:
         assert response.status_code == 200
 
         with app.app_context():
-            assert db.session.get(User, regular_user.id) is None
-            assert db.session.get(User, new_email) is not None
+            assert db.session.get(User, regular_user.id) is not None
+            assert db.session.get(User, new_email) is None
             team = Team.query.filter_by(name="Test XI").first()
             assert team is not None
-            assert team.user_id == new_email
+            assert team.user_id == regular_user.id
 
-    def test_confirm_email_change_clears_pending_fields(self, client, app, regular_user):
-        """After a successful email change the pending_email_* columns are cleared."""
+    def test_retired_confirmation_clears_proof_without_changing_identity(self, client, app, regular_user):
+        """Retired confirmation invalidates its legacy proof without changing identity."""
         new_email = "clean-pending@example.com"
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
@@ -688,11 +681,11 @@ class TestEmailChange:
         client.get(f"/account/confirm-email-change?token={raw_token}", follow_redirects=True)
 
         with app.app_context():
-            new_user = db.session.get(User, new_email)
-            assert new_user is not None
-            assert new_user.pending_email is None
-            assert new_user.pending_email_token is None
-            assert new_user.pending_email_token_expires is None
+            assert db.session.get(User, new_email) is None
+            user = db.session.get(User, regular_user.id)
+            assert user.pending_email is None
+            assert user.pending_email_token is None
+            assert user.pending_email_token_expires is None
 
     def test_cancel_email_change_clears_pending_fields(self, authenticated_client, regular_user, app):
         """POSTing to cancel-email-change clears all pending_email_* fields."""

@@ -42,7 +42,7 @@ ALLOWED = COMMUNITY | SUPPORT
 PUBLIC = frozenset({'static', 'login', 'logout', 'auth_challenge', 'register', 'admin_stop_impersonation',
     'verify_email', 'verify_email_pending', 'resend_verification', 'forgot_password', 'reset_password',
     'identity_device_privacy', 'identity_network.privacy',
-    'identity_signup.appeal', 'identity_signup.verify', 'identity_signup.status', 'identity_email.verify'})
+    'identity_signup.appeal', 'identity_signup.verify', 'identity_signup.status', 'identity_email.verify', 'identity_merge.verify', 'identity_campaign.member'})
 
 
 def enabled():
@@ -157,7 +157,7 @@ def guard():
     if state == 'allowed':
         return None
     if state in ('force_verify', 'unverified'):
-        allowed = {'force_verify_email', 'force_verify_email_send', 'force_verify_email_change'} if state == 'force_verify' else set()
+        allowed = {'force_verify_email', 'force_verify_email_send', 'force_verify_email_change', 'force_change_password'} if state == 'force_verify' else set()
         if request.endpoint in allowed:
             return None
         if not json_request:
