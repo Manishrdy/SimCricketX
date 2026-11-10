@@ -16,6 +16,7 @@ import io
 import json
 from pathlib import Path
 import sqlite3
+import sys
 import tempfile
 from unittest.mock import patch
 
@@ -42,12 +43,26 @@ def inventory(registered, directory=None):
 
 
 def fingerprint(path):
-    """Hash logical contents, not SQLite pages (which change on no-op writes)."""
+    """Hash logical contents, not SQLite pages (which change on no-op writes).
+
+    Hashes schema + raw rows straight from the cursor. This used to use
+    iterdump(), which renders every row to SQL text in Python and was the
+    dominant cost of verification on a large database.
+    """
     digest = hashlib.sha256()
     with contextlib.closing(sqlite3.connect(str(path))) as conn:
-        for statement in conn.iterdump():
-            digest.update(statement.encode('utf-8'))
-            digest.update(b'\n')
+        objects = conn.execute(
+            "SELECT type, name, tbl_name, sql FROM sqlite_master "
+            "WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name").fetchall()
+        for obj in objects:
+            digest.update(repr(obj).encode('utf-8'))
+            if obj[0] == 'table':
+                cursor = conn.execute('SELECT * FROM "{}"'.format(obj[1].replace('"', '""')))
+                while True:
+                    rows = cursor.fetchmany(5000)
+                    if not rows:
+                        break
+                    digest.update(repr(rows).encode('utf-8'))
     return digest.hexdigest()
 
 
@@ -123,9 +138,14 @@ def _runner(name, loader, db, app, snapshot):
     return loader()(db, app)
 
 
-def rehearse(name, action, snapshot):
-    """A swallowed migration exception must not be mistaken for success."""
-    before = fingerprint(snapshot)
+def rehearse(name, action, snapshot, state=None):
+    """A swallowed migration exception must not be mistaken for success.
+
+    ``state`` carries the snapshot's last fingerprint between calls: one step's
+    "after" is the next step's "before", so each step costs one hash, not two.
+    """
+    state = state if state is not None else {}
+    before = state.get('fp') or fingerprint(snapshot)
     logged = []
     output = io.StringIO()
 
@@ -154,11 +174,15 @@ def rehearse(name, action, snapshot):
         try:
             action()
             if logged or 'FAILED' in output.getvalue() or 'SKIPPED' in output.getvalue():
+                state.pop('fp', None)
                 return {'name': name, 'status': 'ERROR', 'detail': 'Migration reported an error or skipped work; completion is unverified.'}
         except Exception as exc:
             # Avoid printing SQL parameters, which can contain production data.
+            state.pop('fp', None)
             return {'name': name, 'status': 'ERROR', 'detail': type(exc).__name__ + ': migration rehearsal failed; completion is unverified.'}
-    changed = before != fingerprint(snapshot)
+    after = fingerprint(snapshot)
+    state['fp'] = after
+    changed = before != after
     return {'name': name, 'status': 'PENDING' if changed else 'CURRENT',
             'detail': 'Would change the snapshot.' if changed else 'No logical database changes.'}
 
@@ -214,8 +238,13 @@ def verify(db_path):
                                 'detail': '; '.join(missing) if missing else 'Required tables, columns, indexes, uniqueness and foreign keys exist.'})
             steps = [(name, loader) for name, loader in MIGRATIONS if name not in MANUAL]
             steps.extend((name, _loader('migrations.' + name)) for name in EXTRA if name not in registry)
-            for name, loader in steps:
-                results.append(rehearse(name, lambda n=name, l=loader: _runner(n, l, db, app, snapshot), snapshot))
+            state = {}
+            for number, (name, loader) in enumerate(steps, 1):
+                # stderr, so --json output stays machine-readable.
+                print('[{}/{}] rehearsing {} ...'.format(number, len(steps), name),
+                      file=sys.stderr, flush=True)
+                results.append(rehearse(name, lambda n=name, l=loader: _runner(n, l, db, app, snapshot),
+                                        snapshot, state))
         finally:
             with app.app_context():
                 db.session.remove()
