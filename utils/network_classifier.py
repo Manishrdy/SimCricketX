@@ -1,4 +1,6 @@
 """Privacy-minimal ProxyCheck v3 adapter and short-lived classification cache."""
+from __future__ import annotations
+
 import csv
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
