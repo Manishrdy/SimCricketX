@@ -226,10 +226,15 @@ def main(argv=None):
     parser.add_argument('--db', required=True, help='Existing SQLite database; opened read-only.')
     parser.add_argument('--json', action='store_true', help='Machine-readable report.')
     parser.add_argument('--strict', action='store_true', help='Manual review items also make the check exit 2.')
+    parser.add_argument('--verbose', action='store_true',
+                        help='Print the full traceback if verification itself fails (may include SQL text).')
     args = parser.parse_args(argv)
     try:
         results = verify(args.db)
     except Exception as exc:
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
         results = [{'name': 'verification', 'status': 'ERROR',
                     'detail': type(exc).__name__ + ': unable to complete verification; check database path and dependencies.'}]
     code = exit_code(results, args.strict)
