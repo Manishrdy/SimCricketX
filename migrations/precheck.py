@@ -113,10 +113,6 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # team and tournament deletion no longer needs application-layer cleanup
     # to avoid IntegrityError. See migration docstring for the action matrix.
     ("add_team_match_fk_actions", _loader("migrations.add_team_match_fk_actions")),
-    # Drop leftover category/data_json columns on tournament_player_stats_cache.
-    # Dry-run on boot (report only); apply via the CLI / standalone prod script.
-    ("rebuild_tournament_player_stats_cache",
-     _loader("migrations.rebuild_tournament_player_stats_cache")),
     # Remove the retired manual issue-report storage (replaced first by the
     # support chat, now by the community board).
     ("drop_issue_reports",       _loader("migrations.drop_issue_reports")),
@@ -183,10 +179,13 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # FC in tournaments: tournament_teams.drawn, tracked separately from tied.
     ("add_tournament_team_drawn_column",
      _loader("migrations.add_tournament_team_drawn_column")),
-    # FC-native tournament statistics (200s/300s, BBI/BBM, 5WI/10WM and
-    # detailed cache parity with direct scorecard aggregation).
-    ("extend_fc_statistics_cache",
-     _loader("migrations.extend_fc_statistics_cache")),
+    # tournament_player_stats_cache is retired (statistics read scorecards
+    # directly). Boot only empties it so its FK rows cannot block deletes;
+    # dropping the table needs an explicit
+    # `python migrations/drop_tournament_player_stats_cache.py --db <path> --apply`.
+    # (Its rebuild/extend migrations are no longer registered.)
+    ("drop_tournament_player_stats_cache",
+     _loader("migrations.drop_tournament_player_stats_cache")),
     # teams.updated_at — last-edit timestamp so /teams/manage can show
     # "Last updated ..." instead of the creation date for teams that changed.
     ("add_team_updated_at",      _loader("migrations.add_team_updated_at")),

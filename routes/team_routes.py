@@ -28,7 +28,6 @@ def register_team_routes(
     DBMasterPlayer=None,
     DBUserPlayer=None,
     MatchScorecard=None,
-    TournamentPlayerStatsCache=None,
     MatchPartnership=None,
     DBMatch=None,
     TournamentTeam=None,
@@ -108,14 +107,6 @@ def register_team_routes(
                     MatchPartnership.batsman1_id.in_(player_ids),
                     MatchPartnership.batsman2_id.in_(player_ids),
                 )
-            ).delete(synchronize_session=False)
-
-        if TournamentPlayerStatsCache is not None:
-            cache_filters = [TournamentPlayerStatsCache.team_id == team_id]
-            if player_ids:
-                cache_filters.append(TournamentPlayerStatsCache.player_id.in_(player_ids))
-            db.session.query(TournamentPlayerStatsCache).filter(
-                or_(*cache_filters)
             ).delete(synchronize_session=False)
 
         if MatchScorecard is not None:

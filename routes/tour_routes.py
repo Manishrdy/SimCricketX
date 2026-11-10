@@ -118,7 +118,7 @@ def register_tour_routes(app, limiter, cleanup_match, delete_match_json):
                 fixture.match = None
             db.session.flush()
             for match in matches:
-                cleanup_match(match, rebuild_player_cache=False, delete_json=False)
+                cleanup_match(match, delete_json=False)
                 db.session.delete(match)
             db.session.delete(tour)
             db.session.commit()

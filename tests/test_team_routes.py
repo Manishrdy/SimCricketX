@@ -19,7 +19,6 @@ from database.models import (
     MatchScorecard,
     MatchPartnership,
     Tournament,
-    TournamentPlayerStatsCache,
 )
 
 
@@ -227,12 +226,6 @@ class TestTeamDeletionRoute:
             runs=12,
             balls=8,
         ))
-        db.session.add(TournamentPlayerStatsCache(
-            tournament_id=tournament.id,
-            player_id=player.id,
-            team_id=team_id,
-            matches_played=1,
-        ))
         db.session.commit()
 
         response = authenticated_client.post(
@@ -245,7 +238,6 @@ class TestTeamDeletionRoute:
         assert db.session.get(DBTeam, team_id) is None
         assert MatchScorecard.query.filter_by(team_id=team_id).count() == 0
         assert MatchPartnership.query.filter_by(match_id=match.id).count() == 0
-        assert TournamentPlayerStatsCache.query.filter_by(team_id=team_id).count() == 0
 
     def test_delete_team_unauthenticated(self, client, test_team):
         """Test team deletion without authentication redirects."""

@@ -28,7 +28,6 @@ def ensure_schema(engine, db_obj=None):
 
     # ── Ensure all tables exist before running table-specific DDL/backfills ──
     all_required_tables = (
-        "tournament_player_stats_cache",
         "match_partnerships", "failed_login_attempts",
         "blocked_ips", "active_sessions", "site_counters",
         "login_history", "ip_whitelist", "announcement_banner",
@@ -39,7 +38,7 @@ def ensure_schema(engine, db_obj=None):
     if missing and db_obj is not None:
         # Import all models so SQLAlchemy knows about them
         from database.models import (  # noqa: F401
-            TournamentPlayerStatsCache, MatchPartnership,
+            MatchPartnership,
             FailedLoginAttempt, BlockedIP, ActiveSession, SiteCounter,
             LoginHistory, IPWhitelistEntry, AnnouncementBanner,
             UserBannerDismissal, AuthEventLog, ExceptionLog,
@@ -170,57 +169,6 @@ def ensure_schema(engine, db_obj=None):
         "series_match_number":"INTEGER",
         "standings_applied":  "BOOLEAN DEFAULT 0",
     })
-
-    # ── tournament_player_stats_cache ──
-    # Older DBs may have an early, partial version of this table.
-    # Keep definitions sqlite-safe (avoid NOT NULL on ALTER for existing rows).
-    _add_missing_cols("tournament_player_stats_cache", {
-        "team_id": "INTEGER",
-        "matches_played": "INTEGER DEFAULT 0",
-        "innings_batted": "INTEGER DEFAULT 0",
-        "runs_scored": "INTEGER DEFAULT 0",
-        "balls_faced": "INTEGER DEFAULT 0",
-        "fours": "INTEGER DEFAULT 0",
-        "sixes": "INTEGER DEFAULT 0",
-        "not_outs": "INTEGER DEFAULT 0",
-        "highest_score": "INTEGER DEFAULT 0",
-        "fifties": "INTEGER DEFAULT 0",
-        "centuries": "INTEGER DEFAULT 0",
-        "batting_average": "FLOAT DEFAULT 0.0",
-        "batting_strike_rate": "FLOAT DEFAULT 0.0",
-        "innings_bowled": "INTEGER DEFAULT 0",
-        "overs_bowled": "VARCHAR(10) DEFAULT '0.0'",
-        "runs_conceded": "INTEGER DEFAULT 0",
-        "wickets_taken": "INTEGER DEFAULT 0",
-        "maidens": "INTEGER DEFAULT 0",
-        "best_bowling_wickets": "INTEGER DEFAULT 0",
-        "best_bowling_runs": "INTEGER DEFAULT 0",
-        "five_wicket_hauls": "INTEGER DEFAULT 0",
-        "bowling_average": "FLOAT DEFAULT 0.0",
-        "bowling_economy": "FLOAT DEFAULT 0.0",
-        "bowling_strike_rate": "FLOAT DEFAULT 0.0",
-        "catches": "INTEGER DEFAULT 0",
-        "run_outs": "INTEGER DEFAULT 0",
-        "stumpings": "INTEGER DEFAULT 0",
-    })
-
-    # Best-effort backfill for newly added team_id using players.team_id.
-    # Safe to run repeatedly; only fills NULL values.
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("""
-                UPDATE tournament_player_stats_cache
-                SET team_id = (
-                    SELECT players.team_id
-                    FROM players
-                    WHERE players.id = tournament_player_stats_cache.player_id
-                )
-                WHERE team_id IS NULL
-            """))
-    except Exception:
-        log_exception(source="sqlite", context={"scope": "fix_db_schema_backfill_team_id"})
-        # Keep schema guard non-fatal during startup.
-        pass
 
     # ── auth_event_log ──
     _add_missing_cols("auth_event_log", {

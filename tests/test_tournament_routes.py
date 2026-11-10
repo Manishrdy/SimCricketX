@@ -13,7 +13,6 @@ from database.models import (
     Tournament,
     TournamentFixture,
     TournamentTeam,
-    TournamentPlayerStatsCache,
     Match as DBMatch,
     MatchScorecard,
     MatchPartnership,
@@ -375,10 +374,8 @@ class TestTournamentDashboardStandingsVisibility:
 class TestTournamentDashboardLeaders:
     """
     Regression tests for the "Most Runs" / "Most Wickets" dashboard
-    widgets. These are computed live over MatchScorecard rather than via
-    TournamentPlayerStatsCache, which lags one match behind (see the
-    comment in tournament_dashboard()) -- so they're verified directly
-    against the rendered dashboard rather than the cache table.
+    widgets. These are computed live over MatchScorecard, so they're
+    verified directly against the rendered dashboard.
     """
 
     def _make_match(self, tournament_id, home_team, away_team, user_id):
@@ -415,7 +412,7 @@ class TestTournamentDashboardLeaders:
             ),
             # Both bowlers take 3 wickets — bowler_b concedes fewer runs, so
             # must rank first (mirrors the existing "best bowling" tiebreak
-            # convention already used in _update_player_stats_cache).
+            # convention used across the statistics queries).
             MatchScorecard(
                 match_id=match1.id, player_id=bowler_a.id, team_id=test_team.id,
                 innings_number=2, record_type="bowling", wickets=3, runs_conceded=25, balls_bowled=24,
@@ -704,7 +701,6 @@ class TestTournamentDeletionRoute:
             assert db.session.get(Tournament, tournament_id) is None
             assert TournamentTeam.query.filter_by(tournament_id=tournament_id).count() == 0
             assert TournamentFixture.query.filter_by(tournament_id=tournament_id).count() == 0
-            assert TournamentPlayerStatsCache.query.filter_by(tournament_id=tournament_id).count() == 0
 
             assert db.session.get(DBMatch, match_id) is None
             assert MatchScorecard.query.filter_by(match_id=match_id).count() == 0
@@ -816,23 +812,17 @@ class TestResimulateStatsReversal:
     reverse EVERY stats surface it affected, not just some of them:
       - player career stats (Player.total_runs/total_wickets/matches_played
         via reverse_player_aggregates)
-      - the tournament-scoped TournamentPlayerStatsCache (used by the
-        Statistics page's tournament filter)
+      - the tournament-scoped statistics behind the Statistics page's
+        tournament filter (aggregated live from MatchScorecard)
       - the dashboard's live "Most Runs"/"Most Wickets"/MOM widgets, which
         self-heal automatically once the underlying MatchScorecard/Match
         rows are deleted
     and replaying the same fixture afterward must produce clean, correctly
     isolated stats with no contamination left over from the reversed match.
-
-    Before this fix, TournamentPlayerStatsCache was never touched on
-    reversal (_update_player_stats_cache is only called from the forward
-    update_standings() path), so a resimulated match's runs/wickets stayed
-    stuck in a player's cached tournament stats indefinitely -- until, if
-    ever, that exact player played another match in the same tournament.
     """
 
     @pytest.mark.parametrize("match_format", ["T20", "FC"])
-    def test_resimulate_reverses_career_and_cache_then_replay_is_clean(
+    def test_resimulate_reverses_career_and_tournament_stats_then_replay_is_clean(
         self, authenticated_client, regular_user, test_team, test_team_2, match_format, ready_tournament_teams
     ):
         engine = TournamentEngine()
@@ -879,20 +869,12 @@ class TestResimulateStatsReversal:
         db.session.commit()
 
         # This match is the only one either player has played *in this
-        # tournament*, so their cache should read exactly this match's
-        # contribution -- mirrors what the forward update_standings() path
-        # would have produced.
-        engine.rebuild_player_stats_cache(tournament.id, {batter.id, bowler.id})
-        db.session.commit()
-
-        batter_cache = TournamentPlayerStatsCache.query.filter_by(
-            tournament_id=tournament.id, player_id=batter.id
-        ).first()
-        bowler_cache = TournamentPlayerStatsCache.query.filter_by(
-            tournament_id=tournament.id, player_id=bowler.id
-        ).first()
-        assert batter_cache.runs_scored == 60
-        assert bowler_cache.wickets_taken == 2
+        # tournament*, so its statistics read exactly this match's numbers.
+        from engine.stats_service import StatsService
+        stats_service = StatsService()
+        stats = stats_service.get_tournament_stats(regular_user.id, tournament.id, match_format)
+        assert stats['batting'][0]['runs'] == 60
+        assert stats['bowling'][0]['wickets'] == 2
 
         # Sanity check: the dashboard's live leaderboards show this match
         # before it's touched.
@@ -918,18 +900,10 @@ class TestResimulateStatsReversal:
         assert refreshed_bowler.matches_played == 1
         assert refreshed_bowler.total_wickets == 1
 
-        # Tournament-cached stats rebuilt to zero -- not left showing the
+        # Tournament statistics are empty again -- not left showing the
         # deleted match's numbers.
-        batter_cache = TournamentPlayerStatsCache.query.filter_by(
-            tournament_id=tournament.id, player_id=batter.id
-        ).first()
-        bowler_cache = TournamentPlayerStatsCache.query.filter_by(
-            tournament_id=tournament.id, player_id=bowler.id
-        ).first()
-        assert batter_cache.runs_scored == 0
-        assert batter_cache.matches_played == 0
-        assert bowler_cache.wickets_taken == 0
-        assert bowler_cache.matches_played == 0
+        stats = stats_service.get_tournament_stats(regular_user.id, tournament.id, match_format)
+        assert stats == stats_service._empty_stats()
 
         # The match and its scorecards are gone entirely.
         assert db.session.get(DBMatch, match_id) is None
@@ -971,18 +945,11 @@ class TestResimulateStatsReversal:
         result = engine.update_standings(new_match, commit=True)
         assert result is True
 
-        # Cache reflects ONLY the new match — no leftover contamination
+        # Tournament statistics reflect ONLY the new match — no contamination
         # from the reversed one (would read 85/85 or similar if it leaked).
-        batter_cache = TournamentPlayerStatsCache.query.filter_by(
-            tournament_id=tournament.id, player_id=batter.id
-        ).first()
-        bowler_cache = TournamentPlayerStatsCache.query.filter_by(
-            tournament_id=tournament.id, player_id=bowler.id
-        ).first()
-        assert batter_cache.runs_scored == 25
-        assert batter_cache.matches_played == 1
-        assert bowler_cache.wickets_taken == 3
-        assert bowler_cache.matches_played == 1
+        stats = stats_service.get_tournament_stats(regular_user.id, tournament.id, match_format)
+        assert (stats['batting'][0]['runs'], stats['batting'][0]['matches']) == (25, 1)
+        assert (stats['bowling'][0]['wickets'], stats['bowling'][0]['matches']) == (3, 1)
 
         response = authenticated_client.get(f"/tournaments/{tournament.id}")
         body = response.data.decode()

@@ -118,9 +118,10 @@ class StatsService:
         """
         Get statistics for a specific tournament.
 
-        Aggregate persisted scorecards, just like overall statistics. The
-        standings cache can be stale because match completion updates standings
-        before archiving scorecards; it is not a reliable source for this view.
+        Aggregate persisted scorecards, just like overall statistics.
+        Scorecards are the only source: the per-tournament player cache that
+        once shadowed them froze whenever it was rebuilt before a match's
+        scorecards were archived, and has been retired.
 
         Args:
             user_id (str): User ID

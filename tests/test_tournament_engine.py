@@ -14,7 +14,6 @@ from database.models import (
     Tournament,
     TournamentTeam,
     TournamentFixture,
-    TournamentPlayerStatsCache,
     Team as DBTeam,
     Match as DBMatch,
     MatchScorecard,
@@ -921,16 +920,16 @@ class TestUpdateStandingsUnresolvedKnockout:
         assert fixture.standings_applied is True
 
 
-class TestCleanupFixtureMatchDataCacheRebuild:
+class TestCleanupFixtureMatchDataClearsTournamentStats:
     """
     Regression test for the OTHER cleanup path: downstream knockout/IPL
     bracket resets go through _cleanup_fixture_match_data (not the route's
-    _cleanup_match_artifacts), which has its own separate wiring for
-    rebuilding TournamentPlayerStatsCache after reversal. Verified
-    directly since it's easy for the two cleanup paths to drift.
+    _cleanup_match_artifacts). Tournament statistics must stop showing the
+    removed match. Verified directly since it's easy for the two cleanup
+    paths to drift.
     """
 
-    def test_cleanup_fixture_match_data_rebuilds_player_cache(
+    def test_cleanup_fixture_match_data_clears_tournament_stats(
         self, app, engine, regular_user, four_teams
     ):
         t = engine.create_tournament(
@@ -960,19 +959,16 @@ class TestCleanupFixtureMatchDataCacheRebuild:
         fixture.match_id = match_id
         db.session.commit()
 
-        engine.rebuild_player_stats_cache(t.id, {batter.id})
-        db.session.commit()
-        cache = TournamentPlayerStatsCache.query.filter_by(
-            tournament_id=t.id, player_id=batter.id
-        ).first()
-        assert cache.runs_scored == 42
+        from engine.stats_service import StatsService
+        service = StatsService()
+        stats = service.get_tournament_stats(regular_user.id, t.id, "T20")
+        assert stats["batting"][0]["runs"] == 42
 
         engine._cleanup_fixture_match_data(fixture)
         db.session.commit()
 
-        db.session.refresh(cache)
-        assert cache.runs_scored == 0
-        assert cache.matches_played == 0
+        assert db.session.get(DBMatch, match_id) is None
+        assert service.get_tournament_stats(regular_user.id, t.id, "T20") == service._empty_stats()
         assert db.session.get(DBMatch, match_id) is None
 
 

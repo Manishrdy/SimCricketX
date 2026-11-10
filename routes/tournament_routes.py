@@ -39,7 +39,6 @@ def register_tournament_routes(
     limiter,
     tournament_engine,
     Tournament,
-    TournamentPlayerStatsCache,
     DBTeam,
     DBMatch,
     DBPlayer,
@@ -55,13 +54,12 @@ def register_tournament_routes(
     # ── Shared helper ─────────────────────────────────────────────────────
 
     def _cleanup_match_artifacts(
-        match, *, reverse_stats=True, rebuild_player_cache=True, delete_json=True
+        match, *, reverse_stats=True, delete_json=True
     ):
         """
         Delete all artifacts for a single DBMatch: reverse career aggregates,
-        remove scorecards/partnerships, optionally delete the JSON file, purge
-        memory cache, and rebuild the affected players' tournament stats cache
-        so it stops showing this (now-deleted) match's runs/wickets.
+        remove scorecards/partnerships, optionally delete the JSON file, and
+        purge the memory cache.
         Caller is responsible for deleting the DBMatch itself and committing.
 
         JSON deletion is not transactional. Callers that can roll back the
@@ -71,7 +69,6 @@ def register_tournament_routes(
         match_id = match.id
 
         scorecards = MatchScorecard.query.filter_by(match_id=match_id).all()
-        player_ids = {c.player_id for c in scorecards}
 
         # 1. Reverse player career stats
         if reverse_stats and scorecards:
@@ -92,12 +89,6 @@ def register_tournament_routes(
         # 4. Purge from in-memory cache
         with MATCH_INSTANCES_LOCK:
             MATCH_INSTANCES.pop(match_id, None)
-
-        # 5. Rebuild the affected players' tournament stats cache. Skipped
-        # when the whole tournament (and its cache rows) is being deleted
-        # right after — rebuilding first would just be discarded work.
-        if rebuild_player_cache and player_ids and match.tournament_id:
-            tournament_engine.rebuild_player_stats_cache(match.tournament_id, player_ids)
 
     def _delete_match_json(match):
         """Remove match JSON file from disk using stored path or fallback scan."""
@@ -375,12 +366,9 @@ def register_tournament_routes(
 
         # Tournament Leaders — live aggregates within this tournament's
         # matches, top 5 each. Computed directly over DBMatch/MatchScorecard
-        # rather than via TournamentPlayerStatsCache: that cache is only
-        # rebuilt once per match, but update_standings() (which triggers
-        # the rebuild) runs before that same match's MatchScorecard rows
-        # are persisted (Step 10 vs Step 13 in the match-completion flow in
-        # app.py), so the cache always lags one match behind for whoever
-        # just played. Querying live avoids that lag.
+        # scorecards are the single source of truth for player statistics.
+        # (A derived per-tournament cache table used to shadow them and went
+        # stale; it was retired — do not reintroduce one.)
         motm_rows = (
             db.session.query(DBMatch.motm_player_id, sa_func.count(DBMatch.id))
             .filter(
@@ -560,17 +548,12 @@ def register_tournament_routes(
                 ).update({TournamentFixture.match_id: None}, synchronize_session=False)
 
             for m in tournament_matches:
-                # The whole tournament (and its TournamentPlayerStatsCache
-                # rows) is deleted right after this loop, so rebuilding the
-                # per-match player cache here would just be discarded work.
                 # JSON is removed after commit — disk deletes cannot roll back.
-                _cleanup_match_artifacts(
-                    m, rebuild_player_cache=False, delete_json=False
-                )
+                _cleanup_match_artifacts(m, delete_json=False)
                 db.session.delete(m)
 
-            # Tournament cascades to TournamentTeam, TournamentFixture, and
-            # TournamentPlayerStatsCache via relationship cascade on the model.
+            # Tournament cascades to TournamentTeam and TournamentFixture via
+            # relationship cascade on the model.
             db.session.delete(t)
             db.session.commit()
             for m in tournament_matches:

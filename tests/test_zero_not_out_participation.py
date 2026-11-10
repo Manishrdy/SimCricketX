@@ -4,10 +4,9 @@ from datetime import datetime
 
 import pytest
 from database import db
-from database.models import Match, MatchScorecard, Player, Tournament, TournamentFixture, TournamentPlayerStatsCache
+from database.models import Match, MatchScorecard, Player, Tournament, TournamentFixture
 from engine.format_catalog import SUPPORTED_FORMATS, default_scheduled_overs, squad_format
 from engine.stats_service import StatsService
-from engine.tournament_engine import TournamentEngine
 from engine.match import Match as LiveMatch
 from match_archiver import MatchArchiver
 from test_super_over_career_stats import _make_match
@@ -62,21 +61,15 @@ def test_zero_not_out_participation_across_formats(app, regular_user, test_team,
     assert batting['average'] is batting['strike_rate'] is None
     assert len(compared['players'][0]['formats'][fmt]['recent']['batting']) == 1
     assert compared['players'][1]['formats'][fmt]['batting'] == {}
-    TournamentEngine().rebuild_player_stats_cache(tournament.id, {p.id for p in players})
-    for player in (zero_not_out, dnb):
-        row = TournamentPlayerStatsCache.query.filter_by(tournament_id=tournament.id, player_id=player.id).one()
-        assert (row.innings_batted, row.not_outs) == ((1, 1) if player == zero_not_out else (0, 0))
-        assert row.batting_average is row.batting_strike_rate is None
     cached = service.get_tournament_stats(regular_user.id, tournament.id, match_format=fmt)
     cached_batting = {row['player_id']: row for row in cached['batting']}
     assert dnb.id not in cached_batting
     row = cached_batting[zero_not_out.id]
     assert (row['innings'], row['not_outs'], row['runs'], row['balls']) == (1, 1, 0, 0)
     assert row['average'] is row['strike_rate'] is None
-    out_row = TournamentPlayerStatsCache.query.filter_by(tournament_id=tournament.id, player_id=zero_out.id).one()
-    faced_row = TournamentPlayerStatsCache.query.filter_by(tournament_id=tournament.id, player_id=faced_dot.id).one()
-    assert (out_row.innings_batted, out_row.not_outs) == (1, 0)
-    assert (faced_row.innings_batted, faced_row.not_outs) == (1, 1)
+    out_row, faced_row = cached_batting[zero_out.id], cached_batting[faced_dot.id]
+    assert (out_row['innings'], out_row['not_outs']) == (1, 0)
+    assert (faced_row['innings'], faced_row['not_outs']) == (1, 1)
 
 
 @pytest.mark.parametrize('fmt', SUPPORTED_FORMATS)

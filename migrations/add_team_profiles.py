@@ -197,8 +197,8 @@ def _step5_assign_orphaned_players(conn):
     match history) plus a profile row recreated through the team UI. The two
     are MERGED — history rows re-pointed, career aggregates combined — and only
     then is the legacy row deleted. A bare DELETE is never issued:
-    match_partnerships and tournament_player_stats_cache reference players(id)
-    without ON DELETE CASCADE, so it fails whenever the orphan has history, and
+    match_partnerships references players(id) without ON DELETE CASCADE, so
+    it fails whenever the orphan has history, and
     match_scorecards' CASCADE would silently erase career scorecards.
 
     Each orphan runs in its own SAVEPOINT so one bad row cannot roll back the
@@ -265,25 +265,19 @@ def _merge_duplicate_player(conn, orphan_id, survivor_id):
         {"sid": survivor_id, "oid": orphan_id},
     )
 
-    # Tournament stats cache: where BOTH rows appear in the same tournament the
-    # merged numbers cannot be derived from cache rows alone, so drop that
-    # tournament's cache entirely — the stats service recomputes from
-    # match_scorecards, which is authoritative after the re-point above.
-    # Remaining orphan rows (no overlap) are simply re-pointed.
-    conn.execute(text("""
-        DELETE FROM tournament_player_stats_cache
-        WHERE tournament_id IN (
-            SELECT o.tournament_id
-            FROM tournament_player_stats_cache o
-            JOIN tournament_player_stats_cache s
-              ON s.tournament_id = o.tournament_id AND s.player_id = :sid
-            WHERE o.player_id = :oid
+    # The retired tournament stats cache (see
+    # migrations/drop_tournament_player_stats_cache.py) may still exist on a
+    # database that has not dropped it yet. Its rows reference players(id)
+    # with no ON DELETE action, so the orphan's must go before the DELETE
+    # below. Nothing reads them: statistics come from match_scorecards.
+    if conn.execute(text(
+        "SELECT 1 FROM sqlite_master WHERE type='table' "
+        "AND name='tournament_player_stats_cache'"
+    )).fetchone():
+        conn.execute(
+            text("DELETE FROM tournament_player_stats_cache WHERE player_id = :oid"),
+            {"oid": orphan_id},
         )
-    """), {"sid": survivor_id, "oid": orphan_id})
-    conn.execute(
-        text("UPDATE tournament_player_stats_cache SET player_id = :sid WHERE player_id = :oid"),
-        {"sid": survivor_id, "oid": orphan_id},
-    )
 
     _combine_career_stats(conn, orphan_id, survivor_id)
 

@@ -19,12 +19,10 @@ from database.models import (
 )
 from engine.stats_service import StatsService
 from engine.stats_aggregator import StatsAggregator
-from engine.tournament_engine import TournamentEngine
 from match_archiver import MatchArchiver
 from database.models import (
     Tournament,
     TournamentFixture,
-    TournamentPlayerStatsCache,
 )
 
 
@@ -555,9 +553,9 @@ class TestStumpingsFieldingStats:
             f"{result['batting']['strike_rate']!r}"
         )
 
-    def test_tournament_cache_dismissals_consistent_with_innings(self, regular_user):
-        """Cache rebuild must apply the same valid-innings filter to both
-        innings_batted and not_outs so `dismissals = innings - not_outs` is
+    def test_tournament_dismissals_consistent_with_innings(self, regular_user):
+        """Tournament stats must apply the same valid-innings filter to both
+        innings and not_outs so `dismissals = innings - not_outs` is
         internally consistent. Before the fix, a non-striker scorecard
         (balls=0, runs>0, not out) was counted in innings but excluded from
         not_outs, so dismissals over-counted by 1 and the average was
@@ -589,7 +587,6 @@ class TestStumpingsFieldingStats:
             {"runs": 25, "balls": 20, "is_out": False},  # standard not-out
             {"runs": 2,  "balls": 0,  "is_out": False},  # non-striker
         ]
-        last_match_id = None
         for spec in cards:
             mid = str(uuid.uuid4())
             db.session.add(DBMatch(
@@ -608,28 +605,18 @@ class TestStumpingsFieldingStats:
                 innings_number=1, record_type="batting",
                 runs=spec["runs"], balls=spec["balls"], is_out=spec["is_out"],
             ))
-            last_match_id = mid
         db.session.commit()
 
-        engine = TournamentEngine()
-        last_match = db.session.get(DBMatch, last_match_id)
-        engine._update_player_stats_cache(last_match)
-        db.session.commit()
-
-        cache = TournamentPlayerStatsCache.query.filter_by(
-            tournament_id=tournament.id, player_id=batter.id
-        ).first()
-        assert cache is not None
+        svc = StatsService(logging.getLogger(__name__))
+        row = svc.get_tournament_stats(regular_user.id, tournament.id, "T20")["batting"][0]
 
         # 5 valid innings (all have runs>0 OR is_out), 2 not-outs (the 25*
         # and the 2-from-non-striker), 3 actual dismissals.
-        assert cache.innings_batted == 5
-        assert cache.not_outs == 2
-        dismissals = cache.innings_batted - cache.not_outs
-        assert dismissals == 3
-        # Avg = total runs / dismissals = 107 / 3 ≈ 35.67. Before the fix,
-        # dismissals=4 would have given 26.75.
-        assert cache.batting_average == round(107 / 3, 2)
+        assert row["innings"] == 5
+        assert row["not_outs"] == 2
+        # Avg = total runs / dismissals = 107 / 3 ≈ 35.67. Counting the
+        # non-striker as dismissed (dismissals=4) would give 26.75.
+        assert row["average"] == round(107 / 3, 2)
 
     def test_statistics_route_defaults_to_t20_not_all(self, authenticated_client):
         """The 'All formats' option was removed — visiting /statistics with
@@ -795,8 +782,7 @@ class TestStatisticsRegressionFixes:
         db.session.add(t)
         db.session.flush()
 
-        # Persist the source scorecards. Cached fielding totals are deliberately
-        # stale: the statistics page must rank the current dismissals instead.
+        # Persist the source scorecards the statistics page ranks from.
         mid = str(uuid.uuid4())
         db.session.add(DBMatch(
             id=mid, user_id=regular_user.id, tournament_id=t.id,
@@ -811,16 +797,6 @@ class TestStatisticsRegressionFixes:
             MatchScorecard(match_id=mid, player_id=p2.id, team_id=team.id,
                            record_type='fielding', innings_number=1,
                            catches=1, run_outs=1, stumpings=2),
-        ])
-        db.session.add_all([
-            TournamentPlayerStatsCache(
-                tournament_id=t.id, player_id=p1.id, team_id=team.id,
-                matches_played=3, catches=1, run_outs=1, stumpings=5
-            ),
-            TournamentPlayerStatsCache(
-                tournament_id=t.id, player_id=p2.id, team_id=team.id,
-                matches_played=3, catches=1, run_outs=1, stumpings=0
-            ),
         ])
         db.session.commit()
 

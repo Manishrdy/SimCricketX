@@ -3,8 +3,9 @@ Tests for migrations/add_team_profiles.py step 5 (orphan assignment/merge).
 
 Regression coverage for the production IntegrityError:
     DELETE FROM players WHERE id = ? → FOREIGN KEY constraint failed
-Step 5 used to blind-DELETE duplicate-name orphans, but match_partnerships and
-tournament_player_stats_cache reference players(id) without ON DELETE CASCADE,
+Step 5 used to blind-DELETE duplicate-name orphans, but match_partnerships (and
+the since-retired tournament_player_stats_cache, which can still exist on an
+undropped database) reference players(id) without ON DELETE CASCADE,
 and the orphan (legacy pre-profile row) usually carries real match history.
 The fix merges the orphan into the surviving profile row instead.
 """
@@ -23,9 +24,19 @@ from database.models import (
     MatchScorecard,
     MatchPartnership,
     Tournament,
-    TournamentPlayerStatsCache,
 )
 from migrations.add_team_profiles import _step5_assign_orphaned_players
+
+
+LEGACY_CACHE_DDL = """
+    CREATE TABLE tournament_player_stats_cache (
+        id INTEGER PRIMARY KEY,
+        tournament_id INTEGER NOT NULL REFERENCES tournaments (id),
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        team_id INTEGER NOT NULL REFERENCES teams (id),
+        matches_played INTEGER DEFAULT 0
+    )
+"""
 
 
 def _run_step5():
@@ -128,20 +139,24 @@ def merge_scenario(app, regular_user):
     t_overlap = Tournament(user_id=regular_user.id, name="Overlap Cup")
     db.session.add_all([t_repoint, t_overlap])
     db.session.flush()
-    db.session.add_all([
-        # Only the orphan appears → row should be re-pointed to the survivor.
-        TournamentPlayerStatsCache(
-            tournament_id=t_repoint.id, player_id=orphan.id, team_id=team.id
-        ),
-        # Both appear → cache for this tournament should be dropped entirely.
-        TournamentPlayerStatsCache(
-            tournament_id=t_overlap.id, player_id=orphan.id, team_id=team.id
-        ),
-        TournamentPlayerStatsCache(
-            tournament_id=t_overlap.id, player_id=survivor.id, team_id=team.id
-        ),
-    ])
     db.session.commit()
+    # The retired cache table as it still exists on a database that has not
+    # run `drop_tournament_player_stats_cache --apply` yet: no model, but
+    # live foreign keys onto players with no ON DELETE action.
+    with db.engine.begin() as conn:
+        conn.execute(text(LEGACY_CACHE_DDL))
+        for tournament_id, player_id in (
+            (t_repoint.id, orphan.id),
+            (t_overlap.id, orphan.id),
+            (t_overlap.id, survivor.id),
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO tournament_player_stats_cache "
+                    "(tournament_id, player_id, team_id) VALUES (:t, :p, :team)"
+                ),
+                {"t": tournament_id, "p": player_id, "team": team.id},
+            )
 
     return {
         "team": team,
@@ -188,17 +203,14 @@ def test_duplicate_orphan_with_history_is_merged_not_deleted(app, merge_scenario
     assert pship.batsman1_id == s["survivor_id"]
     assert pship.batsman2_id == s["partner_id"]
 
-    # Cache: non-overlapping tournament re-pointed, overlapping one dropped
-    repoint_rows = TournamentPlayerStatsCache.query.filter_by(
-        tournament_id=s["t_repoint_id"]
-    ).all()
-    assert [r.player_id for r in repoint_rows] == [s["survivor_id"]]
-    assert (
-        TournamentPlayerStatsCache.query.filter_by(
-            tournament_id=s["t_overlap_id"]
-        ).count()
-        == 0
-    )
+    # Retired cache: the orphan's rows are gone (they would have blocked the
+    # DELETE), the survivor's untouched row is left for the drop migration.
+    with db.engine.begin() as conn:
+        rows = conn.execute(text(
+            "SELECT tournament_id, player_id FROM tournament_player_stats_cache"
+        )).fetchall()
+        conn.execute(text("DROP TABLE tournament_player_stats_cache"))
+    assert rows == [(s["t_overlap_id"], s["survivor_id"])]
 
 
 def test_orphan_without_duplicate_is_assigned_to_profile(app, regular_user):

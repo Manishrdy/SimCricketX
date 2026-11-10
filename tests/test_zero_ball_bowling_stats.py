@@ -4,10 +4,9 @@ from datetime import datetime
 
 import pytest
 from database import db
-from database.models import Match, MatchScorecard, Player, Tournament, TournamentFixture, TournamentPlayerStatsCache
+from database.models import Match, MatchScorecard, Player, Tournament, TournamentFixture
 from engine.format_catalog import SUPPORTED_FORMATS
 from engine.stats_service import StatsService
-from engine.tournament_engine import TournamentEngine
 from engine import player_comparison
 
 
@@ -44,15 +43,12 @@ def test_zero_ball_spells_across_statistics(app, regular_user, test_team, test_t
     card.balls_bowled = legal_balls
     db.session.commit()
     service = StatsService()
-    engine = TournamentEngine()
     comparison = player_comparison
     overall = service.get_overall_stats(regular_user.id, match_format=fmt)['bowling']
     profile = service.get_player_profile(bowler.id, regular_user.id, match_format=fmt)['bowling']
     detailed = service._get_player_detailed_stats(bowler.id, regular_user.id, match_format=fmt)['bowling']
     ids = [next(p['id'] for p in comparison.identities(regular_user.id) if pid in p['player_ids']) for pid in (bowler.id, other.id)]
     cross = comparison.compare(service, regular_user.id, ids)['players'][0]['formats'][fmt]['bowling']
-    engine.rebuild_player_stats_cache(tournament.id, {bowler.id})
-    cache = TournamentPlayerStatsCache.query.filter_by(tournament_id=tournament.id, player_id=bowler.id).one()
     active = spell != 'unused'
     if active:
         assert len(overall) == 1
@@ -61,24 +57,13 @@ def test_zero_ball_spells_across_statistics(app, regular_user, test_team, test_t
             assert row['economy'] is None
             assert row['average'] == (1.0 if wickets else None)
             assert row['strike_rate'] == (0.0 if wickets else None)
-        assert (cache.innings_bowled, cache.runs_conceded, cache.wickets_taken) == (1, runs, wickets)
-        assert cache.bowling_economy is None
-        assert cache.bowling_average == (1.0 if wickets else None)
-        assert cache.bowling_strike_rate == (0.0 if wickets else None)
         tournament_stats = service.get_tournament_stats(regular_user.id, tournament.id, match_format=fmt)
         row = tournament_stats['bowling'][0]
         assert (row['innings'], row['runs'], row['wickets']) == (1, runs, wickets)
         assert row['economy'] is None
         assert row['average'] == (1.0 if wickets else None)
         assert row['strike_rate'] == (0.0 if wickets else None)
-        # Verify UPDATE/rebuild as well as the initial INSERT above.
-        engine.rebuild_player_stats_cache(tournament.id, {bowler.id})
-        db.session.flush()
-        db.session.expire(cache)
-        assert cache.bowling_economy is None
-        assert cache.bowling_average == (1.0 if wickets else None)
-        assert cache.bowling_strike_rate == (0.0 if wickets else None)
     else:
         assert overall == []
         assert profile == detailed == cross == {}
-        assert cache.innings_bowled == 0
+        assert service.get_tournament_stats(regular_user.id, tournament.id, match_format=fmt)['bowling'] == []

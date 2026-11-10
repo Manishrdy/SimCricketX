@@ -178,7 +178,6 @@ def execute(engine, fixture_id, user_id, token):
     db.session.add(receipt)
     db.session.flush()
     from match_archiver import reverse_player_aggregates
-    player_ids = set()
     target_match = db.session.get(Match, fixture.match_id)
     # Reverse points only once, with cascade disabled: the preview is the reset manifest.
     if fixture.stage != engine.STAGE_LEAGUE or fixture.standings_applied:
@@ -199,13 +198,11 @@ def execute(engine, fixture_id, user_id, token):
             item.home_team_id = item.away_team_id = tbd
         if match:
             cards = MatchScorecard.query.filter_by(match_id=match.id).all()
-            player_ids.update(c.player_id for c in cards)
             reverse_player_aggregates(cards, logger=current_app.logger)
             MatchPartnership.query.filter_by(match_id=match.id).delete(synchronize_session=False)
             MatchScorecard.query.filter_by(match_id=match.id).delete(synchronize_session=False)
             db.session.delete(match)
             db.session.flush()
-    engine.rebuild_player_stats_cache(fixture.tournament_id, player_ids)
     fixture.tournament.status = 'Active'
     fixture.tournament.current_stage = fixture.stage
     if fixture.tournament.tour_id:
