@@ -56,7 +56,6 @@ def register_admin_routes(
     MatchScorecard,
     TournamentTeam,
     TournamentFixture,
-    TournamentPlayerStatsCache,
     MatchPartnership,
     PROJECT_ROOT,
     MATCH_INSTANCES,
@@ -1260,14 +1259,9 @@ def register_admin_routes(
                 (MatchPartnership.batsman1_id.in_(player_ids)) |
                 (MatchPartnership.batsman2_id.in_(player_ids))
             ).delete(synchronize_session=False)
-        cache_filters = [TournamentPlayerStatsCache.team_id == team.id]
         scorecard_filters = [MatchScorecard.team_id == team.id]
         if player_ids:
-            cache_filters.append(TournamentPlayerStatsCache.player_id.in_(player_ids))
             scorecard_filters.append(MatchScorecard.player_id.in_(player_ids))
-        db.session.query(TournamentPlayerStatsCache).filter(
-            or_(*cache_filters)
-        ).delete(synchronize_session=False)
         db.session.query(MatchScorecard).filter(
             or_(*scorecard_filters)
         ).delete(synchronize_session=False)
@@ -1330,8 +1324,8 @@ def register_admin_routes(
             db.session.query(DBMatch).filter_by(tournament_id=tournament_id).update(
                 {DBMatch.tournament_id: None}, synchronize_session=False
             )
-            # Tournament cascades to TournamentTeam, TournamentFixture, and
-            # TournamentPlayerStatsCache via relationship cascade on the model.
+            # Tournament cascades to TournamentTeam and TournamentFixture via
+            # relationship cascade on the model.
             db.session.delete(tourn)
             db.session.commit()
         except Exception as e:
@@ -1352,7 +1346,6 @@ def register_admin_routes(
             return jsonify({"error": "Tournament not found"}), 404
         try:
             TournamentFixture.query.filter_by(tournament_id=tournament_id).delete()
-            TournamentPlayerStatsCache.query.filter_by(tournament_id=tournament_id).delete()
             # Reset team standings
             TournamentTeam.query.filter_by(tournament_id=tournament_id).update({
                 'played': 0, 'won': 0, 'lost': 0, 'tied': 0, 'no_result': 0,

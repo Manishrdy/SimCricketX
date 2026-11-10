@@ -970,7 +970,6 @@ class Tournament(db.Model):
     # Relationships
     participating_teams = relationship('TournamentTeam', backref='tournament', cascade="all, delete-orphan")
     fixtures = relationship('TournamentFixture', backref='tournament', cascade="all, delete-orphan")
-    player_stats_cache = relationship('TournamentPlayerStatsCache', backref='tournament', cascade="all, delete-orphan")
 
     __table_args__ = (
         db.Index('uq_tournament_user_creation_token', 'user_id', 'creation_token', unique=True),
@@ -1007,75 +1006,6 @@ class MatchPartnership(db.Model):
     # Indexes for efficient queries
     __table_args__ = (
         db.Index('ix_partnership_match_innings', 'match_id', 'innings_number'),
-    )
-
-class TournamentPlayerStatsCache(db.Model):
-    """Cached player statistics for a specific tournament"""
-    __tablename__ = 'tournament_player_stats_cache'
-
-    id = db.Column(db.Integer, primary_key=True)
-    tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id'), nullable=False)
-    player_id = db.Column(db.Integer, db.ForeignKey('players.id'), nullable=False)
-    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
-
-    # Batting Stats
-    matches_played = db.Column(db.Integer, default=0)
-    innings_batted = db.Column(db.Integer, default=0)
-    runs_scored = db.Column(db.Integer, default=0)
-    balls_faced = db.Column(db.Integer, default=0)
-    fours = db.Column(db.Integer, default=0)
-    sixes = db.Column(db.Integer, default=0)
-    not_outs = db.Column(db.Integer, default=0)
-    highest_score = db.Column(db.Integer, default=0)
-    fifties = db.Column(db.Integer, default=0)
-    centuries = db.Column(db.Integer, default=0)
-    ducks = db.Column(db.Integer, default=0)
-    ones = db.Column(db.Integer, default=0)
-    twos = db.Column(db.Integer, default=0)
-    threes = db.Column(db.Integer, default=0)
-    thirties = db.Column(db.Integer, default=0)
-    double_centuries = db.Column(db.Integer, default=0)
-    triple_centuries = db.Column(db.Integer, default=0)
-    batting_average = db.Column(db.Float().evaluates_none(), default=0.0)
-    batting_strike_rate = db.Column(db.Float().evaluates_none(), default=0.0)
-
-    # Bowling Stats
-    innings_bowled = db.Column(db.Integer, default=0)
-    overs_bowled = db.Column(db.String(10), default='0.0')
-    runs_conceded = db.Column(db.Integer, default=0)
-    wickets_taken = db.Column(db.Integer, default=0)
-    maidens = db.Column(db.Integer, default=0)
-    best_bowling_wickets = db.Column(db.Integer, default=0)
-    best_bowling_runs = db.Column(db.Integer, default=0)
-    best_match_bowling_wickets = db.Column(db.Integer, default=0)
-    best_match_bowling_runs = db.Column(db.Integer, default=0)
-    five_wicket_hauls = db.Column(db.Integer, default=0)
-    ten_wicket_matches = db.Column(db.Integer, default=0)
-    dot_balls_bowled = db.Column(db.Integer, default=0)
-    wickets_bowled = db.Column(db.Integer, default=0)
-    wickets_lbw = db.Column(db.Integer, default=0)
-    wides = db.Column(db.Integer, default=0)
-    noballs = db.Column(db.Integer, default=0)
-    byes = db.Column(db.Integer, default=0)
-    leg_byes = db.Column(db.Integer, default=0)
-    # Explicit None means an undefined rate. Preserve it on INSERT rather
-    # than letting SQLAlchemy substitute the legacy zero default.
-    bowling_average = db.Column(db.Float().evaluates_none(), default=0.0)
-    bowling_economy = db.Column(db.Float().evaluates_none(), default=0.0)
-    bowling_strike_rate = db.Column(db.Float().evaluates_none(), default=0.0)
-
-    # Fielding Stats
-    catches = db.Column(db.Integer, default=0)
-    run_outs = db.Column(db.Integer, default=0)
-    stumpings = db.Column(db.Integer, default=0)
-
-    # Relationships
-    player = relationship('Player')
-    team = relationship('Team')
-
-    __table_args__ = (
-        db.UniqueConstraint('tournament_id', 'player_id', name='uq_tournament_player_cache'),
-        db.Index('ix_tournament_player_cache_tournament_id', 'tournament_id'),
     )
 
 class TournamentTeam(db.Model):

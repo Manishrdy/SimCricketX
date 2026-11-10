@@ -162,8 +162,9 @@ def test_blockers_and_ownership(qa):
 def test_database_failure_preserves_results_and_live_cache(qa,monkeypatch):
     t=tournament(qa);f=fixture(qa,t);m,p=record(qa,f);mid=m.id
     token=token_for(qa,f)
-    def fail(*args,**kwargs): raise RuntimeError('injected rebuild failure')
-    monkeypatch.setattr(TournamentEngine,'rebuild_player_stats_cache',fail)
+    import match_archiver
+    def fail(*args,**kwargs): raise RuntimeError('injected mid-reset failure')
+    monkeypatch.setattr(match_archiver,'reverse_player_aggregates',fail)
     assert reset(qa,f,token).status_code==500
     assert db.session.get(Match,mid) and f.match_id==mid
     assert p.total_runs==70 and FixtureReplay.query.count()==0

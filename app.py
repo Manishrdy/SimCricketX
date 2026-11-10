@@ -147,7 +147,7 @@ except ImportError:
 from database import db
 from database.models import User as DBUser, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, TournamentTeam, TournamentFixture
 from database.models import MasterPlayer as DBMasterPlayer, UserPlayer as DBUserPlayer
-from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache, MatchPartnership  # Distinct from engine.match.Match
+from database.models import Match as DBMatch, MatchScorecard, MatchPartnership  # Distinct from engine.match.Match
 from database.models import (
     FailedLoginAttempt,
     BlockedIP,
@@ -1652,7 +1652,6 @@ def create_app():
         MatchScorecard=MatchScorecard,
         TournamentTeam=TournamentTeam,
         TournamentFixture=TournamentFixture,
-        TournamentPlayerStatsCache=TournamentPlayerStatsCache,
         MatchPartnership=MatchPartnership,
         PROJECT_ROOT=PROJECT_ROOT,
         MATCH_INSTANCES=MATCH_INSTANCES,
@@ -2609,7 +2608,6 @@ def create_app():
         DBMasterPlayer=DBMasterPlayer,
         DBUserPlayer=DBUserPlayer,
         MatchScorecard=MatchScorecard,
-        TournamentPlayerStatsCache=TournamentPlayerStatsCache,
         MatchPartnership=MatchPartnership,
         DBMatch=DBMatch,
         TournamentTeam=TournamentTeam,
@@ -2656,7 +2654,6 @@ def create_app():
         limiter=limiter,
         tournament_engine=tournament_engine,
         Tournament=Tournament,
-        TournamentPlayerStatsCache=TournamentPlayerStatsCache,
         DBTeam=DBTeam,
         DBMatch=DBMatch,
         DBPlayer=DBPlayer,

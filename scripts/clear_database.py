@@ -13,7 +13,6 @@ All other tables will be CLEARED:
 - tournaments
 - tournament_teams
 - tournament_fixtures
-- tournament_player_stats_cache
 - match_partnerships
 
 Usage:
@@ -34,7 +33,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from database import db
 from database.models import (
     User, Team, Player, Match, MatchScorecard, Tournament,
-    TournamentTeam, TournamentFixture, TournamentPlayerStatsCache,
+    TournamentTeam, TournamentFixture,
     MatchPartnership
 )
 from app import create_app
@@ -49,7 +48,7 @@ def get_table_counts():
     tables = [
         'users', 'teams', 'players', 'matches', 'match_scorecards',
         'tournaments', 'tournament_teams', 'tournament_fixtures',
-        'tournament_player_stats_cache', 'match_partnerships'
+        'match_partnerships'
     ]
     
     for table in tables:
@@ -114,7 +113,6 @@ def clear_database():
         # Delete in correct order to respect foreign key constraints
         
         tables_to_clear = [
-            ('tournament_player_stats_cache', 'tournament player stats cache'),
             ('tournament_fixtures', 'tournament fixtures'),
             ('tournament_teams', 'tournament teams'),
             ('match_partnerships', 'match partnerships'),

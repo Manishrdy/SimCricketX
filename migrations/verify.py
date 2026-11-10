@@ -117,7 +117,7 @@ def _runner(name, loader, db, app, snapshot):
             db.create_all()
         return
     if name in ('community_board', 'add_community_mentions',
-                'cleanup_orphaned_stats', 'rebuild_tournament_player_stats_cache'):
+                'cleanup_orphaned_stats'):
         module = importlib.import_module('migrations.' + name)
         return module.run_migration(db, app, apply=True)
     return loader()(db, app)

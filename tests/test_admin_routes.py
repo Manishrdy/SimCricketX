@@ -24,7 +24,6 @@ from database.models import (
     MatchScorecard,
     MatchPartnership,
     Tournament,
-    TournamentPlayerStatsCache,
     BlockedIP,
     FailedLoginAttempt,
     AnnouncementBanner,
@@ -450,12 +449,6 @@ class TestDataManagement:
             runs=20,
             balls=15,
         ))
-        db.session.add(TournamentPlayerStatsCache(
-            tournament_id=tournament.id,
-            player_id=player.id,
-            team_id=team.id,
-            matches_played=1,
-        ))
         db.session.commit()
 
         response = admin_client.post(f"/admin/teams/{team.id}/delete")
@@ -465,7 +458,6 @@ class TestDataManagement:
         assert DBPlayer.query.filter_by(team_id=team.id).count() == 0
         assert MatchScorecard.query.filter_by(team_id=team.id).count() == 0
         assert MatchPartnership.query.filter_by(match_id=match.id).count() == 0
-        assert TournamentPlayerStatsCache.query.filter_by(team_id=team.id).count() == 0
 
     def test_admin_delete_player(self, admin_client):
         """Test deleting non-existent player as admin returns 404 or redirects."""

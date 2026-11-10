@@ -48,7 +48,7 @@ def _import_all_models():
     from database.models import (  # noqa: F401
         Team, Player, Match, MatchScorecard, MatchDiagnosticEvent,
         Tournament, TournamentTeam, TournamentFixture,
-        MatchPartnership, TournamentPlayerStatsCache,
+        MatchPartnership,
         FailedLoginAttempt, BlockedIP,
         ActiveSession, SiteCounter, LoginHistory, IPWhitelistEntry,
         UserGroundConfig, AnnouncementBanner, UserBannerDismissal,
