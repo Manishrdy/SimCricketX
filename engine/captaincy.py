@@ -3,8 +3,10 @@
 Only observable match state enters this policy. All stochastic selection is
 performed at committed engine boundaries, never by status/UI readers.
 """
+from __future__ import annotations
+
 from copy import deepcopy
-from typing import TypedDict, NotRequired
+from typing import TypedDict
 
 MODEL_VERSION = 1
 ATTRIBUTES = (
@@ -30,7 +32,13 @@ class CaptaincyConfig(TypedDict):
     bowling_aggression: int
 
 
-class CaptainContext(TypedDict):
+class _CaptainContextOptional(TypedDict, total=False):
+    # Optional keys; split out because typing.NotRequired needs Python 3.11
+    # and production runs 3.8.
+    fc_intent: dict
+
+
+class CaptainContext(_CaptainContextOptional):
     team: str
     innings: str
     legal_balls: int
@@ -43,7 +51,6 @@ class CaptainContext(TypedDict):
     phase: str
     pitch: str
     pressure: float
-    fc_intent: NotRequired[dict]
 
 
 class CaptainDecision(TypedDict):
