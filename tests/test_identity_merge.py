@@ -346,7 +346,7 @@ def test_mail_delivery_failure_visible_and_get_does_not_verify(configured):
         assert merge.get(conn,mid)['source_verified'] is None
 
 
-def test_render_workflow_pages(configured, admin_client):
+def test_render_workflow_pages(configured, admin_client, pool_dependents):
     import os
     db.session.add_all([Team(name='QA same-name team', short_code='QA', user_id=a) for a in (SOURCE, SURVIVOR)])
     db.session.commit()
@@ -420,3 +420,66 @@ def test_unsafe_owned_archive_blocks(configured,kind):
     mid,_=ready()
     with pytest.raises(ValueError,match='[Aa]rchive'):
         apply(mid)
+
+
+@pytest.fixture
+def pool_dependents(configured):
+    from database.models import MasterPlayer, UserPlayer, Player, League, Season, Auction, AuctionCategory, AuctionPlayer
+    master=MasterPlayer(name='QA linked override'); db.session.add(master);db.session.flush()
+    source=UserPlayer(user_id=SOURCE,master_player_id=master.id,name='QA source override',batting_rating=61)
+    survivor=UserPlayer(user_id=SURVIVOR,master_player_id=master.id,name='QA survivor override',batting_rating=88)
+    team=Team(user_id=SOURCE,name='QA linked squad',short_code='QL')
+    league=League(user_id=SOURCE,name='QA linked league')
+    db.session.add_all([source,survivor,team,league]);db.session.flush()
+    player=Player(team_id=team.id,name='QA squad snapshot',user_player_id=source.id,batting_rating=73)
+    season=Season(league_id=league.id,name='QA setup season');db.session.add_all([player,season]);db.session.flush()
+    auction=Auction(season_id=season.id);db.session.add(auction);db.session.flush()
+    category=AuctionCategory(auction_id=auction.id,name='QA pool');db.session.add(category);db.session.flush()
+    auction_player=AuctionPlayer(auction_id=auction.id,category_id=category.id,name='QA auction snapshot',user_player_id=source.id,batting_rating=79)
+    db.session.add(auction_player);db.session.commit()
+    return source.id,survivor.id,player.id,auction_player.id,team.id
+
+
+def test_conflict_preserves_squad_and_auction_pool_links(configured,pool_dependents):
+    from database.models import Player,AuctionPlayer,UserPlayer
+    source,survivor,player,auction_player,_=pool_dependents
+    mid,_=ready();plan,token=merge.preview(actor(),mid)
+    assert {m['table'] for m in plan['relinks']}=={'players','auction_players'}
+    receipt=merge.execute(actor(),mid,token,SURVIVOR)
+    assert receipt['relinks']==plan['relinks']
+    assert db.session.get(UserPlayer,source) is None
+    p,a=db.session.get(Player,player),db.session.get(AuctionPlayer,auction_player)
+    assert (p.user_player_id,p.batting_rating)==(survivor,73)
+    assert (a.user_player_id,a.batting_rating)==(survivor,79)
+
+
+def test_changed_dependent_snapshot_invalidates_merge(configured,pool_dependents):
+    from database.models import Player
+    mid,_=ready();_,token=merge.preview(actor(),mid)
+    db.session.get(Player,pool_dependents[2]).batting_rating=74;db.session.commit()
+    with pytest.raises(ValueError,match='changed'):
+        merge.execute(actor(),mid,token,SURVIVOR)
+
+
+def test_dependent_relink_rolls_back(configured,pool_dependents):
+    from database.models import Player,AuctionPlayer,UserPlayer
+    mid,_=ready()
+    with patch.object(merge,'audit',side_effect=RuntimeError('injected')):
+        with pytest.raises(RuntimeError):apply(mid)
+    db.session.expire_all()
+    assert db.session.get(Player,pool_dependents[2]).user_player_id==pool_dependents[0]
+    assert db.session.get(AuctionPlayer,pool_dependents[3]).user_player_id==pool_dependents[0]
+    assert db.session.get(UserPlayer,pool_dependents[0])
+
+
+def test_third_party_override_reference_blocks_merge(configured,pool_dependents):
+    db.session.get(Team,pool_dependents[4]).user_id=ACCOUNTS['user3']['email'];db.session.commit()
+    mid,_=ready()
+    with pytest.raises(ValueError,match='another owner'):apply(mid)
+
+
+def test_unknown_discarded_row_dependency_blocks_merge(configured):
+    mid,_=ready()
+    with db.engine.begin() as conn:
+        conn.exec_driver_sql('CREATE TABLE new_override_link (id INTEGER PRIMARY KEY, override_id INTEGER REFERENCES user_players(id))')
+    with pytest.raises(ValueError,match='dependency coverage'):apply(mid)

@@ -2,7 +2,7 @@
 {% block extra_css %}{{ super() }}<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_identity.css') }}">{% endblock %}
 {% block admin_content %}<div class="identity-workspace">
 <header class="identity-header"><div><p class="identity-eyebrow">PRIVATE ADMIN WORKSPACE</p><h1>Network access</h1><p>VPN enforcement: {{ 'enabled' if identity_network_enabled else 'disabled' }}.</p></div></header>
-<nav class="identity-tabs"><a href="{{ url_for('admin_identity.overview') }}">Identity overview</a><a href="{{ url_for('identity_network.overview') }}">Network reviews</a></nav>
+{% include 'admin/partials/identity_nav.html' %}
 {% if error %}<p class="identity-card" role="alert">{{ error }}</p>{% endif %}
 {% if view=='overview' %}
 <section class="identity-card"><h2>Detection health</h2><dl><dt>ProxyCheck key</dt><dd>{{ 'Configured' if configured else 'Not configured' }}</dd><dt>Today’s lookup attempts (UTC)</dt><dd>{{ budget.attempts if budget else 0 }} / 1,000 · {{ budget.last_status|replace('_',' ') if budget else 'No lookups' }}</dd><dt>Private Relay feed</dt><dd>{{ 'Fresh' if feed_fresh else 'Missing or stale — ignored' }}{% if feed %} · Imported {{ feed|localtime }}{% endif %}</dd></dl><p>Unknown results and provider failures allow access under this rule. Other account checks remain enforced. No paid plan is purchased automatically.</p><p>Retained network transitions: {% for state,count in counts.items() %}{{ state|capitalize }} {{ count }}{% if not loop.last %} · {% endif %}{% else %}None{% endfor %}</p></section>

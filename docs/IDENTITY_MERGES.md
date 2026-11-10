@@ -37,7 +37,11 @@ objects retain their IDs and histories. Conflicting names and team short codes
 receive deterministic visible suffixes; duplicate tour/tournament creation tokens
 are renamed too, preserving each object. For colliding player overrides, format
 settings, stadium-adoption keys, votes and banner dismissals, the survivor's row
-wins; non-conflicting source rows move. Vote counts are recalculated. Distinct
+wins; non-conflicting source rows move. Squad and auction-player references to a
+discarded override are repointed to the retained override before deletion, while
+snapshotted ratings and statistics stay unchanged. These dependent links appear
+in the preview and are covered by stale-state revalidation. References from a
+third-party owner or an unknown dependent table block the merge. Vote counts are recalculated. Distinct
 stadium assets remain even when a duplicate adoption link is discarded.
 
 Source private Community content becomes accessible to the survivor. Current

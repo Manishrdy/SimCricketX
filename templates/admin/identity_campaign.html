@@ -4,7 +4,7 @@
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
 {% block admin_content %}<div class="identity-workspace">
 <header class="identity-header"><div><p class="identity-eyebrow">Identity administration</p><h1>Email correction campaign</h1><p>A fixed 30-day deadline, verified correction and private support.</p></div></header>
-<nav class="identity-tabs"><a href="{{ url_for('admin_identity.overview') }}">Identity overview</a><a href="{{ url_for('identity_campaign.overview') }}">Campaign</a><a href="{{ url_for('identity_email.overview') }}">Email changes</a></nav>
+{% include 'admin/partials/identity_nav.html' %}
 {% if error %}<div class="identity-card" role="alert">{{ error }}</div>{% endif %}
 {% if view=='overview' %}
 <section class="identity-card"><h2>Review before activation</h2><p>Activation immediately restricts affected accounts and starts a deadline that never resets. Review a production-copy audit and confirm support, mail and backups are ready first. Administrators are excluded. Collisions alone do not trigger deletion.</p><form method="post">{{ csrf() }}<button class="identity-button" name="action" value="preview">Preview affected accounts</button></form></section>

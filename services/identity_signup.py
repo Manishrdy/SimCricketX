@@ -190,9 +190,11 @@ def create_user(email, password, display_name):
     fp, status = devices.fingerprint(request.form.get('device_fingerprint'))
     network = ip_hash()
     password_hash = generate_password_hash(password)
-    at = now()
     try:
         with transaction() as conn:
+            # Sample after BEGIN IMMEDIATE: a writer that committed while this
+            # request waited must not look like future device evidence.
+            at = now()
             cleanup(conn, at)
             approval = active_approval(conn, identity, at)
             scopes = set(json.loads(approval['scopes'])) if approval else set()

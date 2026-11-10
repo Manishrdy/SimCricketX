@@ -11,8 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from auth.decorators import admin_required
 from database import db
 from database.models import User, IdentityReviewCase as Case, IdentityReviewEvidence as Evidence, IdentityReviewAction as Action
-from services import identity_review as review
-from utils.identity_devices import keys
+from services import identity_review as review, identity_hub as hub
 from utils.identity_scan import timestamp
 
 bp = Blueprint('admin_identity', __name__, url_prefix='/admin/identity')
@@ -23,12 +22,19 @@ bp = Blueprint('admin_identity', __name__, url_prefix='/admin/identity')
 def guard():
     if session.get('impersonating_from'):
         abort(403)
+    from services.identity_email_change import administrator
+    with db.engine.connect() as conn:
+        try:
+            administrator(conn, current_user.stable_id)
+        except ValueError:
+            abort(403)
 
 
 @bp.after_request
 def private(response):
     response.headers['Cache-Control'] = 'no-store, private'
-    response.headers['Referrer-Policy'] = 'same-origin'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    response.headers['X-Robots-Tag'] = 'noindex, nofollow'
     return response
 
 
@@ -57,14 +63,34 @@ def render(view, **data):
     for case in cases:
         ids.update((case.left_id, case.right_id, case.assignee))
     ids.update(entry.actor_id for entry in data.get('history', []))
-    return render_template('admin/identity.html', view=view, people=users(ids), states=review.STATES, observation_time=timestamp, **data)
+    from database.models import IdentityMerge
+    merged = set(db.session.execute(select(IdentityMerge.source).where(IdentityMerge.status == 'completed', IdentityMerge.source.in_(ids))).scalars())
+    return render_template('admin/identity.html', view=view, people=users(ids), merged=merged, states=review.STATES, observation_time=timestamp, **data)
+
+
+def hub_render(view, **data):
+    return render_template('admin/identity_hub.html', view=view, workflows=hub.WORKFLOWS, **data)
+
+
+def hub_filters(**defaults):
+    values = {**defaults, **request.args.to_dict()}
+    try:
+        return hub.filters(values, grants=request.endpoint in ('admin_identity.approvals', 'admin_identity.exemptions'))
+    except ValueError as exc:
+        abort(400, description=str(exc))
+
+
+def pagination(f):
+    args = {k: f[k] for k in ('workflow', 'action', 'q', 'from', 'to', 'status') if f.get(k)}
+    return {'previous': url_for(request.endpoint, **(dict(stable_id=request.view_args['stable_id']) if request.view_args and 'stable_id' in request.view_args else {}), **args, page=f['page']-1) if f['page']>1 else None,
+            'next': url_for(request.endpoint, **(dict(stable_id=request.view_args['stable_id']) if request.view_args and 'stable_id' in request.view_args else {}), **args, page=f['page']+1)}
 
 
 @bp.get('')
 def overview():
-    counts = dict(db.session.execute(select(Case.status, func.count()).where(review.visible(review.now())).group_by(Case.status)).all())
-    recent = db.session.execute(base_query().order_by(Case.updated_at.desc(), Case.id.desc()).limit(5)).scalars().all()
-    return render('overview', counts=counts, cases=recent)
+    data = hub.overview()
+    recent, _ = hub.audit_rows(hub.filters({}))
+    return hub_render('overview', recent=recent[:5], **data)
 
 
 @bp.get('/duplicates')
@@ -145,36 +171,42 @@ def detail(case_id):
 
 @bp.get('/accounts/<stable_id>')
 def account(stable_id):
-    user = db.session.execute(select(User).where(User.stable_id == stable_id)).scalar_one_or_none()
-    if not user:
+    data = hub.account(stable_id)
+    if data is None:
         abort(404)
-    page = page_number()
+    f = hub_filters()
+    f['q'] = stable_id
+    rows, more = hub.audit_rows(f)
+    # Keep existing duplicate-review list and direct action links within the summary.
     cases = db.session.execute(base_query().where(or_(Case.left_id == stable_id, Case.right_id == stable_id))
-                              .order_by(Case.id.desc()).offset((page-1)*30).limit(31)).scalars().all()
-    return render('account', account=user, cases=cases[:30], page=page, more=len(cases)>30)
+                              .order_by(Case.updated_at.desc()).limit(10)).scalars().all()
+    return hub_render('account', rows=rows, more=more, f=f, pages=pagination(f), cases=cases, **data)
 
 
 @bp.get('/policy')
 def policy():
-    try:
-        enabled = bool(keys())
-        configuration = 'Enabled' if enabled else 'Disabled — dedicated key not configured'
-    except ValueError:
-        configuration = 'Disabled by invalid key configuration; operator action required'
-    return render('policy', configuration=configuration)
+    return hub_render('policy', config=hub.configuration())
 
 
 @bp.get('/audit')
 def audit():
-    page = page_number()
-    query = select(Action).join(Case, Action.case_id == Case.id).where(review.visible(review.now()), Action.expires_at > review.now())
-    action = request.args.get('action', '')
-    if action:
-        if action not in (*review.STATES, 'scan_import', 'assign', 'note'):
-            abort(400)
-        query = query.where(Action.action == action)
-    rows = db.session.execute(query.order_by(Action.id.desc()).offset((page-1)*30).limit(31)).scalars().all()
-    return render('audit', history=rows[:30], page=page, more=len(rows)>30, action=action)
+    f = hub_filters()
+    rows, more = hub.audit_rows(f)
+    return hub_render('audit', rows=rows, more=more, f=f, pages=pagination(f))
+
+
+@bp.get('/approvals')
+def approvals():
+    f = hub_filters(status='open')
+    rows, more = hub.grants(f)
+    return hub_render('approvals', rows=rows, more=more, f=f, pages=pagination(f))
+
+
+@bp.get('/exemptions')
+def exemptions():
+    f = hub_filters(status='active')
+    rows, more = hub.grants(f, exemptions=True)
+    return hub_render('exemptions', rows=rows, more=more, f=f, pages=pagination(f))
 
 
 def init_app(app):

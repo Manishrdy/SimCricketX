@@ -5,7 +5,7 @@
 {% block admin_content %}
 <div class="identity-workspace">
 <header class="identity-header"><div><p class="identity-eyebrow">Identity administration</p><h1>Email changes</h1><p>Verify ownership, review the impact, then confirm a safe change.</p></div></header>
-<nav class="identity-tabs"><a href="{{ url_for('admin_identity.overview') }}">Identity overview</a><a href="{{ url_for('identity_email.overview') }}">Email changes</a></nav>
+{% include 'admin/partials/identity_nav.html' %}
 {% if error %}<div class="identity-card" role="alert">{{ error }}</div>{% endif %}
 {% if view == 'overview' %}
 <section class="identity-card"><h2>Request an email change</h2><p>Both mailboxes must confirm within 24 hours. This request does not change the account. Admin accounts are excluded.</p>
