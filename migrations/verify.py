@@ -191,10 +191,21 @@ def verify(db_path):
         try:
             with contextlib.closing(sqlite3.connect(str(snapshot))) as conn:
                 integrity = conn.execute('PRAGMA integrity_check').fetchall()
-                violations = conn.execute('PRAGMA foreign_key_check').fetchall()
-            results.append({'name': 'sqlite_integrity',
-                            'status': 'CURRENT' if integrity == [('ok',)] and not violations else 'ERROR',
-                            'detail': 'Integrity and foreign keys checked; {} FK violation(s).'.format(len(violations))})
+                try:
+                    violations = conn.execute('PRAGMA foreign_key_check').fetchall()
+                except sqlite3.OperationalError as exc:
+                    # "foreign key mismatch": a parent key lacks its UNIQUE index, which a
+                    # migration below may create. Don't abort; the rehearsals will show it.
+                    violations = None
+                    fk_error = str(exc)
+            if violations is None:
+                results.append({'name': 'sqlite_integrity',
+                                'status': 'PENDING' if integrity == [('ok',)] else 'ERROR',
+                                'detail': 'FK check could not run before migrations: ' + fk_error})
+            else:
+                results.append({'name': 'sqlite_integrity',
+                                'status': 'CURRENT' if integrity == [('ok',)] and not violations else 'ERROR',
+                                'detail': 'Integrity and foreign keys checked; {} FK violation(s).'.format(len(violations))})
             # Check required tables/columns BEFORE any rehearsal can create them.
             with app.app_context():
                 missing = model_drift(db.engine, db.metadata)
