@@ -4,6 +4,8 @@ Canonical identity is for duplicate evidence, never a login/recovery alias.
 Structural normalization accepts legacy plus tags; new-address validation does
 not. Neither function verifies mailbox ownership or checks DNS.
 """
+from __future__ import annotations
+
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
