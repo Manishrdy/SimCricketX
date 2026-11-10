@@ -200,6 +200,8 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # users.support_prompt_* — when the Buy Me a Coffee popup was shown,
     # closed, clicked or opted out of. NULL means never asked, so no backfill.
     ("add_user_support_prompt",  _loader("migrations.add_user_support_prompt")),
+    # Parent key for every identity-table FK; ALTER TABLE could not add UNIQUE.
+    ("add_users_stable_id_unique", _loader("migrations.add_users_stable_id_unique")),
     ("add_identity_foundation", _loader("migrations.add_identity_foundation")),
     ("add_identity_devices", _loader("migrations.add_identity_devices")),
     ("add_identity_review", _loader("migrations.add_identity_review")),
