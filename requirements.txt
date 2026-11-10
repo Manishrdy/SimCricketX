@@ -43,4 +43,5 @@ isort>=5.12.0
 # ── Security scanning ─────────────────────────────────────────────────────────
 safety>=2.3.5
 bandit>=1.7.5
-numpy>=1.26
+numpy>=1.24; python_version < "3.9"   # 1.24 is the last release supporting Python 3.8 (production)
+numpy>=1.26; python_version >= "3.9"
