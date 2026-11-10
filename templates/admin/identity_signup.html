@@ -3,7 +3,7 @@
 {% block admin_content %}
 <div class="identity-workspace">
 <header class="identity-header"><div><p class="identity-eyebrow">PRIVATE ADMIN WORKSPACE</p><h1>Signup reviews</h1><p>Review refused signups and grant specific, one-use exceptions.</p><p>Signup enforcement: {{ "enabled" if identity_signup_enforced else "disabled" }}.</p></div></header>
-<nav class="identity-tabs" aria-label="Identity sections"><a href="{{ url_for('admin_identity.overview') }}">Identity overview</a><a href="{{ url_for('identity_signup.queue') }}">Requests and approvals</a><a href="{{ url_for('identity_signup.attempts') }}">Signup attempts</a></nav>
+{% include 'admin/partials/identity_nav.html' %}
 {% if error %}<p role="alert" class="identity-card">{{ error }}</p>{% endif %}
 {% if view == 'queue' %}
 <form class="identity-filters"><label>Status<select name="status">{% for s in ['open','approved','rejected','revoked','used','expired','all'] %}<option value="{{ s }}" {% if s==state %}selected{% endif %}>{{ s|capitalize }}</option>{% endfor %}</select></label><button class="identity-button">Filter</button></form>

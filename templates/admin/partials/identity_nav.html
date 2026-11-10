@@ -1,0 +1,5 @@
+<nav class="identity-tabs" aria-label="Identity sections">
+{% for endpoint,label in [('admin_identity.overview','Overview'),('admin_identity.duplicates','Duplicate reviews'),('admin_identity.approvals','Approvals'),('admin_identity.exemptions','Exemptions'),('identity_signup.attempts','Blocked attempts'),('identity_network.overview','Network access'),('identity_email.overview','Email changes'),('identity_campaign.overview','Email campaign'),('identity_merge.overview','Account merges'),('admin_identity.audit','Activity & receipts'),('admin_identity.policy','Policy status')] %}
+<a href="{{ url_for(endpoint) }}" {% if request.endpoint == endpoint %}aria-current="page"{% endif %}>{{ label }}</a>
+{% endfor %}
+</nav>

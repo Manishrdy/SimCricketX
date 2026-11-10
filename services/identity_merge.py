@@ -157,11 +157,15 @@ def cancel(actor, mid):
 def coverage(conn):
     base.coverage(conn)
     inspector = inspect(conn)
-    actual = set()
+    actual, dependents = set(), set()
     for name in inspector.get_table_names():
         for fk in inspector.get_foreign_keys(name):
+            if fk['referred_table'] in KEEP:
+                dependents.add((name, tuple(fk['constrained_columns']), fk['referred_table'], tuple(fk['referred_columns'])))
             if fk['referred_table'] == 'users' and fk['referred_columns'] == ['stable_id']:
                 actual.update((name, c) for c in fk['constrained_columns'])
+    if dependents != {(n, ('user_player_id',), 'user_players', ('id',)) for n in ('players', 'auction_players')}:
+        raise ValueError('Discarded-row dependency coverage changed; operator review is required.')
     if actual != {(n, 'user_stable_id') for n in STABLE}:
         raise ValueError('Stable account reference coverage changed; operator review is required.')
     stable_names = {'user_stable_id', 'subject', 'left_id', 'right_id', 'assignee', 'source', 'survivor', 'administrator'}
@@ -262,7 +266,9 @@ def plan(conn, row):
         state[name] = [rows(conn, table(name), column, u['stable_id']) for u in users]
     for name in ('identity_signup_appeals', 'identity_appeal_deliveries'):
         state[name] = [rows(conn, table(name), 'email', u['id']) for u in users]
-    result = dict(version=1, source=row['source_address'], survivor=row['survivor_address'], counts=counts,
+    relinks, dependent_state = pool_relinks(conn, losses, addresses)
+    state['pool_dependents'] = dependent_state
+    result = dict(version=2, relinks=relinks, source=row['source_address'], survivor=row['survivor_address'], counts=counts,
                   losses=losses, renames=renames, provenance=provenance, artifacts=artifacts, archives=archives,
                   source_stable=row['source'], survivor_stable=row['survivor'])
     # Stable sorting makes insertion/query order irrelevant; no passwords appear in preview/receipt.
@@ -309,6 +315,9 @@ def execute(actor, mid, token, confirmed_email):
         backup = base.backup_locked(conn, 'merge-'+mid)
         source, survivor = row['source_address'], row['survivor_address']
         conn.exec_driver_sql('PRAGMA defer_foreign_keys = ON')
+        for item in result['relinks']:
+            t = table(item['table'])
+            conn.execute(update(t).where(*where_key(t, item['key'])).values(user_player_id=item['survivor_id']))
         for item in result['losses']:
             t = table(item['table'])
             conn.execute(delete(t).where(*where_key(t, item['key'])))
@@ -458,3 +467,28 @@ def archive_artifacts(conn, user):
         if pin and digest != pin['content_hash']:
             raise ValueError('Archive content changed; operator review required.')
     return base.archive_exports(conn, user)
+
+
+def pool_relinks(conn, losses, addresses):
+    """Keep snapshot ratings/stats intact while preserving the retained pool link."""
+    moves, snapshots = [], []
+    for loss in losses:
+        if loss['table'] != 'user_players':
+            continue
+        source_id, survivor_id = loss['key']['id'], loss['survivor_key']['id']
+        for name in ('players', 'auction_players'):
+            child = table(name)
+            for row in rows(conn, child, 'user_player_id', source_id):
+                if name == 'players':
+                    teams = table('teams')
+                    owner = conn.execute(select(teams.c.user_id).where(teams.c.id == row['team_id'])).scalar_one_or_none()
+                else:
+                    auctions, seasons, leagues = table('auctions'), table('seasons'), table('leagues')
+                    owner = conn.execute(select(leagues.c.user_id).select_from(auctions.join(seasons,
+                        auctions.c.season_id == seasons.c.id).join(leagues, seasons.c.league_id == leagues.c.id))
+                        .where(auctions.c.id == row['auction_id'])).scalar_one_or_none()
+                if owner not in addresses:
+                    raise ValueError('A discarded override is referenced by another owner; operator review required.')
+                moves.append({'table': name, 'key': primary(row, child), 'source_id': source_id, 'survivor_id': survivor_id})
+                snapshots.append({'table': name, 'row': row})
+    return moves, snapshots

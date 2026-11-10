@@ -466,3 +466,27 @@ def test_invalid_legacy_email_marker_does_not_block_deletion(configured):
     row=db.session.execute(select(signup.M)).mappings().one()
     assert row['reason']=='deleted'
     assert 'invalid legacy address' not in str(row)
+
+
+def test_device_evidence_uses_time_after_write_lock(configured, monkeypatch):
+    from contextlib import contextmanager
+    first, second = unused('newbie'), unused('user2')
+    committed = signup.now()
+    clock = {'at': committed}
+    monkeypatch.setattr(signup, 'now', lambda: clock['at'])
+    with context(configured, first):
+        signup.create_user(first, PASSWORD, 'QA')
+    # This request started earlier but obtained the write lock after the first
+    # signup committed. Its evidence clock must be refreshed under that lock.
+    clock['at'] = committed-timedelta(seconds=1)
+    transaction = signup.transaction
+    @contextmanager
+    def waited_for_lock():
+        with transaction() as conn:
+            clock['at'] = committed+timedelta(seconds=1)
+            yield conn
+    monkeypatch.setattr(signup, 'transaction', waited_for_lock)
+    with context(configured, second, ip='192.0.2.11'), pytest.raises(signup.Refused) as caught:
+        signup.create_user(second, PASSWORD, 'QA')
+    assert 'device_match' in caught.value.reasons
+    assert db.session.get(User, second) is None
