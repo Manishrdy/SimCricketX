@@ -279,3 +279,14 @@ def test_rain_revised_allocations_finish_with_captaincy(fmt, monkeypatch):
         assert not response.get('error'), response
         if response.get('match_over'): break
     else: pytest.fail('Revised bowling allocation did not finish')
+
+
+def test_restore_rebuilds_tuple_announce_keys_after_json_roundtrip():
+    """Issue #218: tuple keys become lists through JSON; restore must not choke."""
+    data = match_data()
+    match = quiet_match(data)
+    match.commentary_engine._announced.update({("wearing", 2), ("bowler_3fer", "A", "1"), "close_finish"})
+    snap = json.loads(json.dumps(match.captaincy_snapshot()))
+    restored = quiet_match(data)
+    restored.restore_captaincy(snap)
+    assert restored.commentary_engine._announced == match.commentary_engine._announced
