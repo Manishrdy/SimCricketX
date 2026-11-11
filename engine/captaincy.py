@@ -533,4 +533,4 @@ class CaptaincyMixin:
             self.commentary_engine._rng.setstate(tuples(snapshot['commentary_rng']))
             self.commentary_engine._recent.clear()
             self.commentary_engine._recent.update({k: deque(v) for k, v in snapshot.get('commentary_recent', {}).items()})
-            self.commentary_engine._announced = set(snapshot.get('commentary_announced', []))
+            self.commentary_engine._announced = set(tuples(k) for k in snapshot.get('commentary_announced', []))
