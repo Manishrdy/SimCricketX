@@ -6,7 +6,16 @@ import os
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+try:  # zoneinfo is stdlib from Python 3.9; production runs 3.8
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+except ImportError:  # pragma: no cover - exercised only on Python 3.8
+    try:
+        from backports.zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    except ImportError:
+        ZoneInfo = None
+
+        class ZoneInfoNotFoundError(KeyError):
+            pass
 
 import click
 from flask import current_app, jsonify, render_template, request, session
@@ -74,7 +83,10 @@ def fingerprint(raw):
             raise ValueError()
         if not isinstance(tz, str) or len(tz) > 80:
             raise ValueError()
-        ZoneInfo(tz)
+        if ZoneInfo is not None:
+            ZoneInfo(tz)
+        elif not re.fullmatch(r'[A-Za-z0-9_+-]+(?:/[A-Za-z0-9_+-]+){0,2}', tz):
+            raise ValueError()
         if not isinstance(platform, str) or not re.fullmatch(r'[A-Za-z0-9 _.-]{1,64}', platform):
             raise ValueError()
         if not isinstance(screen, list) or len(screen) != 2 or any(type(n) is not int or not 1 <= n <= 32768 for n in screen):

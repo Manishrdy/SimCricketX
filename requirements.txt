@@ -45,3 +45,4 @@ safety>=2.3.5
 bandit>=1.7.5
 numpy>=1.24; python_version < "3.9"   # 1.24 is the last release supporting Python 3.8 (production)
 numpy>=1.26; python_version >= "3.9"
+backports.zoneinfo>=0.2.1; python_version < "3.9"   # zoneinfo for Python 3.8 (production)

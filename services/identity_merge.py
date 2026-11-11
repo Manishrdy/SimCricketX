@@ -14,6 +14,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from database import db
 from database.models import IdentityMerge, IdentityReviewCase, IdentityReviewAction
 from services import identity_email_change as base, identity_signup as signup
+from utils.file_hash import sha256_hexdigest
 from utils.identity_rules import validate_new_email, normalize_email
 
 M = IdentityMerge.__table__
@@ -461,7 +462,7 @@ def archive_artifacts(conn, user):
             raise ValueError('Unsafe archive artifact; operator review required.')
         try:
             with path.open('rb') as stream:
-                digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+                digest = sha256_hexdigest(stream)
         except OSError:
             raise ValueError('Unreadable archive artifact; operator review required.') from None
         if pin and digest != pin['content_hash']:

@@ -21,6 +21,7 @@ from sqlalchemy import select, update, delete, insert, inspect
 
 from database import db
 from database.models import User, IdentityEmailChange, ActiveSession, IdentityEmailReservation, IdentityArchiveOwner
+from utils.file_hash import sha256_hexdigest
 from utils.identity_rules import validate_new_email, normalize_email, InvalidEmail
 
 U = User.__table__
@@ -303,7 +304,7 @@ def archive_exports(conn, user):
             if path.is_symlink():
                 raise ValueError('An archive is a symlink. Operator review is required.')
             with path.open('rb') as stream:
-                content_hash = hashlib.file_digest(stream, 'sha256').hexdigest()
+                content_hash = sha256_hexdigest(stream)
             exports.append({'filename': path.name, 'sha256': content_hash})
     return exports
 

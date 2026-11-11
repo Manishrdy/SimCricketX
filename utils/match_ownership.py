@@ -18,7 +18,7 @@ def owns_match_snapshot(data, user_id, match_id=None):
 def owns_archive(path, user_id, *, conn=None):
     """Pinned exports use stable ownership; unpinned files retain legacy rules."""
     from pathlib import Path
-    import hashlib
+    from utils.file_hash import sha256_hexdigest
     from sqlalchemy import select
     from database.models import IdentityArchiveOwner, User
     path = Path(path)
@@ -37,6 +37,6 @@ def owns_archive(path, user_id, *, conn=None):
         return False
     try:
         with path.open('rb') as stream:
-            return hashlib.file_digest(stream, 'sha256').hexdigest() == row['content_hash']
+            return sha256_hexdigest(stream) == row['content_hash']
     except OSError:
         return False
