@@ -1,22 +1,24 @@
 {% extends 'admin/layout.html' %}
-{% block extra_css %}{{ super() }}<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_identity.css') }}">{% endblock %}
+{% block title %}Duplicate reviews · Admin{% endblock %}
+{% block extra_css %}{{ super() }}<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_identity.css', v='identity-3') }}">{% endblock %}
 {% block admin_content %}
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
 {% macro person(id) %}{% if people.get(id) %}<a href="{{ url_for('admin_identity.account', stable_id=id) }}">{{ people[id].id }}</a>{% elif id in merged %}<a href="{{ url_for('admin_identity.account',stable_id=id) }}">Merged identity</a>{% else %}<span>Unavailable account</span>{% endif %}{% endmacro %}
 {% macro case_list(items) %}
 <div class="identity-cases">
-{% for item in items %}<article class="identity-card">
+{% for item in items %}<article class="identity-card identity-case">
 <div class="identity-row"><a href="{{ url_for('admin_identity.detail', case_id=item.id) }}"><strong>Review #{{ item.id }}</strong></a><span class="a-badge">{{ item.status|capitalize }}</span></div>
-<p>{{ person(item.left_id) }}<br>{{ person(item.right_id) }}</p>
-<small>Updated {{ item.updated_at|localtime }} · Assigned to {% if item.assignee %}{{ person(item.assignee) }}{% else %}no one{% endif %}</small>
-</article>{% else %}<div class="identity-card"><h2>No reviews here</h2><p>Preview a scan to find candidate pairs, or change your filters.</p></div>{% endfor %}
+<div class="identity-account-pair"><div><span>First account</span>{{ person(item.left_id) }}</div><span class="identity-pair-symbol" aria-hidden="true">↔</span><div><span>Second account</span>{{ person(item.right_id) }}</div></div>
+<small class="identity-case-meta">Updated {{ item.updated_at|localtime }} · Assigned to {% if item.assignee %}{{ person(item.assignee) }}{% else %}no one{% endif %}</small>
+</article>{% else %}<div class="identity-empty"><i class="far fa-folder-open" aria-hidden="true"></i><h2>No reviews here</h2><p>Preview a scan to find candidate pairs, or change your filters.</p></div>{% endfor %}
 </div>
 {% endmacro %}
-{% macro history_list(items) %}{% for entry in items %}<article class="identity-card"><div class="identity-row"><strong>{{ entry.action|replace('_',' ')|capitalize }}</strong><a href="{{ url_for('admin_identity.detail', case_id=entry.case_id) }}">Review #{{ entry.case_id }}</a></div><p class="identity-note">{{ entry.reason }}</p><small>{{ person(entry.actor_id) }} · {{ entry.created_at|localtime }}</small></article>{% else %}<p>No retained actions.</p>{% endfor %}{% endmacro %}
-<div class="identity-workspace">
-<header class="identity-header"><div><p class="identity-eyebrow">PRIVATE ADMIN WORKSPACE</p><h1>Identity reviews</h1><p>Review account evidence and record a considered decision.</p></div><span class="a-badge">Review only</span></header>
+{% macro history_list(items) %}{% for entry in items %}<article class="identity-card"><div class="identity-row"><strong>{{ entry.action|replace('_',' ')|capitalize }}</strong><a href="{{ url_for('admin_identity.detail', case_id=entry.case_id) }}">Review #{{ entry.case_id }}</a></div><p class="identity-note">{{ entry.reason }}</p><small>{{ person(entry.actor_id) }} · {{ entry.created_at|localtime }}</small></article>{% else %}<div class="identity-empty"><i class="far fa-folder-open" aria-hidden="true"></i><p>No retained actions.</p></div>{% endfor %}{% endmacro %}
+<div class="identity-workspace identity-hub identity-screen">
+<header class="identity-header"><div><p class="identity-eyebrow">PRIVATE ADMIN WORKSPACE</p><h1>{{ 'Duplicate reviews' if view=='queue' else ('Scan preview' if view=='preview' else 'Identity review') }}</h1><p>Review account evidence and record a considered decision.</p></div><span class="hub-private"><i class="fas fa-clone" aria-hidden="true"></i> Evidence review</span></header>
 {% include 'admin/partials/identity_nav.html' %}
 {% if view == 'queue' %}
+<div class="identity-section-heading identity-row"><div><p class="identity-eyebrow">Review queue</p><h2>Account pairs</h2><p>Filter by account, review status or the evidence connecting a pair.</p></div><form method="post" action="{{ url_for('admin_identity.scan_preview') }}">{{ csrf() }}<button class="identity-button"><i class="fas fa-search" aria-hidden="true"></i> Preview duplicate scan</button></form></div>
 <form class="identity-filters" method="get"><label>Account email<input name="q" value="{{ q }}" maxlength="120" type="search"></label><label>Status<select name="status"><option value="">All statuses</option>{% for s in states %}<option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s|capitalize }}</option>{% endfor %}</select></label><label>Current evidence<select name="reason"><option value="">All reasons</option>{% for r in ['canonical_email','confirmed_device','fingerprint'] %}<option value="{{ r }}" {% if reason==r %}selected{% endif %}>{{ r|replace('_',' ')|capitalize }}</option>{% endfor %}</select></label><button class="identity-button">Filter reviews</button></form>
 {{ case_list(cases) }}
 <div class="identity-pagination">{% if page>1 %}<a href="{{ url_for('admin_identity.duplicates',page=page-1,q=q,status=status,reason=reason) }}">Previous</a>{% endif %}<span>Page {{ page }}</span>{% if more %}<a href="{{ url_for('admin_identity.duplicates',page=page+1,q=q,status=status,reason=reason) }}">Next</a>{% endif %}</div>
