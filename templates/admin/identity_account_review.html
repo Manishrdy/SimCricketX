@@ -1,0 +1,127 @@
+{% extends 'admin/layout.html' %}
+{% block title %}Account identity review · Admin{% endblock %}
+{% block extra_css %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_identity.css', v='identity-3') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_account_review.css', v=1) }}">
+{% endblock %}
+{% block extra_js %}
+{{ super() }}
+<script defer src="{{ url_for('static', filename='js/admin_account_review.js', v=1) }}"></script>
+{% endblock %}
+{% block admin_content %}
+<div class="identity-workspace identity-hub identity-screen account-review">
+{% include 'admin/partials/identity_nav.html' %}
+<header class="account-review-header">
+  <h1>Account identity review</h1>
+  <form id="identity-review-run" method="post" action="{{ url_for('admin_identity.account_review_run') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="identity-button" type="submit"><i class="fas fa-play" aria-hidden="true"></i> <span>Run identity review</span></button>
+  </form>
+</header>
+{% for message in get_flashed_messages() %}<p class="identity-card review-notice" role="status">{{ message }}</p>{% endfor %}
+
+<section class="review-run" id="identity-review-live" aria-labelledby="identity-review-live-title" hidden>
+  <div class="review-heading">
+    <h2 id="identity-review-live-title">Review activity</h2>
+    <p class="review-run-status" id="identity-review-status" role="status"></p>
+  </div>
+  <dl class="review-live-metrics">
+    <div><dt>Processed</dt><dd id="identity-review-processed">0</dd></div>
+    <div><dt>Expected</dt><dd id="identity-review-total">—</dd></div>
+    <div><dt>With findings</dt><dd id="identity-review-findings">0</dd></div>
+    <div><dt>Elapsed</dt><dd id="identity-review-elapsed">0s</dd></div>
+  </dl>
+  <p class="review-stage" id="identity-review-stage"></p>
+  <progress id="identity-review-progress" aria-label="Accounts processed"></progress>
+  <ol class="review-log" id="identity-review-log" aria-label="Review activity log" tabindex="0"></ol>
+  <p class="review-refresh" id="identity-review-refresh" hidden><a href="{{ request.full_path }}">Refresh saved report</a></p>
+</section>
+
+<div id="identity-review-results">
+{% if report %}
+{% set h = report.header %}{% set m = h.metadata %}
+<section class="identity-card review-summary" aria-labelledby="review-summary-title">
+  <div class="review-heading">
+    <h2 id="review-summary-title">Latest saved review</h2>
+    {{ h.completed_at|localtime }}
+  </div>
+  <dl class="review-summary-metrics">
+    <div><dt>Accounts scanned</dt><dd>{{ m.accounts }}</dd></div>
+    <div><dt>With findings</dt><dd>{{ m.finding_accounts }}</dd></div>
+    <div><dt>Device coverage</dt><dd>{{ m.device_accounts }}</dd></div>
+    <div><dt>Network coverage</dt><dd>{{ m.network_accounts }}</dd></div>
+  </dl>
+  <details class="review-disclosure">
+    <summary>Run details</summary>
+    <dl class="review-detail-grid">
+      <div><dt>Run by</dt><dd>{{ h.actor_label }}</dd></div>
+      <div><dt>Started</dt><dd>{{ h.started_at|localtime }}</dd></div>
+      <div><dt>Expires</dt><dd>{{ h.expires_at|localtime }}</dd></div>
+      <div><dt>Rules / normalization / ranking</dt><dd>{{ h.rules_version }} / {{ m.normalization_version }} / {{ m.ranking_version }}</dd></div>
+      <div><dt>Device evidence schema</dt><dd>{{ 'Available' if m.device_schema_available else 'Unavailable' }}</dd></div>
+      <div><dt>Device rows skipped</dt><dd>{{ m.skipped_device_rows }}</dd></div>
+      <div><dt>Blocked signup groups</dt><dd><a href="{{ url_for('identity_signup.attempts') }}">{{ m.blocked_signup_groups }}</a></dd></div>
+      {% for key,value in m.configuration.items() %}<div><dt>{{ key|replace('_',' ')|capitalize }}</dt><dd>{{ value }}</dd></div>{% endfor %}
+    </dl>
+    <p>Coverage totals reflect the scan. Expired evidence is hidden from account results.</p>
+    {% for warning in m.warnings %}<p>{{ warning }}</p>{% endfor %}
+  </details>
+</section>
+
+<section class="identity-card review-results" aria-labelledby="review-results-title">
+  <div class="review-heading">
+    <h2 id="review-results-title">Account results</h2>
+    <span>{{ report.total }} matching · Page {{ page }}</span>
+  </div>
+  <form method="get" class="identity-filters">
+    <label>Search<input type="search" name="q" value="{{ q }}" maxlength="254" placeholder="Email or stable ID"></label>
+    <label>View<select name="view"><option value="findings" {% if view=='findings' %}selected{% endif %}>Findings and coverage gaps</option><option value="all" {% if view=='all' %}selected{% endif %}>All accounts</option></select></label>
+    <label>Finding<select name="finding"><option value="">Any finding or gap</option>{% for code,label in labels.items() %}<option value="{{ code }}" {% if finding==code %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <button class="identity-button" type="submit">Filter</button>
+  </form>
+  <div class="review-account-list">
+  {% for item in report['items'] %}
+    <article class="review-account">
+      <h3><a href="{{ url_for('admin_identity.account',stable_id=item.stable_id) }}">{{ item.label }} <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></h3>
+      {% if item.findings %}
+      <ul class="review-findings" aria-label="Findings">
+        {% for code,detail in item.findings.items() %}
+        <li class="{{ 'review-gap' if code in ['missing_device','missing_network'] else 'review-finding' }}">{{ labels[code] }}{% if detail.reason %} · {{ detail.reason|replace('_',' ') }}{% endif %}</li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="review-clear">No findings</p>{% endif %}
+      <details class="review-disclosure">
+        <summary>Account evidence</summary>
+        <dl class="review-detail-grid">
+          <div><dt>Stable ID</dt><dd>{{ item.stable_id }}</dd></div>
+          <div><dt>Email verification recorded</dt><dd>{{ 'Yes' if item.email_verified else 'No' }}</dd></div>
+          <div><dt>Forced verification</dt><dd>{{ 'Yes' if item.force_email_verify else 'No' }}</dd></div>
+          <div><dt>Last device sighting</dt><dd>{{ observation_time(item.device.last_seen)|localtime if item.device else 'Missing or expired' }}</dd></div>
+          <div><dt>Latest network observation</dt><dd>{% if item.network %}{{ item.network.state }} · {{ observation_time(item.network.observed_at)|localtime }}{% else %}Missing or expired{% endif %}</dd></div>
+          {% for code,detail in item.findings.items() if detail.last_seen or detail.until %}
+          <div><dt>{{ labels[code] }}</dt><dd>{% if detail.last_seen %}Last match {{ observation_time(detail.last_seen)|localtime }}{% endif %}{% if detail.until %}Until {{ observation_time(detail.until)|localtime }}{% endif %}</dd></div>
+          {% endfor %}
+        </dl>
+      </details>
+    </article>
+  {% else %}
+    <p class="review-empty">No accounts match these filters.</p>
+  {% endfor %}
+  </div>
+  {% if page>1 or report.more %}
+  <nav class="identity-pagination" aria-label="Report pages">
+    {% if page>1 %}<a href="{{ url_for('admin_identity.account_review_report',q=q,finding=finding,view=view,page=page-1) }}">Previous</a>{% endif %}
+    {% if report.more %}<a href="{{ url_for('admin_identity.account_review_report',q=q,finding=finding,view=view,page=page+1) }}">Next</a>{% endif %}
+  </nav>
+  {% endif %}
+</section>
+{% else %}
+<section class="identity-card review-empty">
+  <h2>No saved review</h2>
+  <p>Run a review to check all accounts.</p>
+</section>
+{% endif %}
+</div>
+</div>
+{% endblock %}

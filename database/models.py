@@ -1841,3 +1841,23 @@ class IdentityMerge(db.Model):
     delivery = db.Column(db.String(16), nullable=False, default='pending')
     completed_at = db.Column(db.DateTime, nullable=True)
     receipt_json = db.Column(db.Text, nullable=True)
+
+
+class IdentityAccountReport(db.Model):
+    """Singleton successful report; contains no copied email addresses or secrets."""
+    __tablename__ = 'identity_account_reports'
+    id = db.Column(db.Integer, primary_key=True)
+    started_at = db.Column(db.DateTime, nullable=False)
+    completed_at = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    actor_id = db.Column(db.String(36), nullable=False)
+    rules_version = db.Column(db.Integer, nullable=False)
+    metadata_json = db.Column(db.Text, nullable=False)
+    __table_args__ = (db.CheckConstraint('id = 1'),)
+
+
+class IdentityAccountResult(db.Model):
+    __tablename__ = 'identity_account_results'
+    stable_id = db.Column(db.String(36), db.ForeignKey('users.stable_id', ondelete='CASCADE'), primary_key=True)
+    report_id = db.Column(db.Integer, db.ForeignKey('identity_account_reports.id', ondelete='CASCADE'), nullable=False)
+    payload = db.Column(db.Text, nullable=False)

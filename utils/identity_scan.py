@@ -22,12 +22,65 @@ def timestamp(value):
         return None
 
 
+def evidence_groups(connection, at, *, check=lambda: None, progress=lambda *args, **kwargs: None):
+    """Group usable evidence once; callers choose account or pair projections."""
+    cutoff = at - timedelta(days=180)
+    tables = {r[0] for r in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    def columns(table):
+        return {r[1] for r in connection.execute(f'PRAGMA table_info("{table}")')}
+    if 'users' not in tables or 'id' not in columns('users'):
+        raise ValueError('Database has no supported users table')
+    fields = ['id'] + [c for c in ('stable_id',) if c in columns('users')]
+    users = {r['id']: dict(r) for r in connection.execute('SELECT ' + ','.join(fields) + ' FROM users')}
+    progress('Indexing canonical emails', total=len(users))
+    groups = defaultdict(dict)
+    invalid = 0
+    for uid in users:
+        check()
+        try:
+            groups[('canonical_email', normalize_email(uid).canonical)][uid] = (None, None)
+        except InvalidEmail:
+            invalid += 1
+    warnings = []
+    stable = defaultdict(list)
+    for uid, user in users.items():
+        if user.get('stable_id'):
+            stable[user['stable_id']].append(uid)
+    required = {'user_stable_id', 'key_id', 'device_hash', 'fingerprint_hash',
+                'fingerprint_status', 'cookie_confirmed', 'first_seen', 'last_seen'}
+    device_available = 'identity_device_sightings' in tables and required <= columns('identity_device_sightings')
+    skipped = 0
+    progress('Reading retained device evidence')
+    if device_available:
+        for row in connection.execute('SELECT ' + ','.join(sorted(required)) + ' FROM identity_device_sightings'):
+            check()
+            first, last = timestamp(row['first_seen']), timestamp(row['last_seen'])
+            owners = stable.get(row['user_stable_id'], [])
+            if not first or not last or first > last or last > at or len(owners) != 1:
+                skipped += 1
+                continue
+            if last <= cutoff:
+                continue
+            uid = owners[0]
+            for kind, value, eligible in (
+                ('confirmed_device', row['device_hash'], row['cookie_confirmed'] == 1),
+                ('fingerprint', row['fingerprint_hash'], row['fingerprint_status'] == 'ok'),
+            ):
+                if not eligible or not value or not row['key_id']:
+                    continue
+                group = groups[(kind, row['key_id'], value)]
+                old_first, old_last = group.get(uid, (first, last))
+                group[uid] = (min(first, old_first), max(last, old_last))
+    else:
+        warnings.append('Device evidence unavailable in this schema; no historical matches inferred.')
+    return users, groups, invalid, skipped, device_available, warnings, tables
+
+
 def scan(path=None, *, at=None, _connection=None):
     at = at or datetime.now(timezone.utc)
     if at.tzinfo is None:
         raise ValueError('Scan time must include a timezone')
     at = at.astimezone(timezone.utc)
-    cutoff = at - timedelta(days=180)
     if _connection is None:
         path = Path(path).resolve(strict=True)
         connection = sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)
@@ -39,50 +92,9 @@ def scan(path=None, *, at=None, _connection=None):
         if _connection is None:
             connection.execute('PRAGMA query_only=ON')
             connection.execute('BEGIN')  # One consistent snapshot, including committed WAL data.
-        tables = {r[0] for r in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        users, groups, invalid, skipped, device_available, warnings, tables = evidence_groups(connection, at)
         def columns(table):
             return {r[1] for r in connection.execute(f'PRAGMA table_info("{table}")')}
-        if 'users' not in tables or 'id' not in columns('users'):
-            raise ValueError('Database has no supported users table')
-        fields = ['id'] + [c for c in ('stable_id',) if c in columns('users')]
-        users = {r['id']: dict(r) for r in connection.execute('SELECT ' + ','.join(fields) + ' FROM users')}
-        groups = defaultdict(dict)
-        invalid = 0
-        for uid in users:
-            try:
-                groups[('canonical_email', normalize_email(uid).canonical)][uid] = (None, None)
-            except InvalidEmail:
-                invalid += 1
-        warnings = []
-        stable = defaultdict(list)
-        for uid, user in users.items():
-            if user.get('stable_id'):
-                stable[user['stable_id']].append(uid)
-        required = {'user_stable_id', 'key_id', 'device_hash', 'fingerprint_hash',
-                    'fingerprint_status', 'cookie_confirmed', 'first_seen', 'last_seen'}
-        device_available = 'identity_device_sightings' in tables and required <= columns('identity_device_sightings')
-        skipped = 0
-        if device_available:
-            for row in connection.execute('SELECT ' + ','.join(sorted(required)) + ' FROM identity_device_sightings'):
-                first, last = timestamp(row['first_seen']), timestamp(row['last_seen'])
-                owners = stable.get(row['user_stable_id'], [])
-                if not first or not last or first > last or last > at or len(owners) != 1:
-                    skipped += 1
-                    continue
-                if last <= cutoff:
-                    continue
-                uid = owners[0]
-                for kind, value, eligible in (
-                    ('confirmed_device', row['device_hash'], row['cookie_confirmed'] == 1),
-                    ('fingerprint', row['fingerprint_hash'], row['fingerprint_status'] == 'ok'),
-                ):
-                    if not eligible or not value or not row['key_id']:
-                        continue
-                    group = groups[(kind, row['key_id'], value)]
-                    old_first, old_last = group.get(uid, (first, last))
-                    group[uid] = (min(first, old_first), max(last, old_last))
-        else:
-            warnings.append('Device evidence unavailable in this schema; no historical matches inferred.')
         pairs = defaultdict(dict)
         for key, members in groups.items():
             kind = key[0]
