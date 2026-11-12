@@ -1,8 +1,10 @@
 """Private identity review screens; no enforcement or destructive account actions."""
+from collections import deque
 import json
+import time
 
 import click
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, Response, abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy import select, func, or_
@@ -11,7 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from auth.decorators import admin_required
 from database import db
 from database.models import User, IdentityReviewCase as Case, IdentityReviewEvidence as Evidence, IdentityReviewAction as Action
-from services import identity_review as review, identity_hub as hub
+from services import identity_review as review, identity_hub as hub, identity_account_review as account_review
 from utils.identity_scan import timestamp
 
 bp = Blueprint('admin_identity', __name__, url_prefix='/admin/identity')
@@ -91,6 +93,80 @@ def overview():
     data = hub.overview()
     recent, _ = hub.audit_rows(hub.filters({}))
     return hub_render('overview', recent=recent[:5], **data)
+
+
+@bp.post('/account-review/run')
+def account_review_run():
+    if request.accept_mimetypes.best == 'application/x-ndjson':
+        return Response(
+            account_review_events(account_review.database_path(), current_user.stable_id,
+                                  hub.configuration(), current_app.logger),
+            mimetype='application/x-ndjson', headers={'X-Accel-Buffering': 'no'},
+        )
+    try:
+        account_review.execute(current_user.stable_id, hub.configuration())
+    except (account_review.ReviewBusy, account_review.ReviewUnavailable) as exc:
+        flash(str(exc), 'warning')
+        return redirect(url_for('.account_review_report'), code=303)
+    except Exception:  # A failed scan must leave the prior report accessible.
+        current_app.logger.exception('Identity account review failed')
+        flash('Identity review could not finish. The previous successful report is unchanged. Please retry.', 'error')
+        return redirect(url_for('.account_review_report'), code=303)
+    flash('Identity review completed. No accounts or review cases were changed.', 'success')
+    return redirect(url_for('.account_review_report'), code=303)
+
+
+def account_review_events(path, actor, configuration, logger):
+    from gevent import sleep
+
+    # Only the worker appends events. It can finish and publish even if the
+    # browser disconnects, without retaining the Flask request context.
+    events = deque()
+    started = time.monotonic()
+
+    def event(status, message, **counts):
+        return json.dumps(dict(status=status, message=message,
+                               elapsed_ms=round((time.monotonic() - started) * 1000), **counts)) + '\n'
+
+    def progress(message, **counts):
+        events.append(event('running', message, **counts))
+
+    yield event('running', 'Starting identity review')
+    try:
+        job = account_review.start(path, actor, configuration, progress=progress)
+        heartbeat = started + 5
+        while not job.ready():
+            while events:
+                yield events.popleft()
+            if time.monotonic() >= heartbeat:
+                yield event('heartbeat', '')
+                heartbeat = time.monotonic() + 5
+            sleep(0.1)
+        while events:
+            yield events.popleft()
+        job.get()
+    except (account_review.ReviewBusy, account_review.ReviewUnavailable, TimeoutError) as exc:
+        yield event('failed', str(exc) or 'Identity review timed out.')
+    except Exception:
+        logger.exception('Identity account review failed')
+        yield event('failed', 'Identity review could not finish. The previous successful report is unchanged.')
+    else:
+        yield event('complete', 'Report saved')
+
+
+@bp.get('/account-review')
+def account_review_report():
+    q = request.args.get('q', '').strip()[:254]
+    finding = request.args.get('finding', '')
+    view = request.args.get('view', 'findings')
+    page = page_number()
+    try:
+        report = account_review.read(q=q, finding=finding, view=view, page=page)
+    except ValueError as exc:
+        abort(400, description=str(exc))
+    return render_template('admin/identity_account_review.html', report=report,
+                           labels=account_review.LABELS, observation_time=timestamp,
+                           q=q, finding=finding, view=view, page=page)
 
 
 @bp.get('/duplicates')
@@ -218,4 +294,5 @@ def init_app(app):
         with review.transaction() as conn:
             conn.exec_driver_sql('BEGIN IMMEDIATE')
             result = review.cleanup(conn, review.now())
+            result['account_reports'] = account_review.cleanup(conn, review.now())
         click.echo(json.dumps(result))

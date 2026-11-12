@@ -167,7 +167,9 @@ def coverage(conn):
                 actual.update((name, c) for c in fk['constrained_columns'])
     if dependents != {(n, ('user_player_id',), 'user_players', ('id',)) for n in ('players', 'auction_players')}:
         raise ValueError('Discarded-row dependency coverage changed; operator review is required.')
-    if actual != {(n, 'user_stable_id') for n in STABLE}:
+    # Saved report rows belong only to the scanned account and cascade on deletion;
+    # they are never transferred as survivor evidence.
+    if actual != {(n, 'user_stable_id') for n in STABLE} | {('identity_account_results', 'stable_id')}:
         raise ValueError('Stable account reference coverage changed; operator review is required.')
     stable_names = {'user_stable_id', 'subject', 'left_id', 'right_id', 'assignee', 'source', 'survivor', 'administrator'}
     stable_non_fk = {(t.name, c.name) for t in db.metadata.tables.values() for c in t.c

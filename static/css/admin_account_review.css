@@ -1,0 +1,193 @@
+.account-review {
+    --review-gold: #f1cf91;
+    --review-line: var(--card-border);
+    --review-muted: var(--fg-secondary);
+}
+
+.account-review-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.25rem;
+    padding: clamp(1.2rem, 3vw, 2.2rem);
+    border: 1px solid #34594c;
+    border-radius: 16px;
+    background: linear-gradient(115deg, #102c26, #1d493b);
+    color: #fff;
+}
+
+.account-review-header h1 {
+    margin: 0;
+    color: inherit;
+    font-size: clamp(1.6rem, 3.2vw, 2.55rem);
+    font-weight: 650;
+    line-height: 1.13;
+    letter-spacing: -.045em;
+}
+
+.account-review-header .identity-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .65rem;
+    white-space: nowrap;
+    background: var(--review-gold);
+    color: #23291d;
+}
+
+.account-review-header .identity-button:hover { background: #ffe1aa; }
+.account-review-header .identity-button:disabled { cursor: wait; opacity: .75; }
+.account-review-header .identity-button i { font-size: .7em; }
+
+.account-review #identity-review-results {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.account-review .review-notice { margin: 1rem 0; }
+
+.review-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .5rem 1rem;
+    flex-wrap: wrap;
+}
+
+.account-review .review-heading h2 { margin: 0; }
+.review-heading > span, .review-heading > time {
+    color: var(--review-muted);
+    font-size: .8rem;
+}
+
+.account-review dl:is(.review-summary-metrics, .review-live-metrics, .review-detail-grid) {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .7rem;
+    margin: 1rem 0 0;
+}
+
+.review-summary-metrics > div, .review-live-metrics > div {
+    padding: .85rem 1rem;
+    border: 1px solid var(--review-line);
+    border-radius: 9px;
+}
+
+.review-summary-metrics > div { background: var(--bg-secondary); }
+
+.account-review dl:is(.review-summary-metrics, .review-live-metrics, .review-detail-grid) :is(dt, dd) {
+    padding: 0;
+    border: 0;
+}
+
+.account-review dl:is(.review-summary-metrics, .review-live-metrics, .review-detail-grid) dt {
+    margin: 0;
+    color: var(--review-muted);
+    font-size: .75rem;
+    font-weight: 500;
+}
+
+.account-review dl:is(.review-summary-metrics, .review-live-metrics) dd {
+    margin: .25rem 0 0;
+    font-size: clamp(1.25rem, 2.2vw, 1.9rem);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    letter-spacing: -.04em;
+}
+
+.account-review details.review-disclosure { margin: .75rem 0 0; }
+.account-review .review-account details.review-disclosure:not([open]) {
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+.review-disclosure summary {
+    width: fit-content;
+    cursor: pointer;
+    color: var(--review-muted);
+    font-size: .78rem;
+    font-weight: 600;
+}
+
+.account-review dl.review-detail-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
+.account-review dl.review-detail-grid dd { margin: .2rem 0 .4rem; }
+.review-disclosure p { color: var(--review-muted); font-size: .8rem; }
+
+.account-review .review-results .identity-filters {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr 1fr auto;
+    gap: .65rem;
+    margin: 1rem 0;
+}
+
+.account-review .review-results .identity-filters label { min-width: 0; }
+.account-review .review-results .identity-filters input,
+.account-review .review-results .identity-filters select { min-height: 44px; }
+[data-theme="dark"] .account-review .review-results select { color-scheme: dark; }
+
+.review-account { border-top: 1px solid var(--review-line); padding: .95rem 0; }
+.review-account:last-child { padding-bottom: 0; }
+.account-review .review-account h3 { margin: 0 0 .55rem; }
+.review-account h3 a { color: var(--fg); text-decoration: none; }
+.review-account h3 a:hover { text-decoration: underline; }
+.review-account h3 i { margin-left: .25rem; font-size: .65em; color: var(--review-muted); }
+.review-findings { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0; padding: 0; list-style: none; }
+.review-findings li { padding: .25rem .55rem; border-radius: 5px; font-size: .72rem; }
+.review-finding { color: #684318; background: #f8e9cd; }
+.review-gap { color: var(--review-muted); background: var(--bg-secondary); border: 1px solid var(--review-line); }
+.review-clear, .review-empty { color: var(--review-muted); }
+.review-clear, .review-empty p { margin: 0; }
+.account-review .review-empty h2 { color: var(--fg); margin-bottom: .3rem; }
+
+.review-run {
+    --review-line: #345048;
+    --review-muted: #bad1c6;
+    margin-top: 1rem;
+    padding: clamp(1rem, 2.5vw, 1.5rem);
+    border: 1px solid var(--review-line);
+    border-radius: 12px;
+    background: #142522;
+    color: #eff6ef;
+}
+
+.review-run .review-run-status {
+    margin: 0;
+    color: #c1e8d3;
+    font-size: .8rem;
+    font-weight: 650;
+}
+.review-run[data-status="failed"] .review-run-status { color: #ffcc9a; }
+.review-live-metrics > div { background: #1a302a; }
+.review-run .review-stage { margin: .85rem 0 .2rem; color: #dbeae2; }
+.review-run progress { display: block; width: 100%; height: .6rem; accent-color: var(--review-gold); }
+.review-log {
+    max-height: 12rem;
+    overflow: auto;
+    margin: .85rem 0 0;
+    padding: .65rem .85rem;
+    border: 1px solid var(--review-line);
+    border-radius: 8px;
+    background: #0e1d19;
+    list-style: none;
+    font: .77rem/1.65 "IBM Plex Mono", ui-monospace, monospace;
+}
+.review-log li { display: flex; align-items: baseline; gap: .7rem; padding: .13rem 0; }
+.review-log time { color: #a9c8ba; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.review-refresh { margin: .8rem 0 0; }
+.review-refresh a { color: var(--review-gold); }
+
+@media (max-width: 850px) {
+    .account-review .review-results .identity-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 600px) {
+    .account-review-header { align-items: stretch; flex-direction: column; }
+    .account-review dl:is(.review-summary-metrics, .review-live-metrics) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .review-summary-metrics > div, .review-live-metrics > div { padding: .7rem; }
+}
+
+@media (max-width: 400px) {
+    .account-review .review-results .identity-filters { grid-template-columns: 1fr; }
+}

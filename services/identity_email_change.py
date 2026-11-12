@@ -48,6 +48,7 @@ REVOKE = frozenset({('active_sessions', 'user_id')})
 # Non-FK address/actor columns intentionally retained, including historical
 # appeal identities and stable UUID actors. Never silently rewrite snapshots.
 NON_FK_PRESERVED = HISTORICAL | frozenset({
+    ('identity_account_reports', 'actor_id'),
     ('identity_review_actions', 'actor_id'), ('identity_signup_actions', 'actor_id'),
     ('identity_network_actions', 'actor_id'), ('identity_signup_attempts', 'email'),
     ('identity_signup_appeals', 'email'), ('identity_appeal_deliveries', 'email'),
