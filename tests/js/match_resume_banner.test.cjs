@@ -11,13 +11,16 @@ async function restore(overrides = {}, format = 'Hundred') {
     const elements = new Map();
     const createElement = () => ({style: {}, dataset: {}, hidden: false, textContent: '',
         appendChild(child) { elements.set(child.id, child); }});
-    for (const id of ['sb-score', 'sb-overs', 'sb-phase', 'spin-toss']) {
+    const sidebarIds = ['status', 'toss', 'players', 'striker', 'non-striker', 'bowler', 'next']
+        .map(name => 'live-innings-' + name);
+    for (const id of ['sb-score', 'sb-overs', 'sb-phase', 'spin-toss', ...sidebarIds]) {
         const element = createElement();
         element.parentElement = createElement();
         elements.set(id, element);
     }
     let onReady;
     const requests = [];
+    const resumed = [];
     const state = {status: 'in_progress', score: 30, wickets: 1, current_over: 5,
         current_ball: 0, innings: 1, total_overs: 20, phase_name: 'Middle',
         legal_balls: 25, innings_ball_limit: 100,
@@ -29,7 +32,10 @@ async function restore(overrides = {}, format = 'Hundred') {
         matchData: {match_id: 'test', overs: 20}, simulationMode: 'manual',
         IS_HUNDRED_MATCH: format === 'Hundred', BALLS_PER_SET: format === 'Hundred' ? 5 : 6,
         LIVE_RATE_UNIT: format === 'Hundred' ? 1 : 6, getMatchFormat: () => format,
-        appendLog() {}, console: {error(error) { throw error; }},
+        appendLog() {}, console: {error(message, error) { throw error; }},
+        scheduleNextBall: delay => resumed.push(delay),
+        showDecisionModal: decision => resumed.push(decision),
+        _processBallResult: card => resumed.push(card),
         fetch: async (url, options) => {
             requests.push({url, options});
             return {ok: true, json: async () => options
@@ -38,7 +44,7 @@ async function restore(overrides = {}, format = 'Hundred') {
     vm.runInNewContext(banner + resume, context);
     onReady();
     await new Promise(setImmediate);
-    return {elements, requests};
+    return {elements, requests, resumed, render: context.renderLiveInnings};
 }
 
 test('refresh at 25 balls restores the available timeout and ends powerplay', async () => {
@@ -86,4 +92,55 @@ test('refresh preserves ListA server phases and legacy T20 fallback', async () =
     assert.equal(listA.elements.get('sb-phase').textContent, 'POWERPLAY (PP1)');
     const t20 = await restore({phase_name: undefined}, 'T20');
     assert.equal(t20.elements.get('sb-phase').textContent, 'POWERPLAY');
+});
+
+test('live innings restores roles, displays pending choices, and clears at a break', async () => {
+    const live = {status: 'live', innings: 2, batting_team: 'Away',
+        striker: 'Batter B', non_striker: 'Batter A', bowler: 'Bowler A', next_batter: 'Batter C'};
+    const {elements, render} = await restore({live_innings: live}, 'T20');
+    const row = name => elements.get('live-innings-' + name);
+    assert.equal(row('toss').hidden, true);
+    assert.equal(row('status').textContent, 'Innings 2 · Away batting');
+    assert.equal(row('striker').textContent, 'Batter B');
+    assert.equal(row('non-striker').textContent, 'Batter A');
+    assert.equal(row('bowler').textContent, 'Bowler A');
+    assert.equal(row('next').textContent, 'Batter C');
+
+    render({...live, selecting_batter: 'non_striker'});
+    assert.equal(row('striker').textContent, 'Batter B');
+    assert.equal(row('non-striker').textContent, 'Selecting batter…');
+    render({...live, selecting_bowler: true, next_batter: null});
+    assert.equal(row('bowler').textContent, 'Selecting bowler…');
+    assert.equal(row('next').textContent, 'No batters left');
+
+    render({status: 'break'});
+    assert.equal(row('status').textContent, 'Innings break');
+    assert.equal(row('players').hidden, true);
+    for (const name of ['striker', 'non-striker', 'bowler', 'next']) {
+        assert.equal(row(name).textContent, '—');
+    }
+    render({...live, innings: 3});
+    assert.equal(row('players').hidden, false);
+    assert.equal(row('status').textContent, 'Innings 3 · Away batting');
+    render({status: 'complete'});
+    assert.equal(row('players').hidden, true);
+    assert.equal(row('status').textContent, 'Match complete');
+});
+
+test('reload during a break restores the card before play advances', async () => {
+    const card = {innings_end: true, innings_number: 1, scorecard_data: {}, commentary: 'End of innings'};
+    const {elements, resumed} = await restore({
+        innings: 2, live_innings: {status: 'break'}, pending_card: {payload: card},
+    }, 'T20');
+    assert.equal(elements.get('live-innings-status').textContent, 'Innings break');
+    assert.equal(elements.get('live-innings-players').hidden, true);
+    assert.equal(resumed.length, 1);
+    assert.equal(resumed[0].scorecard_data, card.scorecard_data);
+    assert.equal(resumed[0].commentary, '');
+});
+
+test('reload restores a pending manual selection before play advances', async () => {
+    const decision = {decision_type: 'next_bowler'};
+    const {resumed} = await restore({pending_selection: decision}, 'T20');
+    assert.deepEqual(resumed, [decision]);
 });

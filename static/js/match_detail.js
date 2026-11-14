@@ -53,26 +53,22 @@ let innings1Data = null;       // Saved {ballHistory, overRuns} from 1st innings
 let dashboardActive = false;   // Which view is showing
 let currentMainView = 'commentary'; // 'commentary' | 'matchcenter'
 
-// Hard-lock code window height to available space in main panel.
+// Size the commentary pane to the live-view stack. Measuring the whole
+// main panel and subtracting the banner left the log at the title bar
+// whenever that sum was short, and a percentage height then clipped it.
 function syncCodeWindowHeight() {
-    const mainPanel = document.querySelector('.main-panel');
-    const scoreBanner = document.querySelector('.score-banner');
-    const controlsBar = document.querySelector('.controls-bar');
+    const stack = document.getElementById('live-view-stack');
     const codeWindow = document.querySelector('.code-window');
+    if (!stack || !codeWindow) return;
 
-    if (!mainPanel || !scoreBanner || !controlsBar || !codeWindow) return;
-
-    const panelHeight = mainPanel.clientHeight;
-    if (!panelHeight) return;
-
-    const panelStyle = getComputedStyle(mainPanel);
-    const rowGap = parseFloat(panelStyle.rowGap || panelStyle.gap || '0') || 0;
-    const available = panelHeight - scoreBanner.offsetHeight - controlsBar.offsetHeight - (rowGap * 2);
-
-    if (available > 120) {
+    const available = stack.clientHeight;
+    if (available > 80) {
         const px = `${Math.floor(available)}px`;
         codeWindow.style.height = px;
         codeWindow.style.maxHeight = px;
+    } else {
+        codeWindow.style.height = '';
+        codeWindow.style.maxHeight = '';
     }
 }
 // C1: HTML escaping utility to prevent XSS via innerHTML
@@ -224,7 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Spin Toss Button
     const spinBtn = document.getElementById('spin-toss');
     if (spinBtn) {
-        spinBtn.onclick = spinTossAndStartMatch;
+        spinBtn.onclick = () => (simulationMode === 'manual' ? showTossPopup() : spinTossAndStartMatch());
     }
 
     // Reset Swap Buttons
@@ -249,6 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
     requestAnimationFrame(syncCodeWindowHeight);
     setTimeout(syncCodeWindowHeight, 50);
     window.addEventListener('resize', syncCodeWindowHeight);
+    document.querySelector('.match-info')?.addEventListener('toggle', syncCodeWindowHeight);
 });
 
 
@@ -836,6 +833,7 @@ async function submitManualDecision() {
         const appliedType = data.applied.type;
         hideDecisionModal();
         clearPendingDecisionState();
+        if (data.live_innings) renderLiveInnings(data.live_innings);
 
         if (appliedType === 'fc_declare') {
             appendLog(`[MANUAL] ${data.applied.declared ? 'Declared the innings.' : 'Continuing to bat.'}`, 'comment');
@@ -883,6 +881,136 @@ function appendLog(message, type = 'normal') {
     logContainer.scrollTop = logContainer.scrollHeight;
 }
 
+// Manual mode: the user makes the away captain's coin call in a popup, then
+// sees the winner, the captain's decision and the reasoning behind it.
+// Auto mode keeps the one-click flow (spinTossAndStartMatch below).
+function showTossPopup() {
+    const overlay = document.getElementById('toss-overlay');
+    if (!overlay) return spinTossAndStartMatch();
+    const awayTeam = matchData.team_away.split('_')[0];
+    const coin = document.getElementById('toss-coin');
+    const calls = document.getElementById('toss-calls');
+    const verdict = document.getElementById('toss-verdict');
+    const sub = document.getElementById('toss-sub');
+    const title = document.getElementById('toss-title');
+    const buttons = Array.from(overlay.querySelectorAll('.toss-call-btn'));
+    const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    title.textContent = 'Call the toss';
+    sub.textContent = `${awayTeam} call it in the air. Heads or Tails?`;
+    verdict.hidden = true;
+    calls.hidden = false;
+    coin.style.transition = 'none';
+    coin.style.transform = 'rotateY(0deg)';
+    coin.classList.add('is-idle');
+    buttons.forEach(b => { b.disabled = false; b.classList.remove('picked'); });
+    overlay.style.display = 'flex';
+    if (buttons[0]) buttons[0].focus();
+
+    const finish = () => { overlay.style.display = 'none'; };
+
+    buttons.forEach(btn => {
+        btn.onclick = () => {
+            const call = btn.dataset.call;
+            buttons.forEach(b => { b.disabled = true; });
+            btn.classList.add('picked');
+            coin.classList.remove('is-idle');
+            title.textContent = 'Coin in the air...';
+            sub.textContent = `${awayTeam} called ${call}.`;
+
+            const minWait = new Promise(r => setTimeout(r, reduced ? 200 : 1700));
+            const post = payload => fetch(`${window.location.pathname}/spin-toss`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(r => r.json().then(d => ({ ok: r.ok, status: r.status, body: d })));
+            const request = post({ call, phase: 'flip' });
+
+            // Land on the face the server actually flipped.
+            request.then(({ ok, body }) => {
+                if (!ok) return;
+                const land = body.toss_coin === 'Tails' ? 180 : 0;
+                coin.style.transition = reduced ? 'none' : '';
+                coin.style.transform = `rotateY(${1800 + land}deg)`;
+            }).catch(() => {});
+
+            Promise.all([request, minWait]).then(([{ ok, status, body }]) => {
+                if (!ok) {
+                    title.textContent = 'Toss failed';
+                    sub.textContent = body.error || `Toss failed (${status})`;
+                    appendLog(`[ERROR] ${sub.textContent}`, 'error');
+                    if (status !== 409) buttons.forEach(b => { b.disabled = false; b.classList.remove('picked'); });
+                    else setTimeout(finish, 1500);
+                    return;
+                }
+                const won = body.toss_call === body.toss_coin;
+                title.textContent = `It's ${body.toss_coin}!`;
+                sub.textContent = won
+                    ? `${body.toss_caller} called ${body.toss_call} correctly.`
+                    : `${body.toss_caller} called ${body.toss_call}. Wrong call.`;
+                calls.hidden = true;
+                document.getElementById('toss-verdict-head').textContent =
+                    `${body.toss_winner} won the toss. Bat or bowl first?`;
+                document.getElementById('toss-verdict-reason').textContent =
+                    `Pitch suggestion: ${(body.toss_reason || '').replace(/^Chose to/, 'to')}`;
+                const picks = Array.from(document.querySelectorAll('#toss-picks .toss-call-btn'));
+                picks.forEach(pb => {
+                    pb.disabled = false;
+                    pb.classList.toggle('picked', pb.dataset.decision === body.toss_recommended);
+                    pb.onclick = () => {
+                        picks.forEach(x => { x.disabled = true; });
+                        post({ decision: pb.dataset.decision }).then(({ ok: ok2, body: res }) => {
+                            if (!ok2) {
+                                appendLog(`[ERROR] ${res.error || 'Toss failed'}`, 'error');
+                                picks.forEach(x => { x.disabled = false; });
+                                return;
+                            }
+                            finish();
+                            applyTossResult(res);
+                        }).catch(err => {
+                            appendLog(`[ERROR] Toss failed: ${err}`, 'error');
+                            picks.forEach(x => { x.disabled = false; });
+                        });
+                    };
+                });
+                verdict.hidden = false;
+                if (picks[0]) picks[0].focus();
+            }).catch(err => {
+                appendLog(`[ERROR] Toss failed: ${err}`, 'error');
+                title.textContent = 'Toss failed';
+                buttons.forEach(b => { b.disabled = false; b.classList.remove('picked'); });
+            });
+        };
+    });
+}
+
+// Broadcast-style toss segment (pitch report, toss, captains). Falls
+// back to the single-sentence commentary if the server sent no lines.
+function logTossCommentary(d) {
+    if (Array.isArray(d.toss_lines) && d.toss_lines.length) {
+        d.toss_lines.forEach(l => appendLog(l.kind === 'break' ? '&nbsp;' : l.text, 'comment'));
+        return;
+    }
+    appendLog(`[TOSS] ${d.toss_commentary}`, 'comment');
+    if (d.toss_reason) appendLog(`[TOSS] ${d.toss_reason}`, 'comment');
+}
+
+function applyTossResult(d) {
+    const resultEl = document.getElementById('toss-result');
+    const spinBtn = document.getElementById('spin-toss');
+    if (spinBtn) spinBtn.hidden = true;
+    resultEl.textContent = `${d.toss_winner} chose to ${d.toss_decision}`;
+    logTossCommentary(d);
+    const homeTeam = matchData.team_home.split('_')[0];
+    const awayTeam = matchData.team_away.split('_')[0];
+    const batFirst = (d.toss_winner === homeTeam && d.toss_decision === 'Bat') ||
+                     (d.toss_winner === awayTeam && d.toss_decision === 'Bowl')
+                     ? homeTeam : awayTeam;
+    const batNameEl = document.getElementById('sb-bat-name');
+    if (batNameEl) batNameEl.textContent = batFirst;
+    setTimeout(startMatch, IS_FC_MATCH ? 0 : 1000);
+}
+
 function spinTossAndStartMatch() {
     const resultEl = document.getElementById('toss-result');
     const spinBtn = document.getElementById('spin-toss');
@@ -908,8 +1036,9 @@ function spinTossAndStartMatch() {
                 return;
             }
             const d = body;
+            if (spinBtn) spinBtn.hidden = true;
             resultEl.textContent = `${d.toss_winner} chose to ${d.toss_decision}`;
-            appendLog(`[TOSS] ${d.toss_commentary}`, 'comment');
+            logTossCommentary(d);
 
             // Set batting team name in banner based on toss result
             const homeTeam = matchData.team_home.split('_')[0];
@@ -1248,6 +1377,34 @@ function updateScoreBanner(data) {
     }
 }
 
+function renderLiveInnings(state) {
+    const heading = document.getElementById('live-innings-status');
+    if (!heading) return;
+    const live = state.status === 'live';
+    const status = {
+        break: 'Innings break',
+        tiebreak: IS_HUNDRED_MATCH ? 'Super Five' : 'Super Over',
+        complete: 'Match complete',
+    };
+    const text = live ? `Innings ${state.innings} · ${state.batting_team} batting` : status[state.status];
+    heading.hidden = false;
+    if (heading.textContent !== text) heading.textContent = text;
+
+    document.getElementById('live-innings-toss').hidden = true;
+    document.getElementById('live-innings-players').hidden = !live;
+    const values = {
+        striker: state.selecting_batter === 'striker' ? 'Selecting batter…' : state.striker,
+        'non-striker': state.selecting_batter === 'non_striker' ? 'Selecting batter…' : state.non_striker,
+        bowler: state.selecting_bowler ? 'Selecting bowler…' : state.bowler,
+        next: state.next_batter || (state.selecting_batter ? '—' : 'No batters left'),
+    };
+    for (const [role, name] of Object.entries(values)) {
+        const row = document.getElementById(`live-innings-${role}`);
+        const value = (live && name) || '—';
+        if (row.textContent !== value) row.textContent = value;
+    }
+}
+
 function renderOverFlow() {
     const container = document.getElementById('sb-over-flow');
     if (!container) return;
@@ -1513,6 +1670,7 @@ function renderCaptainDiscussion(data) {
 // above AND the HTTP fetch path below. Zero logic change vs the original.
 async function _processBallResult(data) {
     ballInFlight = false;
+    if (data.live_innings) renderLiveInnings(data.live_innings);
     renderCaptainDiscussion(data);
     const captainStatus = document.getElementById('fc-captain-status');
     if (data.fc_decision_pending) {
@@ -1845,11 +2003,9 @@ function showScorecard(data, completeData) {
     currentInningsNumber = completeData.innings_number;
     const overlay = document.getElementById('scorecard-overlay');
     overlay.style.display = 'flex';
-    // Drawn, so the server can stop holding it. Acking here rather than on
-    // close means a user who wanders off mid-interval is not re-shown the
-    // card on their next reconnect. Cards with no id (the final scoreboard,
-    // super-over cards) are not held server-side and no-op here.
-    ackCard(completeData.pending_card_id);
+    // Keep innings-end cards available until play in the next innings
+    // advances, so refreshing during the break can reopen the card.
+    if (!completeData.innings_end) ackCard(completeData.pending_card_id);
     // Each card gets its own close action; a final card must not inherit
     // an interval handler that schedules another ball.
     const closeBtn = document.querySelector('.close-scorecard');
@@ -2608,6 +2764,7 @@ function soSimulateBall() {
 
         // Match decided — log result, show main match scorecard
         if (data.super_over_complete) {
+            renderLiveInnings({status: 'complete'});
             appendLog(`══ ${data.result} ══`);
             soLogMiniScorecard(data.innings2_scorecard);
             matchOver = true;
@@ -2668,6 +2825,7 @@ function soResyncFromServer() {
     fetch(`${window.location.pathname}/live-state`)
         .then(r => r.json())
         .then(state => {
+            if (state.live_innings) renderLiveInnings(state.live_innings);
             if (state.status === 'completed') {
                 window.location.href = `${window.location.pathname}/scoreboard`;
             } else if (state.super_over) {
@@ -2811,6 +2969,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch(`/match/${matchId}/live-state`)
         .then(r => r.json())
         .then(state => {
+            if (state.live_innings) renderLiveInnings(state.live_innings);
             if (state.status === 'completed') {
                 window.location.href = `/match/${matchId}/scoreboard`;
                 return;
@@ -2955,11 +3114,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             currentInningsNumber = state.innings;
 
-            // ── Continue simulation ───────────────────────────────────────
-            if (simulationMode === 'auto') {
+            const pendingCard = state.pending_card?.payload;
+            if (pendingCard?.innings_end) {
+                // Commentary was already replayed above.
+                return _processBallResult({
+                    ...pendingCard, commentary: '',
+                    live_innings: state.live_innings || {status: 'break'},
+                });
+            }
+            if (simulationMode === 'manual' && state.pending_selection) {
+                showDecisionModal(state.pending_selection);
+            } else {
                 scheduleNextBall(1200);
             }
-            // Manual mode: user presses Next Ball themselves — no action needed
         })
         .catch(err => {
             console.error('[Resume] Failed to fetch live state:', err);

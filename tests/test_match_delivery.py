@@ -98,6 +98,7 @@ def test_http_recovery_replays_lost_card_and_rejects_stale_instance(app):
         finally:
             socket.disconnect()
         assert result['pending_card_id']
+        assert result['live_innings'] == {'status': 'break'}
         recovered = authenticated_client.get(url + '/live-state?delivery=1&request_id=' + token).get_json()
         assert recovered['delivery'] == result
         assert authenticated_client.post(url + '/next-ball', json={"delivery_token": token}).get_json() == result
