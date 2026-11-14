@@ -1,30 +1,28 @@
-/* Match Detail - Full Page Layout with No Scroll */
+/* Match Detail - the page scrolls; the commentary log grows with the match.
+   The side panel and score banner stay pinned while it does. */
 
-/* body is a column flex container (layout.html) with only min-height set.
-   A percentage height on main never resolves in that case, so the match
-   grid collapsed to the short innings card and the commentary pane was
-   left with nothing but its title bar. A definite viewport height lets
-   the main column, the sidebar and the log share the space under the nav. */
+/* body is a column flex container (layout.html) with only min-height set,
+   so main grows with its content and the page scrolls normally. */
 body {
-    height: 100vh;
-    height: 100dvh;
-    overflow: hidden;
+    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 /* Keep the site footer on screen. The match columns fill the space
    above it instead of covering it. */
 footer {
     flex-shrink: 0;
+    /* layout.html sets 1.25rem inline; this page wants the log close to it. */
+    padding: 0.55rem 1rem 0.7rem !important;
 }
 
 /* Override main-container to use the full viewport under the nav */
 .main-container {
     max-width: none !important;
-    padding: 1rem !important;
-    flex: 1 1 auto;
+    padding: 1rem 1rem 0.5rem !important;
+    flex: 1 0 auto;
     min-height: 0;
     height: auto;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
 }
@@ -41,12 +39,9 @@ body .scx-nav.navbar {
     display: grid;
     grid-template-columns: 300px minmax(0, 1fr);
     gap: 1rem;
-    /* flex-basis 0 so the grid's height is the space main actually has,
-       not the height of the innings card. height: 100% does not resolve
-       on this flex item. */
-    flex: 1 1 0;
+    flex: 1 0 auto;
+    align-items: start;
     min-height: 0;
-    overflow: hidden;
 }
 
 @media (max-width: 1024px) {
@@ -58,13 +53,23 @@ body .scx-nav.navbar {
 @media (max-width: 768px) {
     .match-layout {
         grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: auto minmax(25rem, 1fr);
-        overflow-y: auto;
+        grid-template-rows: auto auto;
+    }
+
+    .info-card,
+    .score-banner {
+        position: relative;
+        top: auto;
+        max-height: none;
     }
 }
 
-/* Sidebar - Scrollable if needed */
+/* Sidebar - sticky so it stays beside the growing log */
 .info-card {
+    position: sticky;
+    top: calc(var(--nav-height, 72px) + 0.5rem);
+    align-self: start;
+    max-height: calc(100dvh - var(--nav-height, 72px) - 1rem);
     background: var(--card-bg);
     border-radius: var(--radius-lg, 16px);
     border: 1px solid var(--card-border);
@@ -199,11 +204,10 @@ body .scx-nav.navbar {
 /* Main Panel - Fixed Height */
 .main-panel {
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
     gap: 0.75rem;
     min-height: 0;
-    height: 100%;
-    overflow: hidden;
+    min-width: 0;
 }
 
 .score-banner {
@@ -217,17 +221,21 @@ body .scx-nav.navbar {
 .live-view-stack {
     grid-row: 3;
     min-height: 0;
-    height: 100%;
     position: relative;
-    overflow: hidden;
     border-radius: 8px;
 }
 
+/* Only the active pane takes up space. The other is parked at zero height
+   so the stack is exactly as tall as what is on screen. */
 .view-pane {
     position: absolute;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
     min-height: 0;
-    height: 100%;
     opacity: 0;
     transform: translateY(6px) scale(0.994);
     pointer-events: none;
@@ -241,6 +249,10 @@ body .scx-nav.navbar {
     transform: translateY(0) scale(1);
     pointer-events: auto;
     z-index: 2;
+    position: relative;
+    height: auto;
+    overflow: visible;
+    visibility: visible;
 }
 
 .pane-commentary {
@@ -250,6 +262,13 @@ body .scx-nav.navbar {
 
 .pane-matchcenter {
     display: grid;
+}
+
+/* The charts are sized against their panel, so Match Center needs a
+   definite height of its own now that the stack no longer supplies one. */
+.pane-matchcenter.is-active {
+    height: clamp(34rem, calc(100dvh - 15rem), 52rem);
+    overflow: hidden;
 }
 
 .main-panel .dashboard-container {
@@ -270,7 +289,9 @@ body .scx-nav.navbar {
     color: #ffffff;
     flex-shrink: 0;
     overflow: hidden;
-    position: relative;
+    position: sticky;
+    top: calc(var(--nav-height, 72px) + 0.5rem);
+    z-index: 6;
     box-shadow:
         0 8px 32px rgba(0, 0, 0, 0.25),
         0 2px 8px rgba(0, 0, 0, 0.15),
@@ -741,10 +762,10 @@ body .scx-nav.navbar {
     background: transparent;
     border-radius: 0;
     border: 0;
-    flex: 1 1 auto;
-    overflow-y: auto;
+    flex: 0 0 auto;
+    overflow: visible;
     padding: 1rem;
-    min-height: 0;
+    min-height: 12rem;
     height: auto;
 }
 
