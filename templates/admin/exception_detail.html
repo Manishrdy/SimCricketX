@@ -40,6 +40,9 @@
             <i class="fas fa-redo"></i> Retry GitHub sync
         </button>
         {% endif %}
+        <button type="button" class="a-btn a-btn-danger" onclick="deleteException(this, {{ row.id }})">
+            <i class="fas fa-trash"></i> Delete
+        </button>
     </div>
 </div>
 
@@ -147,6 +150,34 @@ function retryExcSync(btn, rowId) {
             document.getElementById('alertContainer').innerHTML =
                 '<div class="a-alert a-alert-error" style="display:block">Network error: ' + err + '</div>';
             btn.disabled = false;
+        });
+}
+
+function deleteException(btn, rowId) {
+    if (!confirm('Delete exception #' + rowId + ' from the database? This cannot be undone.')) return;
+    btn.disabled = true;
+    const original = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+
+    fetch('/admin/issues/exceptions/' + rowId + '/delete', { method: 'POST', credentials: 'same-origin' })
+        .then(r => r.json().then(b => ({ ok: r.ok, body: b })))
+        .then(({ ok, body }) => {
+            const box = document.getElementById('alertContainer');
+            if (ok && body.status === 'deleted') {
+                box.innerHTML = '<div class="a-alert a-alert-success" style="display:block">Exception deleted. Redirecting…</div>';
+                setTimeout(() => { window.location.href = '{{ url_for("admin_issues") }}'; }, 600);
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = original;
+                box.innerHTML = '<div class="a-alert a-alert-error" style="display:block"></div>';
+                box.firstChild.textContent = body.error || 'Delete failed';
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            btn.innerHTML = original;
+            document.getElementById('alertContainer').innerHTML =
+                '<div class="a-alert a-alert-error" style="display:block">Network error: ' + err + '</div>';
         });
 }
 </script>

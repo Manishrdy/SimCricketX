@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}SimCricketX — Text-based cricket simulators{% endblock %}
 </title>
-<meta name="description" content="Text-based cricket simulators for T10, T20, List A, The Hundred and First-Class. Build squads, play tournaments, create tours and explore ball-by-ball statistics.">
+<meta name="description" content="{% block description %}Text-based cricket simulators for T10, T20, List A, The Hundred and First-Class. Build squads, play tournaments, create tours and explore ball-by-ball statistics.{% endblock %}">
 <link rel="canonical" href="https://simcricketx.app{{ request.path }}">
-<meta property="og:title" content="SimCricketX — Text-based cricket simulators">
-<meta property="og:description" content="Five formats. Seven competition structures. Your cricket world, one ball at a time.">
+<meta property="og:title" content="{% block social_title %}SimCricketX — Text-based cricket simulators{% endblock %}">
+<meta property="og:description" content="{% block social_description %}Five formats. Seven competition structures. Your cricket world, one ball at a time.{% endblock %}">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"SimCricketX","url":"https://simcricketx.app/","applicationCategory":"GameApplication","operatingSystem":"Web browser","description":"Text-based cricket simulators for T10, T20, List A (40 or 50 overs), The Hundred and First-Class, with custom squads, seven competition structures, tours and statistics.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","@id":"https://simcricketx.app/#app","name":"SimCricketX","url":"https://simcricketx.app/","applicationCategory":"GameApplication","operatingSystem":"Web browser","description":"Text-based cricket simulators for T10, T20, List A (40 or 50 overs), The Hundred and First-Class, with custom squads, seven competition structures, tours and statistics.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
 <link rel="alternate" type="text/plain" href="/llms.txt" title="SimCricketX capability guide for language models">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_manage.css') }}">

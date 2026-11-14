@@ -1809,7 +1809,7 @@ def register_admin_routes(
 
     # ── Auth Event Log ─────────────────────────────────────────────────────────
 
-    @app.route('/admin/auth-events')
+    @app.route('/admin/auth-events', strict_slashes=False)
     @login_required
     @admin_required
     def admin_auth_events():
@@ -1892,6 +1892,25 @@ def register_admin_routes(
             log_exception(exc)
             db.session.rollback()
             app.logger.error(f"[Admin] auth_events_clear_resolved error: {exc}")
+            return jsonify({'error': 'Database error'}), 500
+
+    @app.route('/admin/auth-events/delete-all', methods=['POST', 'DELETE'])
+    @app.route('/admin/auth-events/delete', methods=['POST', 'DELETE'])
+    @login_required
+    @admin_required
+    def admin_auth_events_delete_all():
+        """Bulk-delete all auth event records."""
+        try:
+            deleted = AuthEventLog.query.delete(synchronize_session=False)
+            db.session.commit()
+            log_admin_action(current_user.id, 'auth_events_delete_all',
+                             details=f"{deleted} records deleted",
+                             ip_address=get_client_ip())
+            return jsonify({'ok': True, 'deleted': int(deleted)})
+        except Exception as exc:
+            log_exception(exc)
+            db.session.rollback()
+            app.logger.error(f"[Admin] auth_events_delete_all error: {exc}")
             return jsonify({'error': 'Database error'}), 500
 
     @app.route('/admin')

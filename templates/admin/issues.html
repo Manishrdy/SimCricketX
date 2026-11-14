@@ -24,6 +24,9 @@
         <button type="button" class="a-btn a-btn-secondary" onclick="syncWithGitHub(event)">
             <i class="fas fa-sync"></i> Sync with GitHub
         </button>
+        <button type="button" class="a-btn a-btn-danger" onclick="deleteAllIssues(event)">
+            <i class="fas fa-trash"></i> Delete
+        </button>
     </div>
 </div>
 
@@ -176,6 +179,36 @@ function syncWithGitHub(event) {
             } else {
                 alertBox.innerHTML = '<div class="a-alert a-alert-error" style="display:block"></div>';
                 alertBox.firstChild.textContent = 'Sync failed: ' + (body.error || 'unknown error');
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            btn.innerHTML = original;
+            document.getElementById('alertContainer').innerHTML =
+                '<div class="a-alert a-alert-error" style="display:block">Network error: ' + err + '</div>';
+        });
+}
+
+function deleteAllIssues(event) {
+    if (!confirm('Delete all issues from the database? This cannot be undone.')) return;
+    const btn = event.currentTarget;
+    btn.disabled = true;
+    const original = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+
+    fetch('/admin/issues/delete', { method: 'POST', credentials: 'same-origin' })
+        .then(r => r.json().then(b => ({ ok: r.ok, body: b })))
+        .then(({ ok, body }) => {
+            const alertBox = document.getElementById('alertContainer');
+            if (ok) {
+                alertBox.innerHTML = '<div class="a-alert a-alert-success" style="display:block">Deleted ' +
+                    (body.deleted || 0) + ' issue(s). Reloading...</div>';
+                setTimeout(() => location.reload(), 800);
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = original;
+                alertBox.innerHTML = '<div class="a-alert a-alert-error" style="display:block"></div>';
+                alertBox.firstChild.textContent = 'Delete failed: ' + (body.error || 'unknown error');
             }
         })
         .catch(err => {

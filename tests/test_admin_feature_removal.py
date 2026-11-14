@@ -131,3 +131,87 @@ def test_exception_cards_open_complete_details(app, qa_admin):
         assert content in detail.data
     assert b'Linked reports' not in detail.data
     assert qa_admin.get('/admin/issues/exceptions/99999999').status_code == 404
+
+
+def test_exception_delete_single_and_delete_all(app, qa_admin):
+    from database import db
+    from database.models import ExceptionLog
+    from datetime import datetime
+
+    row1 = ExceptionLog(
+        exception_type='DeleteMeOne',
+        exception_message='First error',
+        last_seen_at=datetime(2026, 9, 25),
+        first_seen_at=datetime(2026, 9, 1),
+    )
+    row2 = ExceptionLog(
+        exception_type='DeleteMeTwo',
+        exception_message='Second error',
+        last_seen_at=datetime(2026, 9, 25),
+        first_seen_at=datetime(2026, 9, 1),
+    )
+    row3 = ExceptionLog(
+        exception_type='DeleteMeThree',
+        exception_message='Third error',
+        last_seen_at=datetime(2026, 9, 25),
+        first_seen_at=datetime(2026, 9, 1),
+    )
+    db.session.add_all([row1, row2, row3])
+    db.session.commit()
+
+    # Verify buttons render on both pages
+    listing_resp = qa_admin.get('/admin/issues/')
+    assert listing_resp.status_code == 200
+    assert b'deleteAllIssues' in listing_resp.data
+
+    detail_resp = qa_admin.get(f'/admin/issues/exceptions/{row1.id}')
+    assert detail_resp.status_code == 200
+    assert f'deleteException(this, {row1.id})'.encode() in detail_resp.data
+
+    # Non-admin cannot delete
+    regular = logged_in_client(app, 'user1')
+    assert regular.post(f'/admin/issues/exceptions/{row1.id}/delete').status_code == 403
+    assert regular.post('/admin/issues/delete').status_code == 403
+
+    # Delete a single exception
+    del_single = qa_admin.post(f'/admin/issues/exceptions/{row1.id}/delete')
+    assert del_single.status_code == 200
+    assert del_single.json == {'status': 'deleted', 'deleted': 1, 'id': row1.id}
+    assert db.session.get(ExceptionLog, row1.id) is None
+    assert db.session.get(ExceptionLog, row2.id) is not None
+    assert db.session.get(ExceptionLog, row3.id) is not None
+
+    # Deleting a non-existent exception returns 404
+    assert qa_admin.post(f'/admin/issues/exceptions/{row1.id}/delete').status_code == 404
+
+    # Delete all remaining exceptions
+    del_all = qa_admin.post('/admin/issues/delete')
+    assert del_all.status_code == 200
+    assert del_all.json['status'] == 'deleted'
+    assert del_all.json['deleted'] >= 2
+    assert ExceptionLog.query.count() == 0
+
+
+def test_auth_events_delete_all(app, qa_admin):
+    from database import db
+    from database.models import AuthEventLog
+
+    e1 = AuthEventLog(email='one@example.com', event_type='resend_rate_limit', status='pending')
+    e2 = AuthEventLog(email='two@example.com', event_type='email_send_failure', status='resolved')
+    db.session.add_all([e1, e2])
+    db.session.commit()
+
+    page = qa_admin.get('/admin/auth-events')
+    assert page.status_code == 200
+    assert b'deleteAllAuthEvents' in page.data
+
+    regular = logged_in_client(app, 'user1')
+    assert regular.post('/admin/auth-events/delete-all').status_code == 403
+
+    res = qa_admin.post('/admin/auth-events/delete-all')
+    assert res.status_code == 200
+    assert res.json['ok'] is True
+    assert res.json['deleted'] >= 2
+    assert AuthEventLog.query.count() == 0
+
+

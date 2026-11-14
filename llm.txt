@@ -1,62 +1,25 @@
 # SimCricketX
 
-> Text-based cricket simulators and cricket competition management in the browser. Free to play and open source.
+> A free, open-source, text-based cricket simulator and competition manager that runs in a browser.
 
-Website: https://simcricketx.app/
+[Website](https://simcricketx.app/) · [About and feature guide](https://simcricketx.app/about) · [Changelog](https://simcricketx.app/changelog) · [Source code](https://github.com/ManishYelam/SimCricketX)
 
-## Public pages
-- [Welcome](https://simcricketx.app/): formats, modes and competitions.
-- [About](https://simcricketx.app/about): detailed capabilities.
-- [Stadium conditions guide](https://simcricketx.app/stadiums/conditions-guide): simulation settings.
-- [Register](https://simcricketx.app/register): create an account.
-- [Login](https://simcricketx.app/login): access an existing account.
+## Match formats and play
+- [Formats and playing rules](https://simcricketx.app/about#formats): T10 (10 overs), T20 (20 overs), List A (40 or 50 overs), The Hundred (100 balls, five-ball sets and ten-ball ends), First-Class (four or five days, two innings per team).
+- [Match experience](https://simcricketx.app/about#play): choose teams, XIs, batting orders, venue, pitch, forecast and day/night conditions. Auto is available in every format. Manual supports T10, T20, List A and The Hundred. First-Class is Auto-only. Follow ball-by-ball commentary or use the Match Center, with scoring charts and a delivery timeline. Return to an available unfinished match from the dashboard.
+- [Teams and players](https://simcricketx.app/about#teams): browse the shared pool, create private players, import CSV/JSON, override ratings, draft and publish format-specific squads, and set captaincy styles. T10 can seed from your T20 squad. The Hundred plays with your T20 squad and keeps separate match statistics.
+- [Stadiums and conditions](https://simcricketx.app/about#stadiums): create a private venue or adopt an official template. Set format-specific pitch defaults and adjustments, pitch/skill blending, boundary dimensions, outfield speed and temperature. Matches retain the settings captured at creation. See the [stadium conditions guide](https://simcricketx.app/stadiums/conditions-guide).
 
-## Formats
-- T10 (10 overs): A short, sharp contest. T20-based player ratings with dedicated T10 squads.
-- T20 (20 overs): The full short-format contest, with manual control and optional Impact Player rules.
-- List A (40 or 50 overs): Build a one-day side. Both match lengths share List A squads, ratings and career totals.
-- The Hundred (100 balls): Five-ball sets, ten-ball ends and shared T20 squads and ratings.
-- First-Class (Multi-day): A longer tactical contest with multiple innings, declarations and follow-on decisions. Auto simulation only.
+## Simulation algorithms
+- [How the algorithms work](https://simcricketx.app/about#engine): weighted delivery outcomes combine format, pitch, player ability, matchups and game state. The engine models pressure, momentum, batting intent, fielding and bowling eligibility.
+- Automatic captaincy responds to score, conditions, workloads and recent play. The First-Class engine uses an innings forecast and evaluates declarations and follow-ons with dynamic programming.
+- A Duckworth–Lewis Standard Edition approximation handles rain targets in limited-overs games. Professional DLS can produce different results. First-Class weather can shorten sessions through rain or bad light.
+- Eligible T10, T20 and List A ties can go to Super Overs. The Hundred uses five-ball Super Fives in knockouts and retains ties in exhibition and league games.
 
-## Competition structures
-- Round Robin: Every team plays every other team once.
-- Double Round Robin: Every pairing meets twice.
-- Pure Knockout: Advance through elimination rounds to the final.
-- League + Semis + Final: A league stage followed by semi-finals and a final.
-- Double League + Semis + Final: Two league meetings per pairing, then the title deciders.
-- IPL Style Playoffs: League cricket followed by qualifiers, an eliminator and a final.
-- Custom Series: Two teams, one rivalry: schedule 1–7 matches.
+## Competitions, records and community
+- [Tournaments and tours](https://simcricketx.app/about#competitions): single or double round robin, pure knockout, single or double league plus semi-finals and final, IPL-style playoffs, and two-team custom series of one to seven matches. League-to-finals structures need at least four eligible teams. Follow fixtures, format-specific standings and playoff progression, preview and replay completed fixtures, or arrange a multi-format tour between two teams.
+- [Scorecards and statistics](https://simcricketx.app/about#statistics): match history, downloadable archives, batting/bowling/fielding leaderboards, career and team records, cross-format comparisons, partnerships and head-to-head records. Filter List A by scheduled 40- or 50-over length. Export supported statistics as CSV, text or PDF, with HTML available as a PDF fallback.
+- [Community and account](https://simcricketx.app/about#community): discussion threads, questions and feedback, live search, votes, images, mentions and notifications. My Profile summarizes a member's own cricket activity. Account tools cover settings, sign-in history, sessions and data export.
 
-League-to-semi-final and IPL-style structures require at least four teams. Custom series require exactly two.
-
-## Capabilities
-
-### Your squads, your selection
-Create custom teams, manage format-specific squads, select playing XIs and batting orders, and build a player pool. Import players with CSV or JSON and customize player ratings. The Hundred uses your T20 squad.
-
-### Conditions that change the contest
-Configure conditions inside private stadiums, independently by format. Pitch/skill blending, scoring, pace/spin favour, wicket adjustments and limited-overs phase effects shape future matches. Official venues are templates for private copies; existing setups and saved matches remain preserved.
-
-### Ball-by-ball simulation
-Follow text commentary and scorecards as deliveries resolve through a probabilistic engine. Player attributes, matchups, pitch and match state influence outcomes. Results are simulations, not predictions of real matches.
-
-### Auto and Manual play
-Let Auto run the match, or use Manual mode for supported limited-overs formats. First-Class is Auto-only. T20 also supports optional Impact Player rules.
-
-### Story Mode
-Play a scenario inspired by a legendary match arc using your own teams. Story packs steer the pressure and narrative of a supported match; they do not guarantee a historical result.
-
-### Tours across formats
-Bring two teams together for a multi-format tour. Configure series, match counts and series order, then follow fixtures, individual series results and the tour summary.
-
-### Statistics with context
-Explore batting and bowling leaderboards, player careers, team statistics, player comparisons, partnerships and head-to-head records. List A statistics can be filtered by the original 40- or 50-over scheduled length.
-
-### Records you can revisit
-Return to match history and detailed scorecards. Export statistics as CSV or text; the PDF export can fall back to downloadable HTML when PDF generation is unavailable.
-
-### A community around the game
-Use the community board to discuss the simulator and share feedback. Account features and administrative moderation support the shared platform.
-
-## Access and scope
-Public information is available without signing in. Creating teams, playing matches, competitions, tours, statistics and community participation require an account. This guide does not grant access to private user data. Simulation outcomes are not real-world predictions. Features vary by format; do not infer that every mode or rule applies to every format.
+## Access
+The About page and changelog are public. Playing, squad building, competition management, personal statistics and community participation require an account. [Register](https://simcricketx.app/register) or [sign in](https://simcricketx.app/login). Match results describe simulated cricket.

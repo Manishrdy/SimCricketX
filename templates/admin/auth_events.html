@@ -17,6 +17,9 @@
         <button onclick="clearResolved()" class="a-btn a-btn-secondary">
             <i class="fas fa-broom"></i> Clear Resolved
         </button>
+        <button type="button" onclick="deleteAllAuthEvents()" class="a-btn a-btn-danger">
+            <i class="fas fa-trash"></i> Delete All
+        </button>
     </div>
 </div>
 
@@ -263,6 +266,13 @@ function filterType(t) {
 async function clearResolved() {
     if (!confirm('Delete all resolved auth event records?')) return;
     const { ok, data, error } = await adminFetchJson('/admin/auth-events/clear-resolved', { method: 'POST' });
+    if (ok) { showAlert(`Deleted ${data.deleted} record(s)`, 'success'); setTimeout(() => location.reload(), 1200); }
+    else showAlert(error, 'error');
+}
+
+async function deleteAllAuthEvents() {
+    if (!confirm('Delete all auth event records from the database? This cannot be undone.')) return;
+    const { ok, data, error } = await adminFetchJson('/admin/auth-events/delete-all', { method: 'POST' });
     if (ok) { showAlert(`Deleted ${data.deleted} record(s)`, 'success'); setTimeout(() => location.reload(), 1200); }
     else showAlert(error, 'error');
 }
