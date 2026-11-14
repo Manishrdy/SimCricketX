@@ -53,23 +53,14 @@ let innings1Data = null;       // Saved {ballHistory, overRuns} from 1st innings
 let dashboardActive = false;   // Which view is showing
 let currentMainView = 'commentary'; // 'commentary' | 'matchcenter'
 
-// Size the commentary pane to the live-view stack. Measuring the whole
-// main panel and subtracting the banner left the log at the title bar
-// whenever that sum was short, and a percentage height then clipped it.
+// The commentary pane used to be pinned to the viewport and scrolled inside
+// itself. It now grows with the log and the page scrolls, so there is no
+// height to compute; this only clears any size an older render left behind.
 function syncCodeWindowHeight() {
-    const stack = document.getElementById('live-view-stack');
     const codeWindow = document.querySelector('.code-window');
-    if (!stack || !codeWindow) return;
-
-    const available = stack.clientHeight;
-    if (available > 80) {
-        const px = `${Math.floor(available)}px`;
-        codeWindow.style.height = px;
-        codeWindow.style.maxHeight = px;
-    } else {
-        codeWindow.style.height = '';
-        codeWindow.style.maxHeight = '';
-    }
+    if (!codeWindow) return;
+    codeWindow.style.height = '';
+    codeWindow.style.maxHeight = '';
 }
 // C1: HTML escaping utility to prevent XSS via innerHTML
 function escapeHtml(str) {
@@ -877,8 +868,12 @@ function appendLog(message, type = 'normal') {
         <span class="${tokenClass}">${message}</span>
     `;
 
+    // Follow the newest line only if the reader is already at the bottom;
+    // someone who scrolled up to re-read keeps their place.
+    const root = document.documentElement;
+    const atBottom = window.innerHeight + window.scrollY >= root.scrollHeight - 160;
     logContainer.appendChild(div);
-    logContainer.scrollTop = logContainer.scrollHeight;
+    if (atBottom) div.scrollIntoView({ block: 'nearest' });
 }
 
 // Manual mode: the user makes the away captain's coin call in a popup, then
