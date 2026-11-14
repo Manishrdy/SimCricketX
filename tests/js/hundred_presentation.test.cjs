@@ -74,7 +74,7 @@ test('Hundred worm axis and target use the full ball allocation and update after
         constructor(ctx, config) { this.data = config.data; this.options = config.options; chart = this; }
         update() {}
     };
-    const rebuild = source.slice(source.indexOf('function _rebuildWorm'), source.indexOf('/** Size canvas'));
+    const rebuild = source.slice(source.indexOf('function _wormAxisLimit'), source.indexOf('/** Size canvas'));
     vm.runInNewContext('let wormChart = null; function _resizeChartToParent() {}\n' + rebuild, c);
     const first = {ballHistory: [event({legal_balls_after: 100, innings_ball_limit: 100})]};
     c._rebuildWorm([event({target: 144, legal_balls_after: 84, innings_ball_limit: 100})], first);

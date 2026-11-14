@@ -225,6 +225,36 @@ Match Scorecard - SimCricketX
         font-weight: 600;
     }
 
+    .fow-row {
+        padding: 0.75rem 0.85rem;
+        font-size: 0.85rem;
+        line-height: 1.6;
+        color: #64748b;
+        background: #f8fafc;
+        border-top: 1px solid #e2e8f0;
+        border-bottom: 1px solid #e2e8f0;
+        font-weight: 500;
+    }
+
+    .fow-row strong {
+        color: #1e293b;
+        font-weight: 600;
+    }
+
+    .partnership-table .pship-batter {
+        display: block;
+    }
+
+    .partnership-table .pship-share {
+        color: #64748b;
+        font-weight: 500;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .partnership-table tr.unbroken td {
+        font-style: italic;
+    }
+
     .scorecard-top-bar {
         max-width: 1100px;
         margin: 0 auto;
@@ -546,6 +576,48 @@ Match Scorecard - SimCricketX
                 </tbody>
             </table>
         </div>
+
+        {% if innings.fall_of_wickets %}
+        <div class="fow-row">
+            <strong>Fall of wickets:</strong> {{ innings.fall_of_wickets | join(', ') }}
+        </div>
+        {% endif %}
+
+        {% if innings.partnerships %}
+        <div class="stats-section">
+            <div class="section-label">
+                <span>{{ innings.batting_team_name }} Partnerships</span>
+            </div>
+            <table class="stats-table partnership-table">
+                <thead>
+                    <tr>
+                        <th>Wkt</th>
+                        <th>Batters</th>
+                        <th>Runs</th>
+                        <th>{{ 'Balls' if match.match_format == 'Hundred' else 'B' }}</th>
+                        <th>4s</th>
+                        <th>6s</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stand in innings.partnerships %}
+                    {% set star = '*' if stand.is_unbroken else '' %}
+                    <tr{% if stand.is_unbroken %} class="unbroken"{% endif %}>
+                        <td class="stat-number">{{ ordinal(stand.wicket_number) }}</td>
+                        <td class="player-name">
+                            <span class="pship-batter">{{ stand.batsman1_name }} <span class="pship-share">{{ stand.batsman1_contribution if stand.batsman1_contribution is not none else '–' }}{% if stand.batsman1_balls is not none %} ({{ stand.batsman1_balls }}){% endif %}{{ star }}</span></span>
+                            <span class="pship-batter">{{ stand.batsman2_name }} <span class="pship-share">{{ stand.batsman2_contribution if stand.batsman2_contribution is not none else '–' }}{% if stand.batsman2_balls is not none %} ({{ stand.batsman2_balls }}){% endif %}{{ star }}</span></span>
+                        </td>
+                        <td class="stat-highlight stat-number">{{ stand.runs }}{{ star }}</td>
+                        <td class="stat-number">{{ stand.balls }}</td>
+                        <td class="stat-number">{{ stand.fours if stand.fours is not none else '–' }}</td>
+                        <td class="stat-number">{{ stand.sixes if stand.sixes is not none else '–' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
     </div>
     {% endfor %}
 

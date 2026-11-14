@@ -982,8 +982,8 @@ class MatchPartnership(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     match_id = db.Column(db.String(36), db.ForeignKey('matches.id'), nullable=False)
-    innings_number = db.Column(db.Integer, nullable=False)   # 1 or 2
-    wicket_number = db.Column(db.Integer, nullable=False)   # 1st wicket, 2nd wicket, etc.
+    innings_number = db.Column(db.Integer, nullable=False)   # 1-2 (FC: 1-4)
+    wicket_number = db.Column(db.Integer, nullable=False)   # the wicket the pair batted for (unbroken: wickets + 1)
     
     # Partnership participants
     batsman1_id = db.Column(db.Integer, db.ForeignKey('players.id'), nullable=False)
@@ -998,7 +998,21 @@ class MatchPartnership(db.Model):
     # Partnership duration
     start_over = db.Column(db.Float)
     end_over = db.Column(db.Float)
-    
+
+    # Detail added Nov 2026 (migrations/add_partnership_detail.py). Nullable:
+    # rows from before then have no boundaries, batter balls or dismissed
+    # batter. score_at_fall/fall_over were backfilled where derivable.
+    batsman1_balls = db.Column(db.Integer)
+    batsman2_balls = db.Column(db.Integer)
+    fours = db.Column(db.Integer)
+    sixes = db.Column(db.Integer)
+    is_unbroken = db.Column(db.Boolean, default=False)   # still batting at innings end
+    # Fall of wickets: a broken stand's end IS the fall of that wicket.
+    score_at_fall = db.Column(db.Integer)                # team score when it fell
+    fall_over = db.Column(db.String(8))                  # "14.2" (Hundred: ball count)
+    wicket_type = db.Column(db.String(30))
+    dismissed_slot = db.Column(db.Integer)               # 1 = batsman1 out, 2 = batsman2 out
+
     # Relationships
     batsman1 = relationship('Player', foreign_keys=[batsman1_id])
     batsman2 = relationship('Player', foreign_keys=[batsman2_id])

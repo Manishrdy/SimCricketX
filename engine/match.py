@@ -29,6 +29,7 @@ from engine import fc_bowler_workload
 from engine import fc_captain
 from engine import fc_declaration
 from utils.cpu_offload import run_offloaded, start_offloaded
+from utils.partnership_format import fall_of_wickets, fow_text, batter_share, ordinal
 from engine import fc_weather
 from engine.fc_batting_intent import ability, batting_intent, tail_protection
 from engine.fc_delivery import resolve_delivery
@@ -191,6 +192,9 @@ class Match(CaptaincyMixin, HundredPresentation):
         self.hundred_presentation_version = PRESENTATION_VERSION
         self.hundred_delivery_sequence = 0
         self.hundred_deliveries = []
+        # Six-ball limited-overs counterpart of hundred_deliveries: every
+        # ball_data sent, so /live-state can rebuild a refreshed Match Center.
+        self.dashboard_deliveries = []
         self._hundred_delivery_context = None
         self._hundred_delivery_event = None
         self._hundred_announced_set = None
@@ -550,6 +554,8 @@ class Match(CaptaincyMixin, HundredPresentation):
         # Track partnership for pressure calculation AND archiving
         self.current_partnership_balls = 0
         self.current_partnership_runs = 0
+        self.current_partnership_fours = 0
+        self.current_partnership_sixes = 0
         self.current_partnership_start_over = 0.0
         self.current_partnership_contributions = {
             'batsman1': {'name': '', 'runs': 0, 'balls': 0},
@@ -598,8 +604,12 @@ class Match(CaptaincyMixin, HundredPresentation):
         if self.bowler_selected_for_over == self.current_over:
             bowler = (self.current_bowler or {}).get("name")
 
+        batters, bowlers = self._live_scoreboard(striker, non_striker, bowler, decision)
+
         return {
             "status": "live",
+            "batters": batters,
+            "bowlers": bowlers,
             "innings": self.fc_innings if self.is_fc else self.innings,
             "batting_team": self._get_team_name(self.batting_team),
             "striker": striker,
@@ -609,6 +619,66 @@ class Match(CaptaincyMixin, HundredPresentation):
             "selecting_batter": incoming_slot,
             "selecting_bowler": decision_type == "next_bowler",
         }
+
+    def get_final_live_board(self):
+        """The side panel's last frame, sent with the match-ending delivery so
+        the panel keeps the final card instead of going blank."""
+        striker = (self.current_striker or {}).get("name")
+        non_striker = (self.current_non_striker or {}).get("name")
+        bowler = (self.current_bowler or {}).get("name")
+        batters, bowlers = self._live_scoreboard(striker, non_striker, bowler, None)
+        return {
+            "innings": self.fc_innings if self.is_fc else self.innings,
+            "batting_team": self._get_team_name(self.batting_team),
+            "striker": striker, "non_striker": non_striker, "bowler": bowler,
+            "batters": batters, "bowlers": bowlers,
+        }
+
+    def _live_scoreboard(self, striker, non_striker, bowler, decision):
+        """Batting card and bowling figures for the live side panel.
+
+        Reads the same ledgers the scorecard does, so the panel can never
+        disagree with it. `striker`/`non_striker` are the names the panel is
+        already showing (None while a replacement is being chosen).
+        """
+        provisional = None
+        if (decision or {}).get("type") == "next_batter":
+            provisional = decision["context"].get("provisional_batter")
+        on_crease = {n for n in (striker, non_striker) if n}
+
+        batters = []
+        for idx, player in enumerate(self.batting_team):
+            name = player["name"]
+            stats = self.batsman_stats.get(name, {})
+            if stats.get("wicket_type"):
+                state = "out"
+            elif name in on_crease:
+                state = "striker" if name == striker else "non_striker"
+            elif idx in self.remaining_batter_indices or name == provisional:
+                state = "yet"
+            else:
+                continue
+            entry = {"name": name, "state": state}
+            if state != "yet":
+                entry["runs"] = stats.get("runs", 0)
+                entry["balls"] = stats.get("balls", 0)
+            batters.append(entry)
+
+        bowlers = []
+        for name, stats in self.bowler_stats.items():
+            balls = stats.get("balls_bowled", 0)
+            if not balls and name != bowler:
+                continue
+            if self.is_hundred:
+                figures = f"{balls}b {stats.get('wickets', 0)}/{stats.get('runs', 0)}"
+            else:
+                figures = (f"{balls_to_overs_str(balls)}-{stats.get('maidens', 0)}-"
+                           f"{stats.get('runs', 0)}-{stats.get('wickets', 0)}")
+            bowlers.append({"name": name, "figures": figures, "current": name == bowler, "_balls": balls})
+        bowlers.sort(key=lambda b: (not b["current"], -b["_balls"]))
+        for b in bowlers:
+            del b["_balls"]
+        return batters, bowlers
 
     def _balls_to_overs_notation(self, total_balls):
         return str(total_balls) if self.is_hundred else balls_to_overs_str(total_balls)
@@ -910,6 +980,63 @@ class Match(CaptaincyMixin, HundredPresentation):
             self.bowler_stats[bowler_name] = self._new_bowling_stats(self.current_bowler)
             logger.warning("Created missing bowler_stats entry for '%s'", bowler_name)
 
+    def _record_dashboard_delivery(self, ball_data):
+        """Id and keep a six-ball limited-overs ball_data; FC and Hundred pass through."""
+        if not (self.is_fc or self.is_hundred):
+            ball_data["delivery_id"] = f"{ball_data['innings']}:{len(self.dashboard_deliveries) + 1}"
+            self.dashboard_deliveries.append(ball_data)
+        return ball_data
+
+    def _dashboard_figures(self, striker, bowler, batter_before, bowler_before):
+        """Per-ball batter/bowler credits as the scorecard records them."""
+        batter = self.batsman_stats.get(striker, {})
+        bowling = self.bowler_stats.get(bowler, {})
+
+        def delta(after, before, key):
+            return after.get(key, 0) - before.get(key, 0)
+
+        figures = {
+            "batting_runs": delta(batter, batter_before, "runs"),
+            "batter_balls": delta(batter, batter_before, "balls"),
+            "batter_fours": delta(batter, batter_before, "fours"),
+            "batter_sixes": delta(batter, batter_before, "sixes"),
+            "bowler_runs": delta(bowling, bowler_before, "runs"),
+            "bowler_balls": delta(bowling, bowler_before, "balls_bowled"),
+            "bowler_wicket": delta(bowling, bowler_before, "wickets") > 0,
+        }
+        if not self.is_fc:
+            figures["innings_over_limit"] = self.overs
+        return figures
+
+    def _banner_player_figures(self):
+        """Striker, non-striker and bowler figures for the live score banner."""
+        striker = self.current_striker["name"] if self.current_striker else ""
+        non_striker = self.current_non_striker["name"] if self.current_non_striker else ""
+        bowler = self.current_bowler["name"] if self.current_bowler else ""
+        s_stats = self.batsman_stats.get(striker, {})
+        ns_stats = self.batsman_stats.get(non_striker, {})
+        bw_stats = self.bowler_stats.get(bowler, {})
+        bw_overs = bw_stats.get("overs", 0) + (bw_stats.get("balls_bowled", 0) % self.balls_per_over) / 10
+        return {
+            "striker": striker,
+            "non_striker": non_striker,
+            "bowler": bowler,
+            "striker_runs": s_stats.get("runs", 0),
+            "striker_balls": s_stats.get("balls", 0),
+            "striker_fours": s_stats.get("fours", 0),
+            "striker_sixes": s_stats.get("sixes", 0),
+            "nonstriker_runs": ns_stats.get("runs", 0),
+            "nonstriker_balls": ns_stats.get("balls", 0),
+            "nonstriker_fours": ns_stats.get("fours", 0),
+            "nonstriker_sixes": ns_stats.get("sixes", 0),
+            "bowler_wickets": bw_stats.get("wickets", 0),
+            "bowler_runs": bw_stats.get("runs", 0),
+            "bowler_overs": f"{bw_overs:.1f}",
+            "bowler_overs_remaining": self.bowler_manager.overs_remaining(bowler),
+            # FC has no bowling quota — no cap to report.
+            "bowler_max_overs": getattr(self.fmt, "max_bowler_overs", None),
+        }
+
     def _build_decision_required_response(self, decision, commentary="", ball_data=None):
         response = {
             "match_over": False,
@@ -925,10 +1052,9 @@ class Match(CaptaincyMixin, HundredPresentation):
             "wickets": self.wickets,
             "over": self.current_over,
             "ball": self.current_ball,
-            "striker": self.current_striker["name"] if self.current_striker else "",
-            "non_striker": self.current_non_striker["name"] if self.current_non_striker else "",
-            "bowler": self.current_bowler["name"] if self.current_bowler else "",
-            "commentary": commentary
+            **self._banner_player_figures(),
+            "commentary": commentary,
+            "win_probability": self._calculate_win_probability(),
         }
         if ball_data:
             response["ball_data"] = ball_data
@@ -1187,12 +1313,19 @@ class Match(CaptaincyMixin, HundredPresentation):
                     self.batter_idx[1] = selected_index
 
             selected_player = self.batting_team[selected_index]
+            at_crease = {
+                "next_striker": self.current_striker["name"],
+                "next_non_striker": self.current_non_striker["name"],
+            }
+            if self.dashboard_deliveries:
+                self.dashboard_deliveries[-1].update(at_crease)
             result = {
                 "success": True,
                 "applied": {
                     "type": "next_batter",
                     "name": selected_player["name"],
-                    "index": selected_index
+                    "index": selected_index,
+                    **at_crease,
                 }
             }
         elif decision["type"] == "fc_declare":
@@ -1279,31 +1412,7 @@ class Match(CaptaincyMixin, HundredPresentation):
             return status if status else wicket_type
 
         from html import escape
-
-        def table(headers, rows, text_columns):
-            # Inline styles also travel with archived commentary HTML.
-            def cell(value, index, tag):
-                numeric = index >= text_columns
-                alignment = "right" if numeric else "left"
-                style = (
-                    f"text-align:{alignment};padding:4px 10px;vertical-align:top;"
-                    + ("white-space:nowrap;font-variant-numeric:tabular-nums;"
-                       if numeric else "white-space:normal;overflow-wrap:anywhere;min-width:10ch;")
-                    + ("border-bottom:1px solid #444;" if tag == "th" else "")
-                )
-                scope = " scope='col'" if tag == "th" else ""
-                return f"<{tag}{scope} style='{style}'>{escape(str(value))}</{tag}>"
-
-            head = "".join(cell(value, i, "th") for i, value in enumerate(headers))
-            body = "".join(
-                "<tr>" + "".join(cell(value, i, "td") for i, value in enumerate(row)) + "</tr>"
-                for row in rows
-            )
-            return (
-                "<div style='max-width:100%;overflow-x:auto;'>"
-                "<table style='width:100%;border-collapse:collapse;font-size:0.85rem;'>"
-                f"<thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>"
-            )
+        table = self._commentary_table
 
         batting_table = table(
             ("Batter", "Dismissal", "R", "B", "4s", "6s"),
@@ -1326,7 +1435,103 @@ class Match(CaptaincyMixin, HundredPresentation):
             f"{batting_table}"
             f"<div style='margin-top:8px;font-weight:600;'>{escape(bowling_label)}</div>"
             f"{bowling_table}"
+            f"{self._format_partnerships_block(scorecard)}"
         )
+
+    @staticmethod
+    def _commentary_table(headers, rows, text_columns):
+        """Inline-styled HTML table for end-of-match commentary. Inline
+        styles travel with the archived commentary HTML."""
+        from html import escape
+
+        def cell(value, index, tag):
+            numeric = index >= text_columns
+            alignment = "right" if numeric else "left"
+            style = (
+                f"text-align:{alignment};padding:4px 10px;vertical-align:top;"
+                + ("white-space:nowrap;font-variant-numeric:tabular-nums;"
+                   if numeric else "white-space:normal;overflow-wrap:anywhere;min-width:10ch;")
+                + ("border-bottom:1px solid #444;" if tag == "th" else "")
+            )
+            scope = " scope='col'" if tag == "th" else ""
+            return f"<{tag}{scope} style='{style}'>{escape(str(value))}</{tag}>"
+
+        head = "".join(cell(value, i, "th") for i, value in enumerate(headers))
+        body = "".join(
+            "<tr>" + "".join(cell(value, i, "td") for i, value in enumerate(row)) + "</tr>"
+            for row in rows
+        )
+        return (
+            "<div style='max-width:100%;overflow-x:auto;'>"
+            "<table style='width:100%;border-collapse:collapse;font-size:0.85rem;'>"
+            f"<thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>"
+        )
+
+    def _partnership_summary(self, titled_cards):
+        """End-of-match FoW + partnership blocks for several innings, each
+        under its own heading. ``titled_cards`` is [(title, scorecard_like)]."""
+        from html import escape
+        blocks = []
+        for title, card in titled_cards:
+            block = self._format_partnerships_block(card)
+            if block:
+                blocks.append(f"<strong>{escape(str(title))}</strong>{block}")
+        if not blocks:
+            return ""
+        return "<br><strong>Partnerships &amp; Fall of Wickets:</strong><br>" + "<br>".join(blocks)
+
+    def _fc_partnership_summary(self):
+        """FoW + partnerships for every first-class innings played."""
+        cards = []
+        for n in sorted(self.fc_innings_partnerships):
+            stands = self.fc_innings_partnerships.get(n) or []
+            if not stands:
+                continue
+            side = (self.fc_innings_totals.get(n) or {}).get("side")
+            team = self._get_team_name(self.home_xi if side == "home" else self.away_xi) if side else ""
+            title = f"{ordinal(n)} Innings" + (f" — {team}" if team else "")
+            cards.append((title, {"partnerships": stands}))
+        return self._partnership_summary(cards)
+
+    def _format_partnerships_block(self, scorecard):
+        """Fall of wickets line + partnerships table for one innings, for the
+        end-of-match commentary. Empty when the innings has no stands."""
+        from html import escape
+        if not scorecard:
+            return ""
+        stands = scorecard.get("partnerships") or []
+        if not stands:
+            return ""
+        fow = scorecard.get("fall_of_wickets")
+        if fow is None:
+            fow = fall_of_wickets(stands)
+        over_unit = "b" if self.is_hundred else "ov"
+        parts = []
+        if fow:
+            fow_line = ", ".join(fow_text(e, over_unit) for e in fow)
+            parts.append(
+                "<div style='margin-top:8px;'><span style='font-weight:600;'>Fall of wickets:</span> "
+                f"{escape(fow_line)}</div>"
+            )
+        rows = []
+        for p in sorted(stands, key=lambda x: x.get("wicket_number") or 0):
+            unbroken = bool(p.get("is_unbroken"))
+            pair = (
+                batter_share(p.get("batsman1_name", ""), p.get("batsman1_contribution"),
+                             p.get("batsman1_balls"), unbroken)
+                + " & "
+                + batter_share(p.get("batsman2_name", ""), p.get("batsman2_contribution"),
+                               p.get("batsman2_balls"), unbroken)
+            )
+            runs = f"{p.get('runs', 0)}{'*' if unbroken else ''} ({p.get('balls', 0)})"
+            rows.append((
+                ordinal(p.get("wicket_number") or 0), pair, runs,
+                "–" if p.get("fours") is None else p.get("fours"),
+                "–" if p.get("sixes") is None else p.get("sixes"),
+            ))
+        parts.append("<div style='margin-top:8px;font-weight:600;'>Partnerships</div>")
+        parts.append(self._commentary_table(("Wkt", "Batters", "Runs (B)", "4s", "6s"), rows, text_columns=2))
+        return "".join(parts)
 
 
 
@@ -1367,7 +1572,7 @@ class Match(CaptaincyMixin, HundredPresentation):
 
         return state
 
-    # ── WIN PROBABILITY (2nd innings only) ────────────────────────────────────
+    # ── WIN PROBABILITY (limited overs, innings 1 and 2) ──────────────────────
     # DLS-inspired resource model: wickets-in-hand × balls remaining determine
     # how many runs can realistically be scored. A normal CDF approximation
     # converts the gap between expected and required runs into a probability.
@@ -1396,34 +1601,46 @@ class Match(CaptaincyMixin, HundredPresentation):
         cdf = 1.0 - (1.0 / math.sqrt(2 * math.pi)) * math.exp(-0.5 * z * z) * poly
         return 0.5 + sign * (cdf - 0.5)
 
-    def _calculate_win_probability(self) -> float:
+    def _win_prob_resources(self, balls, wickets_in_hand):
+        """Expected runs, and their spread, from `balls` with `wickets_in_hand`."""
+        if self.fmt.name == "T20":
+            # Calibrated against T20 scoring; other formats score at their own rate.
+            runs_per_ball = self._WIN_PROB_PITCH_RPB.get(self.pitch, 1.38)
+        else:
+            baseline = self.fmt.rrr_baseline
+            runs_per_ball = baseline.get(self.pitch, baseline["Hard"]) / self.balls_per_over
+        capacity = self._WIN_PROB_WICKET_CAPACITY.get(wickets_in_hand, 0.50)
+        return balls * runs_per_ball * capacity, (balls ** 0.5) * 2.8 * (capacity ** 0.4)
+
+    def _calculate_win_probability(self):
         """
-        Return the chasing team's win probability (0–100) for the current ball.
-        Only meaningful during innings 2; returns None for innings 1.
+        Return the batting side's win probability (0–100) after the latest ball,
+        or None outside innings 1-2 and for FC.
+
+        Innings 1 projects the final total from the resources left and asks how
+        likely a full-resource chase is to fall short of it, so the value at the
+        end of innings 1 matches the chase's first reading.
         """
-        if self.innings != 2:
+        if self.is_fc or self.innings not in (1, 2):
             return None
+
+        wickets_in_hand = 10 - self.wickets
+        balls_remaining = (self.overs - self.current_over) * self.balls_per_over - self.current_ball
+
+        if self.innings == 1:
+            rest, rest_spread = self._win_prob_resources(max(0, balls_remaining), max(0, wickets_in_hand))
+            chase, chase_spread = self._win_prob_resources(self.overs * self.balls_per_over, 10)
+            z = (self.score + rest + 1 - chase) / max(6.0, math.hypot(rest_spread, chase_spread))
+            return round(max(2.0, min(98.0, self._normal_cdf(z) * 100.0)), 1)
 
         runs_needed = self.target - self.score
         if runs_needed <= 0:
             return 100.0
-
-        wickets_in_hand = 10 - self.wickets
-        if wickets_in_hand <= 0:
+        if wickets_in_hand <= 0 or balls_remaining <= 0:
             return 0.0
 
-        balls_remaining = (self.overs - self.current_over) * self.balls_per_over - self.current_ball
-        if balls_remaining <= 0:
-            return 0.0
-
-        typical_rpb = (self.fmt.rrr_baseline[self.pitch] / self.balls_per_over if getattr(self.fmt, "strict_short_bowling", False)
-                       else self._WIN_PROB_PITCH_RPB.get(self.pitch, 1.38))
-        capacity = self._WIN_PROB_WICKET_CAPACITY.get(wickets_in_hand, 0.50)
-
-        expected_achievable = balls_remaining * typical_rpb * capacity
-        std_dev = max(6.0, (balls_remaining ** 0.5) * 2.8 * (capacity ** 0.4))
-
-        z = (expected_achievable - runs_needed) / std_dev
+        expected_achievable, spread = self._win_prob_resources(balls_remaining, wickets_in_hand)
+        z = (expected_achievable - runs_needed) / max(6.0, spread)
         win_prob = self._normal_cdf(z) * 100.0
         return round(max(2.0, min(98.0, win_prob)), 1)
 
@@ -1565,8 +1782,49 @@ class Match(CaptaincyMixin, HundredPresentation):
         slot['runs'] += runs
         slot['balls'] += balls
 
-    def _save_partnership(self, wicket_type=None):
-        """Save the current partnership and reset for next wicket"""
+    def _save_partnership(self, wicket_type=None, unbroken=False):
+        """Close the current partnership, store it for this innings, and reset.
+
+        ``unbroken=True`` closes a stand that is still going when the innings
+        ends: it is numbered for the wicket it was batting for (wickets + 1)
+        and skipped entirely if the pair never faced or scored anything.
+
+        For a broken stand, ``score_at_fall`` and ``fall_over`` are the fall of
+        wickets entry; ``dismissed_slot`` is filled in by ``_mark_dismissal``
+        once the dismissed end is known (a run-out picks it after saving).
+        """
+        if unbroken and self.current_partnership_runs == 0 and self.current_partnership_balls == 0:
+            return None
+
+        entry = self._partnership_entry(unbroken=unbroken, wicket_type=wicket_type)
+
+        if self.is_fc:
+            self.fc_innings_partnerships.setdefault(self.fc_innings, []).append(entry)
+        elif self.innings == 1:
+            self.first_innings_partnerships.append(entry)
+        else:
+            self.second_innings_partnerships.append(entry)
+
+        print(f"🤝 Partnership Saved: {entry['runs']} runs off {entry['balls']} balls ({entry['batsman1_name']} & {entry['batsman2_name']})")
+
+        # Reset tracking
+        self.current_partnership_runs = 0
+        self.current_partnership_balls = 0
+        self.current_partnership_fours = 0
+        self.current_partnership_sixes = 0
+        self.current_partnership_start_over = self.current_over + (self.current_ball / self.balls_per_over)
+
+        # Reset contributions - one batter stays, one goes.
+        # But for tracking simplicity, we'll reset both and accumulate fresh
+        # The surviving batter's new partnership starts from 0 runs for THIS partnership
+        self.current_partnership_contributions = {
+            'batsman1': {'name': '', 'runs': 0, 'balls': 0},
+            'batsman2': {'name': '', 'runs': 0, 'balls': 0}
+        }
+        return entry
+
+    def _partnership_entry(self, unbroken, wicket_type=None):
+        """Build the partnership dict for the current pair without saving it."""
         contrib = self.current_partnership_contributions
         striker_name = self.current_striker["name"]
         non_striker_name = self.current_non_striker["name"]
@@ -1584,44 +1842,86 @@ class Match(CaptaincyMixin, HundredPresentation):
             b1 = contrib['batsman1']
             b2 = contrib['batsman2']
 
-        partnership_data = {
+        def _player_id(name):
+            stats = self.batsman_stats.get(name) or {}
+            return stats.get("id")
+
+        legal_balls = self.current_over * self.balls_per_over + self.current_ball
+        return {
             "innings_number": self.fc_innings if self.is_fc else self.innings,
-            "wicket_number": self.wickets,
-            "batsman1_id": None,  # Will be resolved to player ID later
+            "wicket_number": self.wickets + 1 if unbroken else self.wickets,
+            "batsman1_id": _player_id(striker_name),
             "batsman1_name": striker_name,
-            "batsman2_id": None,
+            "batsman2_id": _player_id(non_striker_name),
             "batsman2_name": non_striker_name,
             "runs": self.current_partnership_runs,
             "balls": self.current_partnership_balls,
+            "fours": self.current_partnership_fours,
+            "sixes": self.current_partnership_sixes,
             "batsman1_contribution": b1['runs'],
             "batsman1_balls": b1['balls'],
             "batsman2_contribution": b2['runs'],
             "batsman2_balls": b2['balls'],
             "start_over": self.current_partnership_start_over,
             "end_over": self.current_over + (self.current_ball / self.balls_per_over),
+            "is_unbroken": bool(unbroken),
+            "score_at_fall": None if unbroken else self.score,
+            "fall_over": None if unbroken else self._balls_to_overs_notation(legal_balls),
+            "wicket_type": None if unbroken else wicket_type,
+            "dismissed_slot": None,
         }
-        
+
+    def _innings_partnership_list(self):
+        """The saved-partnership list for the innings in progress, or None
+        (super overs don't track partnerships)."""
         if self.is_fc:
-            self.fc_innings_partnerships.setdefault(self.fc_innings, []).append(partnership_data)
-        elif self.innings == 1:
-            self.first_innings_partnerships.append(partnership_data)
-        else:
-            self.second_innings_partnerships.append(partnership_data)
-            
-        print(f"🤝 Partnership Saved: {self.current_partnership_runs} runs off {self.current_partnership_balls} balls ({self.current_striker['name']} & {self.current_non_striker['name']})")
-        
-        # Reset tracking
-        self.current_partnership_runs = 0
-        self.current_partnership_balls = 0
-        self.current_partnership_start_over = self.current_over + (self.current_ball / self.balls_per_over)
-        
-        # Reset contributions - one batter stays, one goes.
-        # But for tracking simplicity, we'll reset both and accumulate fresh
-        # The surviving batter's new partnership starts from 0 runs for THIS partnership
-        self.current_partnership_contributions = {
-            'batsman1': {'name': '', 'runs': 0, 'balls': 0},
-            'batsman2': {'name': '', 'runs': 0, 'balls': 0}
-        }
+            return self.fc_innings_partnerships.get(self.fc_innings, [])
+        if self.innings == 1:
+            return self.first_innings_partnerships
+        if self.innings == 2:
+            return self.second_innings_partnerships
+        return None
+
+    def _mark_dismissal(self, dismissed_name, wicket_type):
+        """Record who was out on the stand that just ended.
+
+        Runs after the dismissal helper because ``_apply_run_out`` saves the
+        partnership before choosing which end is run out.
+        """
+        stands = self._innings_partnership_list()
+        if not stands:
+            return
+        last = stands[-1]
+        if last.get("is_unbroken") or last.get("wicket_number") != self.wickets:
+            return
+        if last.get("batsman1_name") == dismissed_name:
+            last["dismissed_slot"] = 1
+        elif last.get("batsman2_name") == dismissed_name:
+            last["dismissed_slot"] = 2
+        last["wicket_type"] = wicket_type
+
+    def _current_innings_partnerships(self):
+        """Saved stands for this innings plus the one still in progress."""
+        stands = self._innings_partnership_list()
+        if stands is None:
+            return []
+        stands = [dict(p) for p in stands]
+        live = self._live_partnership_entry()
+        if live is not None:
+            stands.append(live)
+        return stands
+
+    def _live_partnership_entry(self):
+        """The in-progress stand as an unbroken entry, or None if it hasn't
+        started (or the innings is all out)."""
+        if self.wickets >= 10:
+            return None
+        if self.current_partnership_runs == 0 and self.current_partnership_balls == 0:
+            return None
+        stands = self._innings_partnership_list() or []
+        if stands and stands[-1].get("is_unbroken"):
+            return None  # already closed at innings end
+        return self._partnership_entry(unbroken=True)
 
     def _save_first_innings_stats(self):
         """Save first innings stats before resetting for second innings"""
@@ -2884,6 +3184,8 @@ class Match(CaptaincyMixin, HundredPresentation):
         # Reset partnership tracking
         self.current_partnership_balls = 0
         self.current_partnership_runs = 0
+        self.current_partnership_fours = 0
+        self.current_partnership_sixes = 0
         self.current_partnership_start_over = 0.0
         self.current_partnership_contributions = {
             'batsman1': {'name': '', 'runs': 0, 'balls': 0},
@@ -3359,10 +3661,17 @@ class Match(CaptaincyMixin, HundredPresentation):
             if extra_type in ("Byes", "Leg Bye"):
                 is_legal_delivery = True
 
+        if self.is_hundred and extra:
+            # The extra runs are on the board, so they belong to the stand.
+            self.current_partnership_runs += outcome.get('runs', 0)
+
         if is_legal_delivery:
             self._count_legal_delivery()
             self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
             self.batsman_stats[self.current_striker["name"]]["balls"] += 1
+            # The wicket ball is part of the stand it ends (the run-out
+            # helper already counts it; this path used to drop it).
+            self.current_partnership_balls += 1
             self._credit_partnership_contribution(balls=1)
 
         self._save_partnership(wicket_type)
@@ -4916,6 +5225,13 @@ class Match(CaptaincyMixin, HundredPresentation):
         """Common shape for a rain-decided match-over response."""
         lines = list(lines)
         lines.append(f"<strong>Match Over!</strong> {self.result}")
+        cards = []
+        if (scorecard_data or {}).get("innings_number") == 2:
+            cards.append(("1st Innings", getattr(self, "first_innings_scorecard", None)))
+        cards.append((f"{(scorecard_data or {}).get('innings', '')} Innings".strip(), scorecard_data))
+        summary = self._partnership_summary(cards)
+        if summary:
+            lines.append(summary)
         return {
             "match_over": True,
             "scorecard_data": scorecard_data,
@@ -4943,8 +5259,8 @@ class Match(CaptaincyMixin, HundredPresentation):
     def _finalize_no_result(self, lines):
         """Rain has washed the match out before a result was possible."""
         washed_out_in_first_innings = (self.innings == 1)
-        if self.wickets < 10 and self.current_partnership_balls > 0:
-            self._save_partnership("not_out")
+        if self.wickets < 10:
+            self._save_partnership(unbroken=True)
         if washed_out_in_first_innings:
             self._save_first_innings_stats()
             # Prevent the innings-3 guard from copying first-innings stats
@@ -4973,8 +5289,8 @@ class Match(CaptaincyMixin, HundredPresentation):
     def _finalize_chase_terminated(self, lines):
         """Rain has ended the chase after the minimum overs: DLS par decides."""
         par = self.target - 1
-        if self.wickets < 10 and self.current_partnership_balls > 0:
-            self._save_partnership("not_out")
+        if self.wickets < 10:
+            self._save_partnership(unbroken=True)
         chasing_code = self._get_team_name(self.batting_team)
         defending_code = self._get_team_name(self.bowling_team)
         lines.append(
@@ -5011,8 +5327,8 @@ class Match(CaptaincyMixin, HundredPresentation):
 
     def _finalize_rain_chase_won(self, lines):
         """A target revision leaves the chasing side already home."""
-        if self.wickets < 10 and self.current_partnership_balls > 0:
-            self._save_partnership("not_out")
+        if self.wickets < 10:
+            self._save_partnership(unbroken=True)
         winner_code = self._get_team_name(self.batting_team)
         wkts_left = 10 - self.wickets
         self._set_outcome(
@@ -5036,8 +5352,8 @@ class Match(CaptaincyMixin, HundredPresentation):
         if self.is_fc:
             return self._fc_transition_to_next_innings()
         # 🤝 SAVE UNFINISHED PARTNERSHIP (if overs completed and not all out)
-        if self.wickets < 10 and self.current_partnership_balls > 0:
-             self._save_partnership("not_out")
+        if self.wickets < 10:
+             self._save_partnership(unbroken=True)
 
         if self.innings == 1:
             # 🔧 USER REQUEST: Print team stats when all out
@@ -5131,9 +5447,8 @@ class Match(CaptaincyMixin, HundredPresentation):
         else:
             scorecard_data = self._generate_detailed_scorecard()
             if self.score >= self.target:
-                # 🤝 SAVE UNFINISHED PARTNERSHIP (Match Won)
-                if self.wickets < 10:
-                    self._save_partnership("not_out")
+                # The unbroken stand was already closed at the top of
+                # _transition_to_next_innings, before this scorecard.
 
                 winner_code = self.data["team_home"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_away"].split("_")[0]
                 wkts_left = 10 - self.wickets
@@ -5158,9 +5473,8 @@ class Match(CaptaincyMixin, HundredPresentation):
                 if self.score == self.target - 1:
                     self.result = "Match Tied"
 
-                    # 🤝 SAVE UNFINISHED PARTNERSHIP (Match Tied)
-                    if self.wickets < 10:
-                        self._save_partnership("not_out")
+                    # (Unbroken stand already closed at the top of
+                    # _transition_to_next_innings.)
 
                     # ✅ Store original scorecard for later display
                     self.original_scorecard = self._generate_detailed_scorecard()
@@ -6878,6 +7192,7 @@ class Match(CaptaincyMixin, HundredPresentation):
             "commentary": self._fc_join(
                 commentary_prefix,
                 f"<strong>Match Over!</strong> {self.result}",
+                self._fc_partnership_summary(),
             ),
         }
         # Never put a blank 0/0 modal in front of the result. A legitimate
@@ -6894,8 +7209,8 @@ class Match(CaptaincyMixin, HundredPresentation):
         # day's minimum would read as an over-rate offence.)
         if self.is_fc and not self.fc_day_log_has_day(self.fc_day):
             self._fc_record_day(self.fc_day)
-        if self.wickets < 10 and self.current_partnership_balls > 0:
-            self._save_partnership("not_out")
+        if self.wickets < 10:
+            self._save_partnership(unbroken=True)
         scorecard_data = self._generate_detailed_scorecard()
         self.fc_innings_totals[self.fc_innings] = {
             "score": self.score, "wickets": self.wickets,
@@ -6911,8 +7226,8 @@ class Match(CaptaincyMixin, HundredPresentation):
         return self._fc_finalize_match(scorecard_data)
 
     def _fc_transition_to_next_innings(self, commentary_prefix=None):
-        if self.wickets < 10 and self.current_partnership_balls > 0:
-            self._save_partnership("not_out")
+        if self.wickets < 10:
+            self._save_partnership(unbroken=True)
 
         ending_innings = self.fc_innings
         scorecard_data = self._generate_detailed_scorecard()
@@ -7353,9 +7668,15 @@ class Match(CaptaincyMixin, HundredPresentation):
                     if getattr(self.fmt, "strict_short_bowling", False) and not decision.get("options"):
                         self.match_status = "aborted"
                         return {"error": "No legal bowling allocation remains", "match_over": True, "result": "Match aborted: invalid bowling state"}
+                    # The captains' reads of the match were produced by
+                    # _captain_evaluate() above, before this prompt. Print them
+                    # now, ahead of the prompt, instead of leaving them queued
+                    # until the first ball, which landed them after the pick.
+                    prompt = f"<em>Select bowler for {'set' if self.is_hundred else 'over'} {self.current_over + 1}</em>"
+                    queued = self.pending_pre_ball_commentary
+                    self.pending_pre_ball_commentary = []
                     return self._build_decision_required_response(
-                        decision,
-                        commentary=f"<em>Select bowler for {'set' if self.is_hundred else 'over'} {self.current_over + 1}</em>"
+                        decision, commentary="<br>".join([*queued, prompt])
                     )
                 try:
                     self.current_bowler = self._fc_pick_bowler() if self.is_fc else self.pick_bowler()
@@ -7438,15 +7759,10 @@ class Match(CaptaincyMixin, HundredPresentation):
         # of that logic transfers.
         if self.is_fc:
             match_state = self._fc_build_match_state()
-            _win_prob = None  # no chase-win-probability model for FC in Phase 1
             pressure_effects = self.pressure_engine.get_pressure_effects(match_state)
         else:
             match_state = self._calculate_current_match_state()
             pressure_score = self.pressure_engine.calculate_pressure(match_state)
-
-            # Win probability (2nd innings only; None during 1st innings)
-            _win_prob = self._calculate_win_probability()
-
 
             # Get base pressure effects (now fair)
             pressure_effects = self.pressure_engine.get_pressure_effects(
@@ -7971,6 +8287,8 @@ class Match(CaptaincyMixin, HundredPresentation):
         _bd_ball = self.current_ball
         _bd_score_before = self.score
         _bd_was_free_hit = self.free_hit_active
+        _bd_batter_before = dict(self.batsman_stats.get(_bd_striker, {}))
+        _bd_bowler_before = dict(self.bowler_stats.get(_bd_bowler, {}))
 
         if self.is_fc:
             keys = {"Wide": "wides", "No Ball": "noballs", "Byes": "byes", "Leg Bye": "legbyes"}
@@ -8052,6 +8370,7 @@ class Match(CaptaincyMixin, HundredPresentation):
                 dismissed_end, dismissed_name, fielder_name, commentary_line = (
                     self._apply_normal_wicket(outcome, extra, commentary_line)
                 )
+            self._mark_dismissal(dismissed_name, wicket_type)
 
             self._hundred_finalize_delivery()
 
@@ -8341,8 +8660,10 @@ class Match(CaptaincyMixin, HundredPresentation):
                     self.batsman_stats[self.current_striker["name"]]["threes"] += 1
                 elif runs == 4:
                     self.batsman_stats[self.current_striker["name"]]["fours"] += 1
+                    self.current_partnership_fours += 1
                 elif runs == 6:
                     self.batsman_stats[self.current_striker["name"]]["sixes"] += 1
+                    self.current_partnership_sixes += 1
 
                 # A2: Bat-runs > 0 invalidate maiden over
                 if runs > 0:
@@ -8374,8 +8695,10 @@ class Match(CaptaincyMixin, HundredPresentation):
                         self.batsman_stats[self.current_striker["name"]]["threes"] += 1
                     elif bat_runs == 4:
                         self.batsman_stats[self.current_striker["name"]]["fours"] += 1
+                        self.current_partnership_fours += 1
                     elif bat_runs == 6:
                         self.batsman_stats[self.current_striker["name"]]["sixes"] += 1
+                        self.current_partnership_sixes += 1
                 else:
                     # No Ball with 0 bat runs = dot ball for the batsman
                     self.batsman_stats[self.current_striker["name"]]["dots"] += 1
@@ -8451,6 +8774,12 @@ class Match(CaptaincyMixin, HundredPresentation):
                     self._tally_limited_overs_extra(outcome, runs)
 
                 self._hundred_finalize_delivery()
+                # Close the winning stand before the scorecard so it shows up
+                # there, in the archive and in the DB (it used to be dropped).
+                _final_stand_runs = self.current_partnership_runs
+                _final_stand_balls = self.current_partnership_balls
+                if self.wickets < 10:
+                    self._save_partnership(unbroken=True)
                 scorecard_data = self._generate_detailed_scorecard()
                 winner_code = self.data["team_home"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_away"].split("_")[0]
                 wkts_left = 10 - self.wickets
@@ -8519,7 +8848,7 @@ class Match(CaptaincyMixin, HundredPresentation):
                     "result": self.result,
                     "commentary": final_commentary,
                     "win_probability": 100.0,
-                    "ball_data": {
+                    "ball_data": self._record_dashboard_delivery({
                         "runs": self.score - _bd_score_before,
                         "batter_out": wicket,
                         "is_extra": extra,
@@ -8531,14 +8860,17 @@ class Match(CaptaincyMixin, HundredPresentation):
                         "ball": _bd_ball,
                         "striker": _bd_striker,
                         "non_striker": _bd_non_striker,
+                        "next_striker": self.current_striker["name"],
+                        "next_non_striker": self.current_non_striker["name"],
                         "bowler": _bd_bowler,
                         "innings": self.fc_innings if self.is_fc else self.innings,
                         "score": self.score,
                         "wickets": self.wickets,
                         "target": getattr(self, 'target', None),
-                        "partnership_runs": self.current_partnership_runs,
-                        "partnership_balls": self.current_partnership_balls,
-                    }
+                        "partnership_runs": _final_stand_runs,
+                        "partnership_balls": _final_stand_balls,
+                        **self._dashboard_figures(_bd_striker, _bd_bowler, _bd_batter_before, _bd_bowler_before),
+                    })
                 }
 
         # Increment ball count for legal deliveries (non-extras OR Byes/Leg Byes)
@@ -8669,7 +9001,7 @@ class Match(CaptaincyMixin, HundredPresentation):
         if self.is_hundred and self._hundred_delivery_event:
             self._hundred_delivery_event.update(next_striker=self.current_striker['name'], next_non_striker=self.current_non_striker['name'])
 
-        ball_data_payload = {
+        ball_data_payload = self._record_dashboard_delivery({
             "delivery": outcome.get("delivery"),
             "runs": self.score - _bd_score_before,
             "batter_out": wicket,
@@ -8682,6 +9014,8 @@ class Match(CaptaincyMixin, HundredPresentation):
             "ball": _bd_ball,
             "striker": _bd_striker,
             "non_striker": _bd_non_striker,
+            "next_striker": self.current_striker["name"],
+            "next_non_striker": self.current_non_striker["name"],
             "bowler": _bd_bowler,
             "innings": self.fc_innings if self.is_fc else self.innings,
             "score": self.score,
@@ -8689,7 +9023,10 @@ class Match(CaptaincyMixin, HundredPresentation):
             "target": getattr(self, 'target', None),
             "partnership_runs": self.current_partnership_runs,
             "partnership_balls": self.current_partnership_balls,
-        }
+            "partnership_fours": self.current_partnership_fours,
+            "partnership_sixes": self.current_partnership_sixes,
+            **self._dashboard_figures(_bd_striker, _bd_bowler, _bd_batter_before, _bd_bowler_before),
+        })
 
         if pending_decision_for_response and pending_decision_for_response.get("type") == "next_batter":
             pending_decision_for_response = self._create_next_batter_decision(
@@ -8705,15 +9042,6 @@ class Match(CaptaincyMixin, HundredPresentation):
                 ball_data=ball_data_payload
             )
 
-        # Build player stat summaries for the score banner
-        _striker_name = self.current_striker["name"]
-        _nonstriker_name = self.current_non_striker["name"]
-        _bowler_name = self.current_bowler["name"] if self.current_bowler else ""
-        _s_stats = self.batsman_stats.get(_striker_name, {})
-        _ns_stats = self.batsman_stats.get(_nonstriker_name, {})
-        _bw_stats = self.bowler_stats.get(_bowler_name, {})
-        _bw_overs_display = _bw_stats.get("overs", 0) + (_bw_stats.get("balls_bowled", 0) % self.balls_per_over) / 10
-
         _rain_info = self._pending_rain_info
         self._pending_rain_info = None
 
@@ -8724,20 +9052,7 @@ class Match(CaptaincyMixin, HundredPresentation):
             "over": self.current_over,
             "ball": self.current_ball,
             "commentary": "<br>".join(all_commentary),
-            "striker": _striker_name,
-            "non_striker": _nonstriker_name,
-            "bowler": _bowler_name,
-            "striker_runs": _s_stats.get("runs", 0),
-            "striker_balls": _s_stats.get("balls", 0),
-            "striker_fours": _s_stats.get("fours", 0),
-            "striker_sixes": _s_stats.get("sixes", 0),
-            "nonstriker_runs": _ns_stats.get("runs", 0),
-            "nonstriker_balls": _ns_stats.get("balls", 0),
-            "nonstriker_fours": _ns_stats.get("fours", 0),
-            "nonstriker_sixes": _ns_stats.get("sixes", 0),
-            "bowler_wickets": _bw_stats.get("wickets", 0),
-            "bowler_runs": _bw_stats.get("runs", 0),
-            "bowler_overs": f"{_bw_overs_display:.1f}",
+            **self._banner_player_figures(),
             "innings_number": self.fc_innings if self.is_fc else self.innings,
             "target": getattr(self, "target", None),
             "total_overs": self.overs,
@@ -8745,14 +9060,14 @@ class Match(CaptaincyMixin, HundredPresentation):
             "scheduled_overs": self.data.get("scheduled_overs"),
             # FC has no fielding-circle phases at all — no phase_name.
             "phase_name": None if self.is_fc else self.fmt.get_phase(self.current_over + (self.current_ball / 5 if self.is_hundred else 0)).name,
-            "bowler_overs_remaining": self.bowler_manager.overs_remaining(_bowler_name),
             "bowling_eligibility": self.get_bowling_eligibility(),
-            # FC has no bowling quota — no cap to report.
-            "bowler_max_overs": getattr(self.fmt, "max_bowler_overs", None),
             "fc_day": self.fc_day if self.is_fc else None,
             "partnership_runs": self.current_partnership_runs,
             "partnership_balls": self.current_partnership_balls,
-            "win_probability": _win_prob,
+            "partnership_fours": self.current_partnership_fours,
+            "partnership_sixes": self.current_partnership_sixes,
+            # After the delivery, so the meter reflects the ball just bowled.
+            "win_probability": self._calculate_win_probability(),
             "rain_affected": self.rain_affected,
             "dls_par": self._current_dls_par(),
             "rain_interruption": _rain_info,
@@ -8892,6 +9207,7 @@ class Match(CaptaincyMixin, HundredPresentation):
         
         innings_number = self.fc_innings if self.is_fc else self.innings
         innings_labels = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}
+        partnerships = self._current_innings_partnerships()
 
         return {
             "team_name": team_name,
@@ -8910,7 +9226,9 @@ class Match(CaptaincyMixin, HundredPresentation):
             "bowling_rate_unit": "RPB" if self.is_hundred else "Economy",
             "run_rate": hundred_rate(self.score, total_balls) if self.is_hundred else f"{run_rate:.2f}",
             "extras": extras,
-            "target_info": target_info_value
+            "target_info": target_info_value,
+            "partnerships": partnerships,
+            "fall_of_wickets": fall_of_wickets(partnerships),
         }
     
     def _setup_super_over(self):
@@ -10227,6 +10545,8 @@ class Match(CaptaincyMixin, HundredPresentation):
             "innings_balls_bowled": self.innings_balls_bowled,
             "current_partnership_balls": self.current_partnership_balls,
             "current_partnership_runs": self.current_partnership_runs,
+            "current_partnership_fours": self.current_partnership_fours,
+            "current_partnership_sixes": self.current_partnership_sixes,
             "current_partnership_start_over": self.current_partnership_start_over,
             "current_partnership_contributions": self.current_partnership_contributions,
             "batter_streaks": self.batter_streaks,
@@ -10400,6 +10720,8 @@ class Match(CaptaincyMixin, HundredPresentation):
 
         self.current_partnership_balls = snap.get("current_partnership_balls", 0)
         self.current_partnership_runs = snap.get("current_partnership_runs", 0)
+        self.current_partnership_fours = snap.get("current_partnership_fours", 0)
+        self.current_partnership_sixes = snap.get("current_partnership_sixes", 0)
         self.current_partnership_start_over = snap.get("current_partnership_start_over", 0.0)
         self.current_partnership_contributions = snap.get("current_partnership_contributions") or {
             'batsman1': {'name': '', 'runs': 0, 'balls': 0},

@@ -98,7 +98,7 @@ body .scx-nav.navbar {
 
 #live-innings-players > div {
     display: grid;
-    grid-template-columns: minmax(0, 5.8rem) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 5.2rem) minmax(0, 1fr);
     align-items: baseline;
     gap: 0.5rem;
     padding: 0.5rem 0;
@@ -107,14 +107,116 @@ body .scx-nav.navbar {
     overflow-wrap: anywhere;
 }
 
+#live-innings-players > div[hidden] {
+    display: none;
+}
+
 #live-innings-players dt {
     color: var(--fg-secondary);
 }
 
 #live-innings-players dd {
     margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0 0.5rem;
     color: var(--fg);
     font-weight: 650;
+}
+
+/* Live score beside the name: set from data-score so the name text stays
+   exactly what the engine sent. */
+#live-innings-players dd[data-score]::after {
+    content: attr(data-score);
+    margin-left: auto;
+    color: var(--fg-secondary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+#live-innings-players .li-on-strike dt::after {
+    content: " \2022";
+    color: var(--accent);
+}
+
+.li-section {
+    margin-top: 0.9rem;
+    padding-top: 0.7rem;
+    border-top: 1px solid var(--card-border);
+}
+
+.li-section[hidden] {
+    display: none;
+}
+
+.li-section h3 {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    margin: 0 0 0.35rem;
+    color: var(--fg-secondary);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.li-count {
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+}
+
+.li-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.li-list li {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0 0.5rem;
+    padding: 0.28rem 0;
+    font-size: 0.82rem;
+    color: var(--fg);
+    overflow-wrap: anywhere;
+}
+
+.li-list .li-score {
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+}
+
+.li-list.li-light li {
+    font-size: 0.75rem;
+    color: var(--fg-secondary);
+}
+
+.li-list.li-light .li-score {
+    font-weight: 500;
+}
+
+.li-list li.li-current {
+    color: var(--fg);
+    font-weight: 650;
+}
+
+.li-list li.li-flash {
+    animation: li-flash 1.2s ease-out;
+}
+
+@keyframes li-flash {
+    from { background: var(--accent-light); }
+    to { background: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .li-list li.li-flash { animation: none; }
 }
 
 .match-info {
@@ -966,6 +1068,56 @@ body .scx-nav.navbar {
     color: var(--fg);
     font-size: 1rem;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.scorecard-fow,
+.scorecard-partnerships {
+    grid-column: 1 / -1;
+}
+
+.scorecard-fow {
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--fg-secondary);
+    padding: 0.75rem 1rem;
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+}
+
+.scorecard-fow-label {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 0.75rem;
+    color: var(--fg);
+    margin-right: 0.5rem;
+}
+
+.scorecard-fow strong {
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+}
+
+.fow-entry {
+    white-space: nowrap;
+}
+
+.scorecard-partnerships .pship-batter {
+    display: block;
+}
+
+.scorecard-partnerships .pship-share {
+    color: var(--fg-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.scorecard-partnerships td:nth-child(n+3) {
+    font-variant-numeric: tabular-nums;
+}
+
+.scorecard-partnerships tr.pship-unbroken td {
+    font-style: italic;
 }
 
 .target-info {

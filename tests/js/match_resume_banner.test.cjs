@@ -101,13 +101,15 @@ test('live innings restores roles, displays pending choices, and clears at a bre
     const row = name => elements.get('live-innings-' + name);
     assert.equal(row('toss').hidden, true);
     assert.equal(row('status').textContent, 'Innings 2 · Away batting');
-    assert.equal(row('striker').textContent, 'Batter B');
-    assert.equal(row('non-striker').textContent, 'Batter A');
-    assert.equal(row('bowler').textContent, 'Bowler A');
+    // Side panel shows 'first initial + surname' so score and name share a line.
+    assert.equal(row('striker').textContent, 'B B');
+    assert.equal(row('striker').title, 'Batter B');
+    assert.equal(row('non-striker').textContent, 'B A');
+    assert.equal(row('bowler').textContent, 'B A');
     assert.equal(row('next').textContent, 'Batter C');
 
     render({...live, selecting_batter: 'non_striker'});
-    assert.equal(row('striker').textContent, 'Batter B');
+    assert.equal(row('striker').textContent, 'B B');
     assert.equal(row('non-striker').textContent, 'Selecting batter…');
     render({...live, selecting_bowler: true, next_batter: null});
     assert.equal(row('bowler').textContent, 'Selecting bowler…');
@@ -122,9 +124,17 @@ test('live innings restores roles, displays pending choices, and clears at a bre
     render({...live, innings: 3});
     assert.equal(row('players').hidden, false);
     assert.equal(row('status').textContent, 'Innings 3 · Away batting');
-    render({status: 'complete'});
-    assert.equal(row('players').hidden, true);
+    // Match over: the last card stays on the panel (it is not cleared).
+    render({...live, status: 'complete', batters: [{name: 'Batter B', state: 'striker', runs: 7, balls: 5}],
+        bowlers: [{name: 'Bowler A', figures: '1.0-0-7-0', current: true}]});
+    assert.equal(row('players').hidden, false);
     assert.equal(row('status').textContent, 'Match complete');
+    assert.equal(row('striker').textContent, 'B B');
+    assert.equal(row('striker').dataset.score, '7 (5)');
+    // A bare 'complete' (e.g. a reload) leaves whatever is showing alone.
+    render({status: 'complete'});
+    assert.equal(row('players').hidden, false);
+    assert.equal(row('striker').textContent, 'B B');
 });
 
 test('reload during a break restores the card before play advances', async () => {

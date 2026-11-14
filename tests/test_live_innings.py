@@ -63,6 +63,19 @@ def test_live_roles_follow_strike_wicket_and_manual_selection(live_match, monkey
     assert pending["striker"] is None
     assert pending["selecting_batter"] == "striker"
     assert pending["non_striker"] == "HOME_P1"
+    # Panel card: the dismissed batter moves out with a score, the slot being
+    # filled is not listed as at the crease, and the pick list is complete.
+    by_state = {}
+    for entry in pending["batters"]:
+        by_state.setdefault(entry["state"], []).append(entry)
+    out = by_state["out"][0]
+    assert out["name"] == "HOME_P2" and "how" not in out
+    assert (out["runs"], out["balls"]) == (match.batsman_stats["HOME_P2"]["runs"],
+                                           match.batsman_stats["HOME_P2"]["balls"])
+    assert [b["name"] for b in by_state["non_striker"]] == ["HOME_P1"]
+    assert "striker" not in by_state
+    assert "HOME_P3" in [b["name"] for b in by_state["yet"]]
+    assert pending["bowlers"][0]["current"] and pending["bowlers"][0]["figures"].count("-") == 3
     state = client.get(url + "/live-state").get_json()
     assert state["live_innings"] == pending
     assert state["pending_selection"]["decision_type"] == "next_batter"
@@ -112,7 +125,92 @@ def test_innings_break_reload_and_finalized_impact_lineup(live_match, monkeypatc
 
     match.target = 1
     scripted(monkeypatch, [delivery(1)])
-    assert client.post(url + "/next-ball").get_json()["live_innings"] == {"status": "complete"}
+    final = client.post(url + "/next-ball").get_json()["live_innings"]
+    # The match-ending ball carries the last card so the panel can keep it.
+    assert final["status"] == "complete"
+    assert final["batters"] and final["bowlers"]
+    assert {b["state"] for b in final["batters"]} <= {"striker", "non_striker", "out", "yet"}
+
+
+def test_win_probability_is_post_ball_and_survives_refresh(live_match, monkeypatch):
+    client, register = live_match
+    match = _match()
+    url = register(match)
+    first_innings = client.get(url + "/live-state").get_json()["win_probability"]
+    assert first_innings is not None
+    assert first_innings == match._calculate_win_probability()
+
+    match.current_over = match.overs
+    match.score = 100
+    client.post(url + "/next-ball")
+    scripted(monkeypatch, [delivery(4)])
+    chase = client.post(url + "/next-ball").get_json()
+    assert chase["innings_number"] == 2 and chase["score"] == 4
+
+    # Probability of the position after the boundary, not before it.
+    assert chase["win_probability"] == match._calculate_win_probability()
+    assert chase["win_probability"] is not None
+    state = client.get(url + "/live-state").get_json()
+    assert state["win_probability"] == chase["win_probability"]
+
+
+def test_live_state_returns_every_delivery_for_a_refreshed_match_center(live_match, monkeypatch):
+    client, register = live_match
+    match = _match()
+    url = register(match)
+    scripted(monkeypatch, [delivery(1), delivery(wicket="Bowled"), delivery(6)])
+    sent = [client.post(url + "/next-ball").get_json()["ball_data"] for _ in range(3)]
+
+    match.current_over = match.overs
+    client.post(url + "/next-ball")
+    break_state = client.get(url + "/live-state").get_json()
+    assert break_state["deliveries"] == sent
+    assert [d["delivery_id"] for d in sent] == ["1:1", "1:2", "1:3"]
+
+    scripted(monkeypatch, [delivery(4)])
+    sent.append(client.post(url + "/next-ball").get_json()["ball_data"])
+    state = client.get(url + "/live-state").get_json()
+    assert state["deliveries"] == sent
+    assert [d["innings"] for d in state["deliveries"]] == [1, 1, 1, 2]
+    assert sent[-1]["delivery_id"] == "2:4"
+
+
+def test_ball_data_reports_batters_at_the_crease_after_the_ball(live_match, monkeypatch):
+    client, register = live_match
+    match = _match()
+    url = register(match)
+    scripted(monkeypatch, [delivery(1), delivery(wicket="Bowled")] + [delivery()] * 4)
+    sent = [client.post(url + "/next-ball").get_json()["ball_data"] for _ in range(6)]
+
+    def pairs(bd):
+        return (bd["striker"], bd["non_striker"]), (bd["next_striker"], bd["next_non_striker"])
+
+    # Odd runs rotate strike.
+    assert pairs(sent[0]) == (("HOME_P1", "HOME_P2"), ("HOME_P2", "HOME_P1"))
+    # The dismissed batter is replaced in the same delivery.
+    assert pairs(sent[1]) == (("HOME_P2", "HOME_P1"), ("HOME_P3", "HOME_P1"))
+    assert (sent[1]["partnership_runs"], sent[1]["partnership_balls"]) == (0, 0)
+    # The over-ending ball swaps ends.
+    assert pairs(sent[5]) == (("HOME_P3", "HOME_P1"), ("HOME_P1", "HOME_P3"))
+
+
+def test_manual_batter_choice_updates_last_delivery_at_the_crease(live_match, monkeypatch):
+    client, register = live_match
+    match = _match()
+    match.data["simulation_mode"] = match.simulation_mode = "manual"
+    url = register(match)
+    scripted(monkeypatch, [delivery(wicket="Bowled")])
+    picked = client.post(url + "/next-ball").get_json()["decision_options"][0]
+    client.post(url + "/submit-decision", json={"type": "next_bowler", "selected_index": picked["index"]})
+
+    wicket = client.post(url + "/next-ball").get_json()
+    assert wicket["ball_data"]["next_striker"] == "HOME_P3"
+    applied = client.post(url + "/submit-decision", json={
+        "type": "next_batter", "selected_index": 3,
+    }).get_json()["applied"]
+    assert (applied["next_striker"], applied["next_non_striker"]) == ("HOME_P4", "HOME_P2")
+    last = client.get(url + "/live-state").get_json()["deliveries"][-1]
+    assert (last["next_striker"], last["next_non_striker"]) == ("HOME_P4", "HOME_P2")
 
 
 def test_follow_on_break_survives_restore_with_same_batting_team(live_match, monkeypatch):

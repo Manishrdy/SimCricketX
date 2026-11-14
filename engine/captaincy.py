@@ -307,30 +307,6 @@ class CaptaincyMixin:
         event['kind'] = kind
         event['captain'] = self._captain_name(side, shootout)
         self.captaincy_events.append(event)
-        labels = {'all_out': 'all-out batting', 'rebuild': 'rebuilding', 'attack': 'attack',
-                  'contain': 'containment', 'balanced': 'balanced'}
-        explanations = {
-            'phase': 'balancing scoring risk for this phase',
-            'controlled_chase': 'keeping the chase under control',
-            'required_rate': 'responding to the required scoring rate',
-            'rebuild_after_wickets': 'protecting the remaining wickets after a collapse',
-            'final_deliveries': 'prioritizing runs with few deliveries remaining',
-            'balanced_attack': 'balancing wickets against runs conceded',
-            'restrict_scoring': 'responding to scoring pressure and the remaining overs',
-            'press_for_wickets': 'keeping pressure on the remaining batters',
-            'wickets_needed_to_defend': 'seeking wickets to defend the target',
-            'protect_required_rate': 'keeping the required rate difficult',
-            'take_twenty_wickets': 'seeking the wickets needed for a First-Class result',
-            'conditions_matchup_and_spell': 'using conditions, batter matchup, and attack freshness',
-            'conditions_matchup_and_phase_allocation': 'using conditions and batter matchup while preserving later bowling options',
-            'validated_shootout_bowler': 'using the available shootout attack',
-        }
-        verb = 'recommends' if kind == 'bowler' else 'switches to' if previous else 'sets'
-        text = f"{event['captain']} {verb} {labels.get(action, action)} ({kind}), {explanations.get(reason, reason.replace('_', ' '))}."
-        from html import escape
-        text = escape(text)
-        self.commentary.append(text)
-        self.pending_pre_ball_commentary.append(text)
 
     def _captain_evaluate(self, shootout=False):
         if not self.captaincy_enabled:

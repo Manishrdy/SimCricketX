@@ -182,6 +182,47 @@ class TestMatchScoreboardRoute:
         assert "Back to Matches" in content
         assert "/my-matches" in content
 
+    def test_scoreboard_shows_partnerships_and_fall_of_wickets(self, authenticated_client, regular_user, test_team, test_team_2):
+        """Saved partnerships render with FoW; legacy rows show dashes for unknowns."""
+        from database.models import MatchPartnership
+        match_id = str(uuid.uuid4())
+        db.session.add(DBMatch(
+            id=match_id, user_id=regular_user.id, home_team_id=test_team.id,
+            away_team_id=test_team_2.id, match_format="T20", venue="Eden",
+            result_description="TW won", home_team_score=60, home_team_wickets=1,
+            away_team_score=40, away_team_wickets=0,
+        ))
+        a = DBPlayer(name="Opener Ann", team_id=test_team.id)
+        b = DBPlayer(name="Opener Bea", team_id=test_team.id)
+        c = DBPlayer(name="Number Three", team_id=test_team.id)
+        bowler = DBPlayer(name="Bowler Bo", team_id=test_team_2.id)
+        db.session.add_all([a, b, c, bowler])
+        db.session.flush()
+        db.session.add_all([
+            MatchScorecard(match_id=match_id, player_id=a.id, team_id=test_team.id, innings_number=1,
+                           record_type="batting", runs=30, balls=20, is_out=True),
+            MatchScorecard(match_id=match_id, player_id=bowler.id, team_id=test_team_2.id, innings_number=1,
+                           record_type="bowling", runs_conceded=60, wickets=1, balls_bowled=36),
+            MatchPartnership(match_id=match_id, innings_number=1, wicket_number=1,
+                             batsman1_id=a.id, batsman2_id=b.id, runs=41, balls=30,
+                             batsman1_contribution=30, batsman1_balls=20,
+                             batsman2_contribution=9, batsman2_balls=10, fours=5, sixes=1,
+                             is_unbroken=False, score_at_fall=41, fall_over="5.0",
+                             wicket_type="Caught", dismissed_slot=1),
+            MatchPartnership(match_id=match_id, innings_number=1, wicket_number=2,
+                             batsman1_id=b.id, batsman2_id=c.id, runs=19, balls=6,
+                             batsman1_contribution=10, batsman2_contribution=9, is_unbroken=True),
+        ])
+        db.session.commit()
+
+        content = authenticated_client.get(f"/match/{match_id}/scoreboard").data.decode("utf-8")
+        assert "Fall of wickets:" in content
+        assert "1-41 (Opener Ann, 5.0 ov)" in content
+        assert "Partnerships" in content
+        assert "2nd" in content and "19*" in content
+        assert "Opener Ann <span class=\"pship-share\">30 (20)</span>" in content
+        assert "–" in content  # legacy stand without boundaries
+
     def test_fc_scoreline_in_my_matches(self, authenticated_client, regular_user, test_team, test_team_2):
         """Test that /my-matches displays multi-innings scores for FC matches."""
         match_id = str(uuid.uuid4())

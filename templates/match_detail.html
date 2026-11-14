@@ -19,11 +19,23 @@
             <div id="toss-result" role="status">Toss pending</div>
         </div>
         <dl id="live-innings-players" hidden>
-            <div><dt>Striker</dt><dd id="live-innings-striker">—</dd></div>
+            <div class="li-on-strike"><dt>Striker</dt><dd id="live-innings-striker">—</dd></div>
             <div><dt>Non-striker</dt><dd id="live-innings-non-striker">—</dd></div>
             <div><dt>Bowler</dt><dd id="live-innings-bowler">—</dd></div>
-            <div><dt>Next in order</dt><dd id="live-innings-next">—</dd></div>
+            <div hidden><dt>Next in order</dt><dd id="live-innings-next">—</dd></div>
         </dl>
+        <section class="li-section" id="live-innings-yet" aria-labelledby="li-yet-title" hidden>
+            <h3 id="li-yet-title">Next to bat <span class="li-count"></span></h3>
+            <ol class="li-list"></ol>
+        </section>
+        <section class="li-section" id="live-innings-out" aria-labelledby="li-out-title" hidden>
+            <h3 id="li-out-title">Dismissed <span class="li-count"></span></h3>
+            <ul class="li-list"></ul>
+        </section>
+        <section class="li-section" id="live-innings-bowlers" aria-labelledby="li-bowl-title" hidden>
+            <h3 id="li-bowl-title">Bowling</h3>
+            <ul class="li-list li-light"></ul>
+        </section>
     </aside>
 
     <!-- Main Panel: Score & Commentary -->
@@ -219,7 +231,7 @@
                     <div id="partnership-bar"></div>
                     <div class="panel-divider"></div>
                     <div id="win-prob-display">
-                        <!-- Populated by JS during 2nd innings only -->
+                        <!-- Server win_probability, innings 1 and 2 (updateWinProbBanner) -->
                         <div id="win-prob-container" style="display:none;">
                             <div class="panel-subheader" style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted,#888);margin-bottom:6px;">Win Probability</div>
                             <div class="win-prob-bar-wrap" style="position:relative;height:18px;border-radius:9px;overflow:hidden;background:var(--surface-2,#1e2430);">
@@ -492,6 +504,28 @@
                         </tr>
                     </thead>
                     <tbody id="bowling-tbody"></tbody>
+                </table>
+            </div>
+
+            <!-- Fall of wickets + partnerships (filled by showScorecard) -->
+            <div class="scorecard-fow" id="scorecard-fow" style="display:none;">
+                <span class="scorecard-fow-label">Fall of wickets</span>
+                <span id="scorecard-fow-text"></span>
+            </div>
+            <div class="scorecard-partnerships" id="scorecard-partnerships" style="display:none;">
+                <h3 class="section-title">Partnerships</h3>
+                <table class="score-table">
+                    <thead>
+                        <tr>
+                            <th>Wkt</th>
+                            <th>Batters</th>
+                            <th>Runs</th>
+                            <th>{{ "Balls" if match.get("match_format") == "Hundred" else "B" }}</th>
+                            <th>4s</th>
+                            <th>6s</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scorecard-partnerships-tbody"></tbody>
                 </table>
             </div>
 
