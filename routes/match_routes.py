@@ -22,6 +22,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import or_
 from sqlalchemy.orm import joinedload
 from utils import support_prompt
+from utils.partnership_format import fall_of_wickets, fow_text, ordinal
 from utils.match_ownership import owns_match_snapshot, owns_archive
 from utils.exception_tracker import log_exception
 from werkzeug.utils import secure_filename
@@ -828,7 +829,7 @@ def register_match_routes(
     def _live_innings_snapshot(match, outcome=None):
         outcome = outcome or {}
         if outcome.get("match_over"):
-            return {"status": "complete"}
+            return {"status": "complete", **match.get_final_live_board()}
         if (outcome.get("match_tied") or outcome.get("super_over_in_progress")
                 or outcome.get("super_over_required")):
             return {"status": "tiebreak"}
@@ -964,8 +965,8 @@ def register_match_routes(
                 "runs": bowler_stats_entry.get("runs", 0),
                 "wickets": bowler_stats_entry.get("wickets", 0),
             },
-            "partnership_runs": getattr(match, "partnership_runs", 0),
-            "partnership_balls": getattr(match, "partnership_balls", 0),
+            "partnership_runs": getattr(match, "current_partnership_runs", 0),
+            "partnership_balls": getattr(match, "current_partnership_balls", 0),
             "crr": crr,
             "match_format": match.data.get("match_format", "T20"),
             "commentary_log": getattr(match, "commentary_replay_log", []),
@@ -981,8 +982,10 @@ def register_match_routes(
             "bowling_eligibility": match.get_bowling_eligibility(),
             **({**match.hundred_state(), "hundred_deliveries": match.hundred_deliveries,
                  "bowler_overs_remaining": match.bowler_manager.overs_remaining(current_bowler.get("name", ""))} if match.is_hundred else {}),
+            **({"deliveries": getattr(match, "dashboard_deliveries", [])} if not (match.is_hundred or match.is_fc) else {}),
             "rain_affected": getattr(match, "rain_affected", False),
             "dls_par": match._current_dls_par() if hasattr(match, "_current_dls_par") else None,
+            "win_probability": match._calculate_win_probability(),
             "rain_events": getattr(match, "rain_events_log", []),
             "fc_weather_status": (
                 match._fc_weather_status()
@@ -1122,6 +1125,43 @@ def register_match_routes(
                 entry['rpb'] = entry['score'] / entry['legal_balls'] if entry['legal_balls'] else None
             innings_list.append(entry)
 
+        # Partnerships + fall of wickets. FoW is derived from the broken
+        # stands, the same way the live scorecard does it.
+        stands_by_innings = {}
+        partnership_rows = (
+            MatchPartnership.query.options(
+                joinedload(MatchPartnership.batsman1), joinedload(MatchPartnership.batsman2))
+            .filter_by(match_id=match_id)
+            .order_by(MatchPartnership.innings_number, MatchPartnership.wicket_number, MatchPartnership.id)
+            .all()
+        )
+        for row in partnership_rows:
+            stands_by_innings.setdefault(row.innings_number, []).append({
+                "wicket_number": row.wicket_number,
+                "batsman1_name": row.batsman1.name if row.batsman1 else "Unknown",
+                "batsman2_name": row.batsman2.name if row.batsman2 else "Unknown",
+                "batsman1_contribution": row.batsman1_contribution,
+                "batsman2_contribution": row.batsman2_contribution,
+                "batsman1_balls": row.batsman1_balls,
+                "batsman2_balls": row.batsman2_balls,
+                "runs": row.runs or 0,
+                "balls": row.balls or 0,
+                "fours": row.fours,
+                "sixes": row.sixes,
+                "is_unbroken": bool(row.is_unbroken),
+                "score_at_fall": row.score_at_fall,
+                "fall_over": row.fall_over,
+                "wicket_type": row.wicket_type,
+                "dismissed_slot": row.dismissed_slot,
+            })
+        fow_unit = "b" if db_match.match_format == "Hundred" else "ov"
+        for entry in innings_list:
+            stands = stands_by_innings.get(entry["number"], [])
+            entry["partnerships"] = stands
+            entry["fall_of_wickets"] = [
+                fow_text(item, fow_unit) for item in fall_of_wickets(stands)
+            ]
+
         motm_player_name = motm_team_name = motm_stat_line = None
         if db_match.motm_player_id:
             motm_cards = [
@@ -1176,6 +1216,7 @@ def register_match_routes(
             "scorecard_view.html",
             match=match_summary,
             innings_list=innings_list,
+            ordinal=ordinal,
         )
     
 

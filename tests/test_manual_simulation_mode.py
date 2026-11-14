@@ -138,6 +138,11 @@ def test_manual_wicket_last_ball_then_next_bowler_decision(app_client, monkeypat
     assert payload["over"] == 1
     assert payload["ball"] == 0
     assert len(payload["decision_options"]) > 0
+    bowler_name = match.bowling_team[0]["name"]
+    assert payload["bowler"] == bowler_name
+    assert payload["bowler_wickets"] == match.bowler_stats[bowler_name]["wickets"] == 1
+    non_striker = payload["non_striker"]
+    assert payload["nonstriker_balls"] == match.batsman_stats[non_striker]["balls"]
 
     selected_index = payload["decision_options"][-1]["index"]
     submit_resp = client.post(
@@ -153,6 +158,10 @@ def test_manual_wicket_last_ball_then_next_bowler_decision(app_client, monkeypat
     next_payload = next_resp.get_json()
     assert next_payload["decision_required"] is True
     assert next_payload["decision_type"] == "next_bowler"
+    for key in ("striker_runs", "striker_balls", "nonstriker_runs", "bowler_wickets", "bowler_runs", "bowler_overs"):
+        assert key in next_payload
+    striker = next_payload["striker"]
+    assert next_payload["striker_balls"] == match.batsman_stats[striker]["balls"]
 
 
 def test_mode_switch_manual_to_auto_auto_resolves_pending_decision(app_client, monkeypatch):

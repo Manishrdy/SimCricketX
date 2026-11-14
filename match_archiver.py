@@ -1224,7 +1224,7 @@ class MatchArchiver:
 
             # Save Partnerships (every real innings, not just the first two)
             for entry in innings_plan:
-                self._save_partnerships_to_db(entry["partnerships"], entry["innings_number"], entry["batting_team_id"])
+                self._save_partnerships_to_db(entry["partnerships"], entry["innings_number"], entry["batting_team_id"], lookup=_lookup_player)
 
             # Detect career milestones after aggregate updates
             all_milestones = []
@@ -1251,66 +1251,65 @@ class MatchArchiver:
             db.session.rollback()
             return False
 
-    def _save_partnerships_to_db(self, partnerships: List[Dict], innings_number: int, batting_team_id: int) -> None:
+    def _save_partnerships_to_db(self, partnerships: List[Dict], innings_number: int,
+                                 batting_team_id: int, lookup) -> None:
         """
         Save partnerships for an innings to the database.
-        
+
         Args:
             partnerships: List of partnership dictionaries from Match engine
-            innings_number: 1 or 2
+            innings_number: 1-4 (FC) or 1-2
             batting_team_id: ID of the batting team
+            lookup: the scorecard player resolver (id-preferred, then the
+                format profile by name) so partnerships attach to exactly the
+                same Player rows as the scorecard does.
         """
         if not partnerships:
             return
 
-        _pfmt = self.match_data.get('match_format', 'T20')
-        _bat_profile = DBTeamProfile.query.filter_by(
-            team_id=batting_team_id, format_type=squad_format(_pfmt)
-        ).first()
-
-        def _lookup_batsman(name):
-            if _bat_profile:
-                p = DBPlayer.query.filter_by(
-                    name=name, profile_id=_bat_profile.id
-                ).first()
-                if p:
-                    return p
-            # Legacy fallback: only accept unassigned (pre-migration) rows so
-            # partnerships are never attached to a different-format Player row.
-            if _pfmt == 'T10':
-                return None
-            return DBPlayer.query.filter_by(
-                name=name, team_id=batting_team_id, profile_id=None
-            ).first()
-
         for p_data in partnerships:
-             # Resolve player IDs (profile-aware)
-             b1 = _lookup_batsman(p_data['batsman1_name'])
-             b2 = _lookup_batsman(p_data['batsman2_name'])
+            b1 = lookup(p_data['batsman1_name'], batting_team_id, player_id=p_data.get('batsman1_id'))
+            b2 = lookup(p_data['batsman2_name'], batting_team_id, player_id=p_data.get('batsman2_id'))
 
-             # Bug Fix B5: Validate players exist before creating partnership
-             if not b1 or not b2:
-                 self.logger.warning(
-                     f"Skipping partnership save - players not found: "
-                     f"{p_data['batsman1_name']} (found: {bool(b1)}), "
-                     f"{p_data['batsman2_name']} (found: {bool(b2)})"
-                 )
-                 continue
-             
-             mp = MatchPartnership(
-                 match_id=self.match_id,
-                 innings_number=innings_number,
-                 wicket_number=p_data.get('wicket_number'),
-                 batsman1_id=b1.id,
-                 batsman2_id=b2.id,
-                 runs=p_data['runs'],
-                 balls=p_data['balls'],
-                 batsman1_contribution=p_data.get('batsman1_contribution', 0),
-                 batsman2_contribution=p_data.get('batsman2_contribution', 0),
-                 start_over=p_data['start_over'],
-                 end_over=p_data['end_over']
-             )
-             db.session.add(mp)
+            if not b1 or not b2:
+                log_data_anomaly(
+                    "PartnershipPlayerLookupMiss",
+                    f"Partnership skipped: {p_data['batsman1_name']} (found: {bool(b1)}), "
+                    f"{p_data['batsman2_name']} (found: {bool(b2)}) for team_id={batting_team_id}",
+                    payload={
+                        "match_id": self.match_id, "innings_number": innings_number,
+                        "wicket_number": p_data.get('wicket_number'),
+                        "batsman1_name": p_data['batsman1_name'],
+                        "batsman2_name": p_data['batsman2_name'],
+                        "team_id": batting_team_id,
+                    },
+                )
+                self._stats_incomplete = True
+                continue
+
+            mp = MatchPartnership(
+                match_id=self.match_id,
+                innings_number=innings_number,
+                wicket_number=p_data.get('wicket_number'),
+                batsman1_id=b1.id,
+                batsman2_id=b2.id,
+                runs=p_data['runs'],
+                balls=p_data['balls'],
+                batsman1_contribution=p_data.get('batsman1_contribution', 0),
+                batsman2_contribution=p_data.get('batsman2_contribution', 0),
+                batsman1_balls=p_data.get('batsman1_balls'),
+                batsman2_balls=p_data.get('batsman2_balls'),
+                fours=p_data.get('fours'),
+                sixes=p_data.get('sixes'),
+                is_unbroken=bool(p_data.get('is_unbroken')),
+                score_at_fall=p_data.get('score_at_fall'),
+                fall_over=p_data.get('fall_over'),
+                wicket_type=p_data.get('wicket_type'),
+                dismissed_slot=p_data.get('dismissed_slot'),
+                start_over=p_data['start_over'],
+                end_over=p_data['end_over']
+            )
+            db.session.add(mp)
 
     def _reverse_player_aggregates(self, scorecards: List[MatchScorecard]) -> None:
         """Delegate to module-level function (kept for backwards compatibility)."""

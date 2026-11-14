@@ -126,3 +126,57 @@ def test_unresolvable_player_sets_loud_failure(app, regular_user, test_team, tes
 
         after_anomalies = ExceptionLog.query.filter_by(exception_type="ScorecardPlayerLookupMiss").count()
         assert after_anomalies == before_anomalies + 1
+
+
+def _stand(b1, b2, **over):
+    stand = {
+        "innings_number": 1, "wicket_number": 1,
+        "batsman1_name": b1, "batsman2_name": b2, "batsman1_id": None, "batsman2_id": None,
+        "runs": 34, "balls": 25, "fours": 4, "sixes": 1,
+        "batsman1_contribution": 20, "batsman1_balls": 14,
+        "batsman2_contribution": 12, "batsman2_balls": 11,
+        "start_over": 0.0, "end_over": 4.1667, "is_unbroken": False,
+        "score_at_fall": 34, "fall_over": "4.1", "wicket_type": "Caught", "dismissed_slot": 2,
+    }
+    stand.update(over)
+    return stand
+
+
+def test_partnership_persists_detail_and_resolves_by_id(app, regular_user, test_team, test_team_2):
+    """Partnerships go through the same id-preferred resolver as the
+    scorecard and keep the 4s/6s, batter balls and fall-of-wicket fields."""
+    from database.models import MatchPartnership
+    with app.app_context():
+        john = DBPlayer.query.filter_by(name="John Doe").first()
+        bob = DBPlayer.query.filter_by(name="Bob Keeper").first()
+        match = _make_match(regular_user.id)
+        match.first_innings_batting_stats = {}
+        match.first_innings_partnerships = [
+            _stand("Renamed John", "Bob Keeper", batsman1_id=john.id),
+            _stand("John Doe", "Bob Keeper", wicket_number=2, runs=9, balls=6, is_unbroken=True,
+                   score_at_fall=None, fall_over=None, wicket_type=None, dismissed_slot=None),
+        ]
+        assert _archive(match) is not False
+
+        rows = MatchPartnership.query.filter_by(match_id=match.match_data["match_id"]).order_by(
+            MatchPartnership.wicket_number).all()
+        assert [(r.batsman1_id, r.batsman2_id) for r in rows] == [(john.id, bob.id), (john.id, bob.id)]
+        first, second = rows
+        assert (first.fours, first.sixes, first.batsman1_balls, first.batsman2_balls) == (4, 1, 14, 11)
+        assert (first.score_at_fall, first.fall_over, first.wicket_type, first.dismissed_slot) == (34, "4.1", "Caught", 2)
+        assert first.is_unbroken is False and second.is_unbroken is True
+        assert DBMatch.query.get(match.match_data["match_id"]).stats_incomplete is False
+
+
+def test_unresolvable_partnership_is_loud(app, regular_user, test_team, test_team_2):
+    from database.models import MatchPartnership
+    with app.app_context():
+        before = ExceptionLog.query.filter_by(exception_type="PartnershipPlayerLookupMiss").count()
+        match = _make_match(regular_user.id)
+        match.first_innings_batting_stats = {}
+        match.first_innings_partnerships = [_stand("Nobody Real", "John Doe")]
+        assert _archive(match) is not False
+
+        assert MatchPartnership.query.filter_by(match_id=match.match_data["match_id"]).count() == 0
+        assert DBMatch.query.get(match.match_data["match_id"]).stats_incomplete is True
+        assert ExceptionLog.query.filter_by(exception_type="PartnershipPlayerLookupMiss").count() == before + 1

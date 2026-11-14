@@ -840,6 +840,12 @@ async function submitManualDecision() {
             // fresh ball instead of showing the innings-end scorecard.
             if (data.transition) _processBallResult(data.transition);
         } else {
+            const lastBall = ballHistory[ballHistory.length - 1];
+            if (appliedType === 'next_batter' && lastBall && data.applied.next_striker) {
+                lastBall.next_striker = data.applied.next_striker;
+                lastBall.next_non_striker = data.applied.next_non_striker;
+                if (typeof updatePlayerCards === 'function') updatePlayerCards(ballHistory);
+            }
             appendLog(`[MANUAL] ${appliedType === 'next_bowler' ? 'Bowler' : 'Batter'} selected: ${data.applied.name}`, 'comment');
             startMatch();
         }
@@ -1065,18 +1071,16 @@ let completedOverTotals = [];   // [{over: 0, runs: 8}, {over: 1, runs: 12}, ...
 let currentOverRunsAccum = 0;   // runs accumulated in the current (incomplete) over
 
 // ── WIN PROBABILITY METER ─────────────────────────────────────────────────
-// Shown only during 2nd innings. Uses the server-computed win_probability
-// field (chasing team's probability, 0-100) from the DLS-inspired model.
-// Named distinctly to avoid collision with match_dashboard.js's updateWinProbability(history).
+// Limited-overs innings 1 and 2. win_probability is the batting side's
+// chance (0-100) from the server's resource model; FC never sends one.
+// Hidden across innings breaks and ties, where the batting side changes
+// before the next value arrives.
 function updateWinProbBanner(data) {
     const container = document.getElementById('win-prob-container');
     if (!container) return;
 
     const inningsNumber = data.innings_number;
-    const matchOver = data.match_over;
-
-    // Only show during 2nd innings
-    if (inningsNumber !== 2 || matchOver) {
+    if ((inningsNumber !== 1 && inningsNumber !== 2) || data.match_over || data.innings_end || data.match_tied) {
         container.style.display = 'none';
         return;
     }
@@ -1107,8 +1111,7 @@ function updateWinProbBanner(data) {
         const defendingNameEl = document.getElementById('wp-defending-name');
         const homeTeam = matchData.team_home ? matchData.team_home.split('_')[0] : 'Chasing';
         const awayTeam = matchData.team_away ? matchData.team_away.split('_')[0] : 'Defending';
-        // In 2nd innings: away team bats first by default; swap based on innings_number === 2
-        // We use the batting team name shown in the score banner as the chasing team
+        // The green (left) side is whoever the score banner shows batting.
         const batNameEl = document.getElementById('sb-bat-name');
         const chasingTeam  = batNameEl ? batNameEl.textContent : homeTeam;
         const defendingTeam = chasingTeam === homeTeam ? awayTeam : homeTeam;
@@ -1376,6 +1379,10 @@ function renderLiveInnings(state) {
     const heading = document.getElementById('live-innings-status');
     if (!heading) return;
     const live = state.status === 'live';
+    // A finished match keeps its last card on the panel. Only a bare
+    // 'complete' (no card attached, e.g. a reload) leaves what is there alone.
+    const final = state.status === 'complete' && Array.isArray(state.batters);
+    const showing = live || final;
     const status = {
         break: 'Innings break',
         tiebreak: IS_HUNDRED_MATCH ? 'Super Five' : 'Super Over',
@@ -1384,20 +1391,92 @@ function renderLiveInnings(state) {
     const text = live ? `Innings ${state.innings} · ${state.batting_team} batting` : status[state.status];
     heading.hidden = false;
     if (heading.textContent !== text) heading.textContent = text;
+    if (state.status === 'complete' && !final) return;
 
     document.getElementById('live-innings-toss').hidden = true;
-    document.getElementById('live-innings-players').hidden = !live;
+    document.getElementById('live-innings-players').hidden = !showing;
     const values = {
-        striker: state.selecting_batter === 'striker' ? 'Selecting batter…' : state.striker,
-        'non-striker': state.selecting_batter === 'non_striker' ? 'Selecting batter…' : state.non_striker,
-        bowler: state.selecting_bowler ? 'Selecting bowler…' : state.bowler,
+        striker: state.selecting_batter === 'striker' ? 'Selecting batter…' : shortName(state.striker),
+        'non-striker': state.selecting_batter === 'non_striker' ? 'Selecting batter…' : shortName(state.non_striker),
+        bowler: state.selecting_bowler ? 'Selecting bowler…' : shortName(state.bowler),
         next: state.next_batter || (state.selecting_batter ? '—' : 'No batters left'),
+    };
+    const batters = (showing && state.batters) || [];
+    const bowlers = (showing && state.bowlers) || [];
+    const byState = s => batters.find(b => b.state === s);
+    const scores = {
+        striker: scoreText(byState('striker')),
+        'non-striker': scoreText(byState('non_striker')),
+        bowler: ((bowlers.find(b => b.current) || {}).figures) || '',
     };
     for (const [role, name] of Object.entries(values)) {
         const row = document.getElementById(`live-innings-${role}`);
-        const value = (live && name) || '—';
+        if (!row) continue;
+        const value = (showing && name) || '—';
         if (row.textContent !== value) row.textContent = value;
+        const full = { striker: state.striker, 'non-striker': state.non_striker, bowler: state.bowler }[role];
+        row.title = (showing && full && full !== value) ? full : '';
+        const score = (showing && name && scores[role]) || '';
+        if (score) row.dataset.score = score; else delete row.dataset.score;
     }
+    renderLiveLists(showing, batters, bowlers);
+}
+
+function shortName(name) {
+    if (!name) return name;
+    const parts = String(name).trim().split(/\s+/);
+    return parts.length < 2 ? parts[0] : `${parts[0][0]} ${parts.slice(1).join(' ')}`;
+}
+
+function scoreText(batter) {
+    return batter ? `${batter.runs} (${batter.balls})` : '';
+}
+
+// One list section: rebuild only when its content changed, and briefly
+// highlight rows that are new or changed since the last ball.
+const liveListCache = {};
+function fillLiveSection(id, rows, build) {
+    const section = document.getElementById(id);
+    if (!section) return;
+    const key = JSON.stringify(rows);
+    section.hidden = rows.length === 0;
+    if (liveListCache[id] === key) return;
+    const previous = new Set((liveListCache[id] ? JSON.parse(liveListCache[id]) : []).map(r => JSON.stringify(r)));
+    liveListCache[id] = key;
+    const list = section.querySelector('.li-list');
+    const count = section.querySelector('.li-count');
+    if (count) count.textContent = rows.length ? String(rows.length) : '';
+    list.replaceChildren(...rows.map(row => {
+        const li = build(row);
+        if (previous.size && !previous.has(JSON.stringify(row))) li.classList.add('li-flash');
+        return li;
+    }));
+}
+
+function liveListItem(name, score) {
+    const li = document.createElement('li');
+    const n = document.createElement('span');
+    n.textContent = name;
+    li.appendChild(n);
+    if (score) {
+        const s = document.createElement('span');
+        s.className = 'li-score';
+        s.textContent = score;
+        li.appendChild(s);
+    }
+    return li;
+}
+
+function renderLiveLists(live, batters, bowlers) {
+    fillLiveSection('live-innings-yet', live ? batters.filter(b => b.state === 'yet') : [],
+        b => liveListItem(b.name));
+    fillLiveSection('live-innings-out', live ? batters.filter(b => b.state === 'out') : [],
+        b => liveListItem(b.name, scoreText(b)));
+    fillLiveSection('live-innings-bowlers', live ? bowlers : [], b => {
+        const li = liveListItem(b.name, b.figures);
+        if (b.current) li.classList.add('li-current');
+        return li;
+    });
 }
 
 function renderOverFlow() {
@@ -1726,11 +1805,12 @@ async function _processBallResult(data) {
         return;
     }
 
-    // Dashboard: process ball_data for every ball (runs in background regardless of view)
+    // Ball history is always recorded; the Match Center DOM is only drawn while
+    // it is showing, and setView rebuilds it from the history when opened.
     if (data.ball_data && (!data.ball_data.delivery_id || !ballHistory.some(b => b.delivery_id === data.ball_data.delivery_id))) {
         ballHistory.push(data.ball_data);
         updateCurrentOverBalls(data.ball_data);
-        if (typeof updateDashboard === 'function') {
+        if (dashboardActive && typeof updateDashboard === 'function') {
             updateDashboard(data.ball_data, ballHistory, overRuns, innings1Data);
         }
         if (typeof updateMatchAnimation === 'function') {
@@ -2048,6 +2128,8 @@ function showScorecard(data, completeData) {
         `;
     });
 
+    renderScorecardPartnerships(data);
+
     // Summary
     document.getElementById('scorecard-summary').textContent =
         `Total: ${data.total_score}/${data.wickets} | ${IS_HUNDRED_MATCH ? 'Balls' : 'Overs'}: ${data.overs} | ${IS_HUNDRED_MATCH ? 'CRR (runs/ball)' : 'Run Rate'}: ${data.run_rate} | Extras: ${data.extras}`
@@ -2064,6 +2146,63 @@ function showScorecard(data, completeData) {
     } else {
         targetInfo.style.display = 'none';
     }
+}
+
+function ordinalWicket(n) {
+    const v = Number(n) || 0;
+    const mod100 = v % 100;
+    if (mod100 >= 10 && mod100 <= 20) return `${v}th`;
+    return `${v}${({ 1: 'st', 2: 'nd', 3: 'rd' })[v % 10] || 'th'}`;
+}
+
+// Fall of wickets line + partnerships table. Both come from the engine's
+// scorecard payload (fall_of_wickets is derived from the broken stands);
+// older payloads and super overs carry neither, so the sections hide.
+function renderScorecardPartnerships(data) {
+    const fowBox = document.getElementById('scorecard-fow');
+    const fowText = document.getElementById('scorecard-fow-text');
+    const section = document.getElementById('scorecard-partnerships');
+    const body = document.getElementById('scorecard-partnerships-tbody');
+    if (!fowBox || !section || !body) return;
+
+    const overUnit = IS_HUNDRED_MATCH ? 'b' : 'ov';
+    const fow = Array.isArray(data.fall_of_wickets) ? data.fall_of_wickets : [];
+    if (fow.length) {
+        fowText.innerHTML = fow.map(entry => {
+            const detail = [entry.batter, entry.over ? `${entry.over} ${overUnit}` : '']
+                .filter(Boolean).map(escapeHtml).join(', ');
+            const head = `<strong>${escapeHtml(entry.wicket)}-${escapeHtml(entry.score)}</strong>`;
+            return `<span class="fow-entry">${head}${detail ? ` (${detail})` : ''}</span>`;
+        }).join(', ');
+        fowBox.style.display = 'block';
+    } else {
+        fowText.innerHTML = '';
+        fowBox.style.display = 'none';
+    }
+
+    const stands = Array.isArray(data.partnerships) ? data.partnerships : [];
+    body.innerHTML = '';
+    if (!stands.length) {
+        section.style.display = 'none';
+        return;
+    }
+    const dash = (value) => (value === null || value === undefined) ? '–' : value;
+    const share = (name, runs, balls, star) =>
+        `<span class="pship-batter">${escapeHtml(name || '')} <span class="pship-share">${escapeHtml(dash(runs))}${balls === null || balls === undefined ? '' : ` (${escapeHtml(balls)})`}${star}</span></span>`;
+    stands.forEach(stand => {
+        const star = stand.is_unbroken ? '*' : '';
+        const row = body.insertRow();
+        if (stand.is_unbroken) row.className = 'pship-unbroken';
+        row.innerHTML = `
+            <td>${escapeHtml(ordinalWicket(stand.wicket_number))}</td>
+            <td>${share(stand.batsman1_name, stand.batsman1_contribution, stand.batsman1_balls, star)}${share(stand.batsman2_name, stand.batsman2_contribution, stand.batsman2_balls, star)}</td>
+            <td><strong>${escapeHtml(stand.runs)}${star}</strong></td>
+            <td>${escapeHtml(stand.balls)}</td>
+            <td>${escapeHtml(dash(stand.fours))}</td>
+            <td>${escapeHtml(dash(stand.sixes))}</td>
+        `;
+    });
+    section.style.display = 'block';
 }
 
 function closeScorecard() {
@@ -2946,6 +3085,41 @@ window.soResumeFromState = soResumeFromState;
 window.soPickBattingTeam = soPickBattingTeam;
 window.soStartInnings = soStartInnings;
 
+// Rebuild the Match Center history and the banner's over strips from the
+// /live-state delivery ledger. Returns false when there is nothing to restore.
+// During an innings break state.innings has already moved on, so the history
+// follows the last delivery's innings; the pending innings-end card then files
+// it as innings 1 exactly as the live innings_end response does.
+function restoreDeliveryHistory(deliveries, state) {
+    if (!Array.isArray(deliveries) || !deliveries.length) return false;
+    const innings = deliveries[deliveries.length - 1].innings;
+    const currentOver = innings === state.innings ? state.current_over : Infinity;
+    ballHistory = deliveries.filter(b => b.innings === innings);
+    innings1Data = innings > 1
+        ? {ballHistory: deliveries.filter(b => b.innings === 1), overRuns: []}
+        : null;
+
+    const totals = new Map();
+    for (const b of ballHistory) totals.set(b.over, (totals.get(b.over) || 0) + b.runs);
+    overRuns = [];
+    completedOverTotals = [];
+    for (const [over, runs] of totals) {
+        if (over < currentOver) {
+            overRuns[over] = runs;
+            completedOverTotals.push({over, runs});
+        }
+    }
+    thisOverBallResults = ballHistory.filter(b => b.over === currentOver);
+    currentOverBalls = [...thisOverBallResults];
+    currentOverRunsAccum = thisOverBallResults.reduce((total, b) => total + b.runs, 0);
+    renderOverFlow();
+    renderThisOverBalls();
+    if (typeof refreshDashboard === 'function' && currentMainView === 'matchcenter') {
+        refreshDashboard(ballHistory, overRuns, innings1Data);
+    }
+    return true;
+}
+
 // ── MATCH RESUME LOGIC ────────────────────────────────────────────────────
 // Runs on page load when the user returns to a mid-match page.
 // Fetches the current engine state and restores the score banner before
@@ -3028,32 +3202,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 bowler_overs_remaining: state.bowler_overs_remaining,
             };
             updateScoreBanner(bannerData);
-            if (IS_HUNDRED_MATCH && Array.isArray(state.hundred_deliveries)) {
-                ballHistory = state.hundred_deliveries.filter(b => b.innings === state.innings);
-                const totals = new Map();
-                for (const b of ballHistory) totals.set(b.over, (totals.get(b.over) || 0) + b.runs);
-                overRuns = [];
-                completedOverTotals = [];
-                for (const [over, runs] of totals) {
-                    if (over < state.current_over) {
-                        overRuns[over] = runs;
-                        completedOverTotals.push({over, runs});
-                    }
-                }
-                thisOverBallResults = ballHistory.filter(b => b.over === state.current_over);
-                currentOverRunsAccum = thisOverBallResults.reduce((total, b) => total + b.runs, 0);
-                if (typeof renderOverFlow === 'function') renderOverFlow();
-                if (typeof renderThisOverBalls === 'function') renderThisOverBalls();
-                const firstHistory = state.hundred_deliveries.filter(b => b.innings === 1);
-                if (state.innings > 1) innings1Data = {ballHistory: firstHistory, overRuns: []};
-                if (typeof refreshDashboard === 'function' && currentMainView === 'matchcenter') {
-                    refreshDashboard(ballHistory, [], innings1Data);
-                }
-            }
+            const deliveries = IS_HUNDRED_MATCH ? state.hundred_deliveries : state.deliveries;
+            const restoredHistory = restoreDeliveryHistory(deliveries, state);
 
             // Set batting team name in banner
             const batNameEl = document.getElementById('sb-bat-name');
             if (batNameEl && state.batting_team_name) batNameEl.textContent = state.batting_team_name;
+
+            // Needs the batting name above: the meter labels the chasing side from it.
+            updateWinProbBanner({
+                innings_number: state.innings,
+                match_over: false,
+                win_probability: state.win_probability,
+            });
 
             // Restore the FC day/session/clock strip after a refresh.
             // /live-state has always returned fc_weather_status, but the
@@ -3081,8 +3242,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            // Show current over outcomes in the strip
-            if (state.current_over_outcomes && state.current_over_outcomes.length) {
+            // Show current over outcomes in the strip (ledger-less formats: FC)
+            if (!restoredHistory && state.current_over_outcomes && state.current_over_outcomes.length) {
                 const thisOverEl = document.getElementById('sb-this-over');
                 if (thisOverEl) {
                     thisOverEl.innerHTML = state.current_over_outcomes

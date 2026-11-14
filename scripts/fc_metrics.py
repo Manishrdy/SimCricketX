@@ -24,15 +24,13 @@ class MatchMetrics:
         self.original_save = match._save_partnership
         match._save_partnership = self.save_partnership
 
-    def save_partnership(self, wicket_type=None):
+    def save_partnership(self, wicket_type=None, unbroken=False):
         innings = self.match.fc_innings
         count = len(self.match.fc_innings_partnerships.get(innings, []))
-        self.original_save(wicket_type)
+        self.original_save(wicket_type, unbroken=unbroken)
         saved = self.match.fc_innings_partnerships.get(innings, [])
         if len(saved) > count:
-            self.partnerships.append(
-                dict(saved[-1], unfinished=wicket_type == "not_out")
-            )
+            self.partnerships.append(dict(saved[-1], unfinished=bool(unbroken)))
 
     def observe(self, outcome):
         m = self.match

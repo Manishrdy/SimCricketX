@@ -182,6 +182,22 @@ def test_manual_recommendation_is_cached_and_user_choice_wins():
     assert match.current_bowler['name'] == chosen['name']
 
 
+def test_captain_decisions_are_recorded_but_not_narrated():
+    data = match_data()
+    data['simulation_mode'] = 'manual'
+    match = quiet_match(data)
+    result = match.next_ball()
+    assert result['decision_type'] == 'next_bowler'
+    assert match.captaincy_events, 'decisions are still recorded for the captaincy panel'
+    markers = ('(batting)', '(bowling)', '(bowler)')
+    assert not any(m in result['commentary'] for m in markers)
+    assert not any(m in line for line in match.commentary for m in markers)
+    chosen = result['decision_options'][0]
+    match.submit_pending_decision(chosen['index'])
+    ball = match.next_ball()
+    assert not any(m in ball['commentary'] for m in markers)
+
+
 def test_legacy_has_no_captaincy_or_extra_random_consumption():
     data = _match_data('T20', 'Hard', 11)
     before = random.getstate()
