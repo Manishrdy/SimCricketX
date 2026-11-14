@@ -107,6 +107,7 @@ def register_auth_routes(
             email = request.form.get("email", "").strip().lower()
             password = request.form.get("password", "")
             confirm_password = request.form.get("confirm_password", "")
+            referral_source = request.form.get("referral_source", "").strip() or None
             challenge_id = request.form.get("challenge_id", "")
             challenge_counter = request.form.get("challenge_counter", "")
             challenge_digest = request.form.get("challenge_digest", "")
@@ -153,7 +154,7 @@ def register_auth_routes(
             if not ok:
                 return render_template("register.html", error=policy_error)
 
-            if register_user(email, password, display_name=display_name):
+            if register_user(email, password, display_name=display_name, referral_source=referral_source):
                 email = getattr(g, 'identity_signup_email', email)
                 if not app.config.get('IDENTITY_SIGNUP_ENFORCE'):
                     collect_device(db.session.get(DBUser, email), request.form.get("device_fingerprint"))

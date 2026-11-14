@@ -38,6 +38,37 @@ class TestAdminAccess:
         """Test accessing admin dashboard as admin."""
         response = admin_client.get("/admin/dashboard")
         assert response.status_code == 200
+        assert b"signupsTodayCard" in response.data
+        assert b"signupsTodayDrawer" in response.data
+
+    def test_admin_dashboard_signups_today_json(self, admin_client, app):
+        """Test signups_today JSON payload on /admin/dashboard includes metadata and referral breakdown."""
+        from datetime import datetime
+        from werkzeug.security import generate_password_hash
+        u = User(
+            id="today_signup@example.com",
+            password_hash=generate_password_hash("Pass1234!"),
+            display_name="Today Player",
+            referral_source="Planet Cricket",
+            ip_address="203.0.113.42",
+            email_verified=True,
+            created_at=datetime.utcnow(),
+        )
+        db.session.add(u)
+        db.session.commit()
+
+        response = admin_client.get("/admin/dashboard?format=signups_today")
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["total"] >= 1
+        matched = [row for row in payload["users"] if row["email"] == "today_signup@example.com"]
+        assert len(matched) == 1
+        assert matched[0]["display_name"] == "Today Player"
+        assert matched[0]["referral_source"] == "Planet Cricket"
+        assert matched[0]["referral_label"] == "Planet Cricket"
+        assert matched[0]["ip_address"] == "203.0.113.42"
+        assert matched[0]["email_verified"] is True
+        assert any(b["source"] == "Planet Cricket" and b["count"] >= 1 for b in payload["referral_breakdown"])
 
     def test_admin_dashboard_as_regular_user(self, authenticated_client):
         """Test accessing admin dashboard as regular user is denied."""

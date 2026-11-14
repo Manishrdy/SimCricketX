@@ -63,6 +63,7 @@ def ensure_schema(engine, db_obj=None):
         "mac_address":                 "VARCHAR(50)",
         "hostname":                    "VARCHAR(100)",
         "display_name":                "VARCHAR(100)",
+        "referral_source":             "VARCHAR(100)",
         "is_admin":                    "BOOLEAN NOT NULL DEFAULT 0",
         "is_banned":                   "BOOLEAN NOT NULL DEFAULT 0",
         "banned_until":                "DATETIME",

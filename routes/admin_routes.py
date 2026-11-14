@@ -73,12 +73,115 @@ def register_admin_routes(
     BACKUP_DIR = os.path.join(PROJECT_ROOT, "data", "backups")
 
 
+    def _format_rel_time(dt_val, now):
+        if not dt_val:
+            return None
+        diff = max(0, int((now - dt_val).total_seconds()))
+        if diff < 60:
+            return "just now"
+        if diff < 3600:
+            return f"{diff // 60}m ago"
+        if diff < 86400:
+            return f"{diff // 3600}h ago"
+        return f"{diff // 86400}d ago"
+
+    def _build_signups_today_data(today_start):
+        now = datetime.utcnow()
+        users = (
+            db.session.query(DBUser)
+            .filter(DBUser.created_at >= today_start)
+            .order_by(DBUser.created_at.desc(), DBUser.id.asc())
+            .all()
+        )
+        ids = [u.id for u in users]
+        teams_by_user = dict(
+            db.session.query(DBTeam.user_id, func.count(DBTeam.id))
+            .filter(DBTeam.user_id.in_(ids))
+            .group_by(DBTeam.user_id)
+            .all()
+        ) if ids else {}
+        matches_by_user = dict(
+            db.session.query(DBMatch.user_id, func.count(DBMatch.id))
+            .filter(DBMatch.user_id.in_(ids))
+            .group_by(DBMatch.user_id)
+            .all()
+        ) if ids else {}
+        tournaments_by_user = dict(
+            db.session.query(Tournament.user_id, func.count(Tournament.id))
+            .filter(Tournament.user_id.in_(ids))
+            .group_by(Tournament.user_id)
+            .all()
+        ) if ids else {}
+        sessions_by_user = dict(
+            db.session.query(ActiveSession.user_id, func.count(ActiveSession.id))
+            .filter(ActiveSession.user_id.in_(ids))
+            .group_by(ActiveSession.user_id)
+            .all()
+        ) if ids else {}
+
+        referral_counts = {}
+        rows = []
+        verified_count = 0
+        engaged_count = 0
+        for u in users:
+            source = (u.referral_source or "").strip() or "Not specified"
+            referral_counts[source] = referral_counts.get(source, 0) + 1
+            if u.email_verified:
+                verified_count += 1
+            t_cnt = teams_by_user.get(u.id, 0)
+            m_cnt = matches_by_user.get(u.id, 0)
+            tr_cnt = tournaments_by_user.get(u.id, 0)
+            s_cnt = sessions_by_user.get(u.id, 0)
+            if t_cnt > 0 or m_cnt > 0 or tr_cnt > 0 or u.community_engaged_at:
+                engaged_count += 1
+            rows.append({
+                "email": u.id,
+                "display_name": u.display_name or "",
+                "referral_source": u.referral_source or None,
+                "referral_label": source,
+                "email_verified": bool(u.email_verified),
+                "is_admin": bool(u.is_admin),
+                "is_banned": bool(u.is_banned),
+                "is_locked": bool(u.lockout_until and u.lockout_until > now),
+                "ip_address": u.ip_address or "Unknown",
+                "created_at_iso": u.created_at.isoformat() if u.created_at else None,
+                "created_at_utc": u.created_at.strftime("%H:%M:%S UTC") if u.created_at else "Unknown",
+                "created_at_rel": _format_rel_time(u.created_at, now) or "Unknown",
+                "last_login_iso": u.last_login.isoformat() if u.last_login else None,
+                "last_login_utc": u.last_login.strftime("%H:%M:%S UTC") if u.last_login else None,
+                "last_login_rel": _format_rel_time(u.last_login, now),
+                "teams_count": t_cnt,
+                "matches_count": m_cnt,
+                "tournaments_count": tr_cnt,
+                "active_sessions": s_cnt,
+                "community_engaged": bool(u.community_engaged_at),
+                "detail_url": url_for("admin_user_detail", user_email=u.id),
+            })
+
+        breakdown = [
+            {"source": src, "count": cnt}
+            for src, cnt in sorted(referral_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        ]
+        return {
+            "date_utc": today_start.strftime("%b %d, %Y"),
+            "total": len(rows),
+            "verified_count": verified_count,
+            "unverified_count": len(rows) - verified_count,
+            "engaged_count": engaged_count,
+            "referral_breakdown": breakdown,
+            "users": rows,
+        }
+
     @app.route('/admin/dashboard')
     @login_required
     @admin_required
     def admin_dashboard():
         """Admin dashboard home"""
         try:
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            if request.args.get('format') == 'signups_today':
+                return jsonify(_build_signups_today_data(today_start))
+
             stats = {}
             stats['total_users'] = db.session.query(DBUser).count()
             stats['total_teams'] = db.session.query(DBTeam).count()
@@ -105,9 +208,9 @@ def register_admin_routes(
             stats['active_sessions'] = ActiveSession.query.count()
 
             # Today's counters
-            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
             cutoff_1h   = datetime.utcnow() - timedelta(hours=1)
-            stats['signups_today']    = DBUser.query.filter(DBUser.created_at >= today_start).count()
+            signups_today_data        = _build_signups_today_data(today_start)
+            stats['signups_today']    = signups_today_data['total']
             stats['matches_today']    = DBMatch.query.filter(DBMatch.date >= today_start).count()
             stats['failed_logins_1h'] = FailedLoginAttempt.query.filter(
                 FailedLoginAttempt.timestamp >= cutoff_1h
@@ -133,7 +236,8 @@ def register_admin_routes(
 
             return render_template('admin/dashboard.html',
                                    stats=stats,
-                                   recent_activity=recent_activity)
+                                   recent_activity=recent_activity,
+                                   signups_today_data=signups_today_data)
         except Exception as e:
             log_exception(e)
             app.logger.error(f"[Admin] Dashboard error: {e}", exc_info=True)

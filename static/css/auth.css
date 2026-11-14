@@ -393,6 +393,25 @@ body {
 /* Password input — leave room for eye button */
 .auth-input--pw { padding-right: 2.8rem; }
 
+/* Select input — custom caret & right padding */
+.auth-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 2.5rem;
+    cursor: pointer;
+}
+.auth-select-caret {
+    position: absolute;
+    right: 0.95rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--fg-muted);
+    font-size: 0.78rem;
+    pointer-events: none;
+    transition: color 0.2s var(--ease);
+}
+.auth-input-wrap:focus-within .auth-select-caret { color: var(--brand); }
+
 /* Password eye toggle */
 .auth-eye-btn {
     position: absolute;

@@ -174,7 +174,7 @@ def evidence(conn, token, fingerprint, at):
     return reasons
 
 
-def create_user(email, password, display_name):
+def create_user(email, password, display_name, referral_source=None):
     """Return the accepted stored address; all policy writes commit together."""
     try:
         identity = validate_new_email(email)
@@ -224,7 +224,7 @@ def create_user(email, password, display_name):
             reserve_new_email(conn, identity.address)
             stable_id = str(uuid.uuid4())
             conn.execute(insert(U).values(id=identity.address, stable_id=stable_id, password_hash=password_hash,
-                display_name=display_name, canonical_email=identity.canonical,
+                display_name=display_name, referral_source=referral_source, canonical_email=identity.canonical,
                 email_normalization_version=identity.version, created_at=at,
                 email_verified=False, ip_address=get_client_ip()))
             if not admin:
