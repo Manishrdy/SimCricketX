@@ -9,7 +9,7 @@
     <section class="a-section"><h2 class="a-section-title"><i class="fas fa-user-shield" aria-hidden="true"></i> Access Restrictions</h2><div class="a-card-flat"><dl class="user-details">
         <div><dt>Ban reason</dt><dd>{{ user.ban_reason or 'None' }}</dd></div>
         <div><dt>Ban ends</dt><dd>{{ user.banned_until|localtime if user.banned_until else ('Permanent' if user.is_banned else 'Not applicable') }}</dd></div>
-    </dl><a class="a-btn a-btn-secondary a-btn-sm" href="{{ url_for('admin_user_detail',user_email=user.id,tab='actions') }}"><i class="fas fa-sliders-h" aria-hidden="true"></i> Manage account access</a></div></section>
+    </dl><a class="a-btn a-btn-secondary a-btn-sm" href="{{ url_for('admin_user_detail',user_email=user.id,tab='actions',back=safe_back) if safe_back else url_for('admin_user_detail',user_email=user.id,tab='actions') }}"><i class="fas fa-sliders-h" aria-hidden="true"></i> Manage account access</a></div></section>
 </div>
 <section class="a-section"><h2 class="a-section-title"><i class="fas fa-desktop" aria-hidden="true"></i> Sessions <span class="count">{{ data.sessions.total }}</span></h2>
 <p class="user-description">Active means within the configured inactivity window. Older records are stale.</p>

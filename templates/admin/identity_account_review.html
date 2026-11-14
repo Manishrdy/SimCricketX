@@ -2,23 +2,75 @@
 {% block title %}Account identity review · Admin{% endblock %}
 {% block extra_css %}
 {{ super() }}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_identity.css', v='identity-3') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_account_review.css', v=1) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_identity.css', v='identity-4') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_account_review.css', v=4) }}">
 {% endblock %}
 {% block extra_js %}
 {{ super() }}
-<script defer src="{{ url_for('static', filename='js/admin_account_review.js', v=1) }}"></script>
+<script defer src="{{ url_for('static', filename='js/admin_account_review.js', v=3) }}"></script>
 {% endblock %}
+{% macro account_card(item) %}
+{% set review_back = request.full_path.rstrip('?') %}
+<article class="review-account {{ 'has-actionable' if item.actionable_findings else ('gaps-only' if item.gap_findings else 'is-clear') }}">
+  <div class="review-account-top">
+    <div class="review-account-identity">
+      <h3><a href="{{ url_for('admin_identity.account',stable_id=item.stable_id,back=review_back) }}">{{ item.label }} <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></h3>
+      <div class="review-account-meta">
+        <span class="review-meta-pill {{ 'is-verified' if item.email_verified else 'is-unverified' }}">
+          <i class="fas fa-{{ 'check-circle' if item.email_verified else 'clock' }}" aria-hidden="true"></i>
+          {{ 'Verified' if item.email_verified else 'Unverified' }}
+        </span>
+        {% if item.force_email_verify %}
+        <span class="review-meta-pill is-warning"><i class="fas fa-exclamation-circle" aria-hidden="true"></i> Forced verify</span>
+        {% endif %}
+        <span class="review-meta-id" title="Stable ID: {{ item.stable_id }}">ID {{ item.stable_id[:8] }}</span>
+      </div>
+    </div>
+    <div class="review-account-actions">
+      <a class="identity-button identity-button-secondary identity-button-sm" href="{{ url_for('admin_identity.account',stable_id=item.stable_id,back=review_back) }}">View account</a>
+    </div>
+  </div>
+  {% if item.findings %}
+  <ul class="review-findings" aria-label="Findings">
+    {% for code,detail in item.findings.items() %}
+    <li class="{{ 'review-gap' if code in ['missing_device','missing_network'] else 'review-finding' }}">
+      <i class="fas fa-{{ 'circle-minus' if code in ['missing_device','missing_network'] else 'triangle-exclamation' }}" aria-hidden="true"></i>
+      <span>{{ labels[code] }}{% if detail.reason %} · {{ detail.reason|replace('_',' ') }}{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="review-clear"><i class="fas fa-check-circle" aria-hidden="true"></i> No findings or coverage gaps</p>{% endif %}
+  <details class="review-disclosure">
+    <summary>Account evidence</summary>
+    <dl class="review-detail-grid">
+      <div><dt>Stable ID</dt><dd>{{ item.stable_id }}</dd></div>
+      <div><dt>Email verification recorded</dt><dd>{{ 'Yes' if item.email_verified else 'No' }}</dd></div>
+      <div><dt>Forced verification</dt><dd>{{ 'Yes' if item.force_email_verify else 'No' }}</dd></div>
+      <div><dt>Last device sighting</dt><dd>{{ observation_time(item.device.last_seen)|localtime if item.device else 'Missing or expired' }}</dd></div>
+      <div><dt>Latest network observation</dt><dd>{% if item.network %}{{ item.network.state }} · {{ observation_time(item.network.observed_at)|localtime }}{% else %}Missing or expired{% endif %}</dd></div>
+      {% for code,detail in item.findings.items() if detail.last_seen or detail.until %}
+      <div><dt>{{ labels[code] }}</dt><dd>{% if detail.last_seen %}Last match {{ observation_time(detail.last_seen)|localtime }}{% endif %}{% if detail.until %}Until {{ observation_time(detail.until)|localtime }}{% endif %}</dd></div>
+      {% endfor %}
+    </dl>
+  </details>
+</article>
+{% endmacro %}
 {% block admin_content %}
 <div class="identity-workspace identity-hub identity-screen account-review">
-{% include 'admin/partials/identity_nav.html' %}
-<header class="account-review-header">
-  <h1>Account identity review</h1>
-  <form id="identity-review-run" method="post" action="{{ url_for('admin_identity.account_review_run') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button class="identity-button" type="submit"><i class="fas fa-play" aria-hidden="true"></i> <span>Run identity review</span></button>
-  </form>
+<header class="identity-header account-review-header">
+  <div>
+    <p class="identity-eyebrow">Private admin workspace</p>
+    <h1>Account identity review</h1>
+    <p>Check every account for duplicate signals, policy findings, and evidence coverage.</p>
+  </div>
+  <div class="identity-header-actions">
+    <form id="identity-review-run" method="post" action="{{ url_for('admin_identity.account_review_run') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="identity-button identity-button-gold" type="submit"><i class="fas fa-play" aria-hidden="true"></i> <span>Run identity review</span></button>
+    </form>
+  </div>
 </header>
+{% include 'admin/partials/identity_nav.html' %}
 {% for message in get_flashed_messages() %}<p class="identity-card review-notice" role="status">{{ message }}</p>{% endfor %}
 
 <section class="review-run" id="identity-review-live" aria-labelledby="identity-review-live-title" hidden>
@@ -70,51 +122,106 @@
 </section>
 
 <section class="identity-card review-results" aria-labelledby="review-results-title">
-  <div class="review-heading">
-    <h2 id="review-results-title">Account results</h2>
-    <span>{{ report.total }} matching · Page {{ page }}</span>
+  <div class="review-results-header">
+    <div>
+      <p class="identity-eyebrow">Report explorer</p>
+      <h2 id="review-results-title">Account results</h2>
+      <p class="review-results-subtitle" id="identity-review-subtitle">
+        <strong>{{ report.total }}</strong> matching
+        · <strong>{{ report.actionable_total }}</strong> with actionable findings
+        {% if group_by %}· Grouped by {{ group_modes[group_by]|lower }} ({{ report.groups|length }} {{ 'group' if report.groups|length == 1 else 'groups' }}){% else %}· Page {{ page }}{% endif %}
+      </p>
+    </div>
+    <nav class="identity-subnav review-group-tabs" id="identity-review-group-tabs" aria-label="Group results by">
+      {% for mode_key, mode_label in [('','List'),('finding','By finding'),('category','By category'),('domain','By domain'),('status','By status')] %}
+      <a href="{{ url_for('admin_identity.account_review_report', q=q, view=view, finding=finding, group_by=mode_key if mode_key else None) }}" {% if group_by==mode_key %}aria-current="page"{% endif %}>{{ mode_label }}</a>
+      {% endfor %}
+    </nav>
   </div>
-  <form method="get" class="identity-filters">
-    <label>Search<input type="search" name="q" value="{{ q }}" maxlength="254" placeholder="Email or stable ID"></label>
+
+  <form method="get" id="identity-review-filter-form" action="{{ url_for('admin_identity.account_review_report') }}" class="identity-filters review-filter-bar">
+    <label>Search<input type="search" name="q" value="{{ q }}" maxlength="254" autocomplete="off" placeholder="Email or stable ID"></label>
     <label>View<select name="view"><option value="findings" {% if view=='findings' %}selected{% endif %}>Findings and coverage gaps</option><option value="all" {% if view=='all' %}selected{% endif %}>All accounts</option></select></label>
     <label>Finding<select name="finding"><option value="">Any finding or gap</option>{% for code,label in labels.items() %}<option value="{{ code }}" {% if finding==code %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
-    <button class="identity-button" type="submit">Filter</button>
+    <label>Group by<select name="group_by">{% for mode_key, mode_label in group_modes.items() %}<option value="{{ mode_key }}" {% if group_by==mode_key %}selected{% endif %}>{{ mode_label }}</option>{% endfor %}</select></label>
+    <div class="identity-actions" id="identity-review-filter-actions">
+      <button class="identity-button" type="submit"><i class="fas fa-filter" aria-hidden="true"></i> Filter</button>
+      {% if q or finding or view != 'findings' or group_by %}
+      <a class="identity-button identity-button-secondary review-reset-link" href="{{ url_for('admin_identity.account_review_report') }}">Reset</a>
+      {% endif %}
+    </div>
   </form>
+
+  <div id="identity-review-body">
+  {% if report.finding_counts %}
+  <div class="review-chip-bar" role="region" aria-label="Filter by finding count">
+    <a class="review-chip {{ 'is-active' if not finding else '' }}" href="{{ url_for('admin_identity.account_review_report', q=q, view=view, group_by=group_by if group_by else None) }}">
+      <span>All matching</span>
+      <strong>{{ report.unfiltered_total }}</strong>
+    </a>
+    {% for fc in report.finding_counts %}
+    <a class="review-chip {{ 'is-gap' if fc.is_gap else 'is-actionable' }} {{ 'is-active' if finding==fc.code else '' }}" href="{{ url_for('admin_identity.account_review_report', q=q, view=view, finding='' if finding==fc.code else fc.code, group_by=group_by if group_by else None) }}">
+      <span>{{ fc.label }}</span>
+      <strong>{{ fc.count }}</strong>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if group_by %}
+  <div class="review-group-list">
+    {% for group in report.groups %}
+    <details class="review-group is-{{ group.kind }}" {% if group.open_default %}open{% endif %}>
+      <summary class="review-group-summary">
+        <div class="review-group-heading">
+          <span class="review-group-chevron" aria-hidden="true"><i class="fas fa-chevron-right"></i></span>
+          <div>
+            <h3>{{ group.title }}</h3>
+            {% if group.subtitle %}<p>{{ group.subtitle }}</p>{% endif %}
+          </div>
+        </div>
+        <div class="review-group-badges">
+          {% if group.actionable_count and group_by in ['domain', 'status'] %}
+          <span class="review-group-badge is-actionable">{{ group.actionable_count }} with findings</span>
+          {% endif %}
+          <span class="review-group-badge">{{ group.count }} {{ 'account' if group.count == 1 else 'accounts' }}</span>
+        </div>
+      </summary>
+      <div class="review-group-body">
+        <div class="review-account-list">
+          {% for item in group['items'] %}
+            {{ account_card(item) }}
+          {% endfor %}
+        </div>
+        {% if group.more_count %}
+        <p class="review-group-more">
+          Showing first {{ group['items']|length }} of {{ group.count }} accounts in this group.
+          <a href="{{ url_for('admin_identity.account_review_report', q=group.filter_q or q, view=view, finding=group.filter_finding or finding) }}">Open paginated list →</a>
+        </p>
+        {% endif %}
+      </div>
+    </details>
+    {% else %}
+    <p class="review-empty">No accounts match these filters.</p>
+    {% endfor %}
+  </div>
+  {% else %}
   <div class="review-account-list">
   {% for item in report['items'] %}
-    <article class="review-account">
-      <h3><a href="{{ url_for('admin_identity.account',stable_id=item.stable_id) }}">{{ item.label }} <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></h3>
-      {% if item.findings %}
-      <ul class="review-findings" aria-label="Findings">
-        {% for code,detail in item.findings.items() %}
-        <li class="{{ 'review-gap' if code in ['missing_device','missing_network'] else 'review-finding' }}">{{ labels[code] }}{% if detail.reason %} · {{ detail.reason|replace('_',' ') }}{% endif %}</li>
-        {% endfor %}
-      </ul>
-      {% else %}<p class="review-clear">No findings</p>{% endif %}
-      <details class="review-disclosure">
-        <summary>Account evidence</summary>
-        <dl class="review-detail-grid">
-          <div><dt>Stable ID</dt><dd>{{ item.stable_id }}</dd></div>
-          <div><dt>Email verification recorded</dt><dd>{{ 'Yes' if item.email_verified else 'No' }}</dd></div>
-          <div><dt>Forced verification</dt><dd>{{ 'Yes' if item.force_email_verify else 'No' }}</dd></div>
-          <div><dt>Last device sighting</dt><dd>{{ observation_time(item.device.last_seen)|localtime if item.device else 'Missing or expired' }}</dd></div>
-          <div><dt>Latest network observation</dt><dd>{% if item.network %}{{ item.network.state }} · {{ observation_time(item.network.observed_at)|localtime }}{% else %}Missing or expired{% endif %}</dd></div>
-          {% for code,detail in item.findings.items() if detail.last_seen or detail.until %}
-          <div><dt>{{ labels[code] }}</dt><dd>{% if detail.last_seen %}Last match {{ observation_time(detail.last_seen)|localtime }}{% endif %}{% if detail.until %}Until {{ observation_time(detail.until)|localtime }}{% endif %}</dd></div>
-          {% endfor %}
-        </dl>
-      </details>
-    </article>
+    {{ account_card(item) }}
   {% else %}
     <p class="review-empty">No accounts match these filters.</p>
   {% endfor %}
   </div>
   {% if page>1 or report.more %}
   <nav class="identity-pagination" aria-label="Report pages">
-    {% if page>1 %}<a href="{{ url_for('admin_identity.account_review_report',q=q,finding=finding,view=view,page=page-1) }}">Previous</a>{% endif %}
-    {% if report.more %}<a href="{{ url_for('admin_identity.account_review_report',q=q,finding=finding,view=view,page=page+1) }}">Next</a>{% endif %}
+    {% if page>1 %}<a href="{{ url_for('admin_identity.account_review_report',q=q,finding=finding,view=view,group_by=group_by if group_by else None,page=page-1) }}">Previous</a>{% endif %}
+    <span>Page {{ page }}</span>
+    {% if report.more %}<a href="{{ url_for('admin_identity.account_review_report',q=q,finding=finding,view=view,group_by=group_by if group_by else None,page=page+1) }}">Next</a>{% endif %}
   </nav>
   {% endif %}
+  {% endif %}
+  </div>
 </section>
 {% else %}
 <section class="identity-card review-empty">

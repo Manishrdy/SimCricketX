@@ -15,7 +15,7 @@
         </dl>
     </div></section>
     <section class="a-section"><h2 class="a-section-title"><i class="fas fa-bolt" aria-hidden="true"></i> Manage This Account</h2><div class="a-card-flat user-shortcuts">
-        <a href="{{ url_for('admin_user_detail',user_email=user.id,tab='security') }}"><span class="user-shortcut-icon"><i class="fas fa-shield-alt" aria-hidden="true"></i></span><span><strong>Security &amp; sessions</strong><small>Review access restrictions and manage sessions</small></span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>
-        <a href="{{ url_for('admin_user_detail',user_email=user.id,tab='actions') }}"><span class="user-shortcut-icon"><i class="fas fa-sliders-h" aria-hidden="true"></i></span><span><strong>Account actions</strong><small>Update credentials, permissions and account data</small></span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+        <a href="{{ url_for('admin_user_detail',user_email=user.id,tab='security',back=safe_back) if safe_back else url_for('admin_user_detail',user_email=user.id,tab='security') }}"><span class="user-shortcut-icon"><i class="fas fa-shield-alt" aria-hidden="true"></i></span><span><strong>Security &amp; sessions</strong><small>Review access restrictions and manage sessions</small></span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+        <a href="{{ url_for('admin_user_detail',user_email=user.id,tab='actions',back=safe_back) if safe_back else url_for('admin_user_detail',user_email=user.id,tab='actions') }}"><span class="user-shortcut-icon"><i class="fas fa-sliders-h" aria-hidden="true"></i></span><span><strong>Account actions</strong><small>Update credentials, permissions and account data</small></span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>
     </div></section>
 </div>

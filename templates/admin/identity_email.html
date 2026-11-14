@@ -1,10 +1,25 @@
 {% extends 'admin/layout.html' %}
 {% block title %}Email changes · Admin{% endblock %}
-{% block extra_css %}{{ super() }}<link rel="stylesheet" href="{{ url_for('static',filename='css/admin_identity.css', v='identity-3') }}">{% endblock %}
+{% block extra_css %}{{ super() }}<link rel="stylesheet" href="{{ url_for('static',filename='css/admin_identity.css', v='identity-6') }}">{% endblock %}
+{% set raw_back = request.args.get('back', '') %}
+{% set safe_back = raw_back if raw_back.startswith('/admin/') and not raw_back.startswith('//') else '' %}
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
 {% block admin_content %}
 <div class="identity-workspace identity-hub identity-screen">
-<header class="identity-header"><div><p class="identity-eyebrow">Identity administration</p><h1>Email changes</h1><p>Verify ownership, review the impact, then confirm a safe change.</p></div></header>
+<header class="identity-header">
+  <div>
+    <p class="identity-eyebrow">Identity administration</p>
+    <h1>Email changes</h1>
+    <p>Verify ownership, review the impact, then confirm a safe change.</p>
+  </div>
+  <div class="identity-header-actions">
+    {% if view != 'overview' %}
+    <a class="identity-button identity-button-header" href="{{ safe_back or url_for('identity_email.overview') }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> {{ 'Back to previous page' if safe_back else 'All requests' }}</a>
+    {% else %}
+    <a class="identity-button identity-button-header" href="{{ safe_back or url_for('admin_identity.overview') }}" onclick="if (!this.dataset.hasBack && window.history.length > 1) { window.history.back(); return false; }" {% if safe_back %}data-has-back="1"{% endif %}><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to previous page</a>
+    {% endif %}
+  </div>
+</header>
 {% include 'admin/partials/identity_nav.html' %}
 {% if error %}<div class="identity-card" role="alert">{{ error }}</div>{% endif %}
 {% if view == 'overview' %}
@@ -16,19 +31,19 @@
 <label>Reason<textarea name="reason" required minlength="10" maxlength="2000" rows="3"></textarea></label>
 <label class="identity-check"><input type="checkbox" name="recovery" value="yes"> Old mailbox is unavailable; I approve a documented ownership recovery exception.</label>
 <label>Recovery ownership evidence (required for an exception)<textarea name="recovery_evidence" maxlength="2000" rows="3" placeholder="Record how ownership was established. Never paste passwords or security tokens."></textarea></label>
-<button class="identity-button">Create request and send verification</button></form></section>
-</div><section class="identity-request-list"><div class="identity-section-heading"><p class="identity-eyebrow">Tracking</p><h2>Requests and receipts</h2></div>
-{% for row in rows %}<article class="identity-card"><a href="{{ url_for('identity_email.detail',change_id=row.id) }}">{{ row.old_email }} → {{ row.new_email }}</a><p>{{ 'expired' if row.status=='pending' and row.expires_at<=at else row.status }} · {{ row.created_at|localtime }}</p></article>{% else %}<div class="identity-empty"><i class="far fa-folder-open" aria-hidden="true"></i><p>No email-change requests.</p></div>{% endfor %}
+<button class="identity-button" type="submit">Create request and send verification</button></form></section>
+</div><section class="identity-request-list"><div class="identity-section-heading"><div><p class="identity-eyebrow">Tracking</p><h2>Requests and receipts</h2></div></div>
+{% for row in rows %}<article class="identity-card"><div class="identity-row"><a href="{{ url_for('identity_email.detail',change_id=row.id) }}">{{ row.old_email }} → {{ row.new_email }}</a><span class="a-badge">{{ 'expired' if row.status=='pending' and row.expires_at<=at else row.status }}</span></div><p>{{ row.created_at|localtime }}</p></article>{% else %}<div class="identity-empty"><i class="far fa-folder-open" aria-hidden="true"></i><p>No email-change requests.</p></div>{% endfor %}
 <div class="identity-pagination">{% if page>1 %}<a href="{{ url_for('identity_email.overview',page=page-1) }}">Previous</a>{% endif %}<span>Page {{ page }}</span>{% if more %}<a href="{{ url_for('identity_email.overview',page=page+1) }}">Next</a>{% endif %}</div>
 </section></div>
 {% else %}
-<section class="identity-card"><h2>{{ row.old_email }} → {{ row.new_email }}</h2><p>Status: {{ 'expired' if row.status=='pending' and row.expires_at<=at else row.status }}</p><p>Reason: {{ row.reason }}</p>
+<section class="identity-card"><div class="identity-row"><h2>{{ row.old_email }} → {{ row.new_email }}</h2><span class="a-badge">{{ 'expired' if row.status=='pending' and row.expires_at<=at else row.status }}</span></div><p>Reason: {{ row.reason }}</p>
 {% if row.recovery_evidence %}<p><strong>Old-mailbox recovery exception:</strong> {{ row.recovery_evidence }}</p>{% endif %}
 <p>Old mailbox: {{ 'recovery approved' if row.recovery_evidence else ('verified' if row.old_verified_at else 'waiting') }} · New mailbox: {{ 'verified' if row.new_verified_at else 'waiting' }}</p><p>Verification delivery: {{ row.proof_delivery }}. Expires {{ row.expires_at|localtime }}.</p>
 {% if row.proof_delivery=='failed' and row.status=='pending' %}<p role="alert">A verification email could not be sent. Cancel this request and create a new one to retry delivery.</p>{% endif %}
-{% if row.status=='pending' and row.expires_at>at %}<form method="post">{{ csrf() }}<button class="identity-button" name="action" value="preview">Preview impact</button> <button class="identity-button identity-button-secondary" name="action" value="cancel">Cancel request</button></form>{% endif %}</section>
+{% if row.status=='pending' and row.expires_at>at %}<form method="post" class="identity-actions">{{ csrf() }}<button class="identity-button" name="action" value="preview">Preview impact</button> <button class="identity-button identity-button-secondary" name="action" value="cancel">Cancel request</button></form>{% endif %}</section>
 {% if plan %}<section class="identity-card"><h2>Review impact</h2><p>Account ID, password, profile, roles, bans and owned data are preserved. All sessions and outstanding security tokens are revoked. Historical address snapshots and completed match files remain unchanged.</p><p>A verified backup is required and retained for 30 days. Recovery requires an operator database restore; there is no per-account undo.</p><div class="identity-table-wrap"><table class="identity-table"><thead><tr><th>Account reference</th><th>Affected rows</th></tr></thead><tbody>{% for name,count in plan.counts.items() %}<tr><td>{{ name.split('.')[0]|replace('_',' ')|title }}{% if name.startswith('community_mentions.') %} · {{ 'Author' if name.endswith('author_id') else 'Recipient' }}{% endif %}</td><td>{{ count }}</td></tr>{% endfor %}</tbody></table></div><p>{{ plan.artifacts|length }} completed match files retain their historical snapshots. {{ plan.archives|length }} exported ZIP files remain accessible to this account.</p>
-<form method="post" class="identity-form identity-form-grid">{{ csrf() }}<input type="hidden" name="action" value="apply"><input type="hidden" name="token" value="{{ token }}"><label>Type the exact new email<input name="confirmed_email" required autocomplete="off"></label><label class="identity-check"><input type="checkbox" name="confirmed" value="yes" required> I reviewed the ownership evidence and impact.</label><p>Preview expires in 15 minutes. Changed account data requires a new preview.</p><button class="identity-button">Confirm email change</button></form></section>{% endif %}
-{% if receipt %}<section class="identity-card"><h2>Completed change</h2><p>Completed {{ row.completed_at|localtime }}. Stable account ID: {{ row.user_stable_id }}.</p><p>Completion notices: old mailbox {{ 'sent' if row.old_notice_sent else 'pending' }}, new mailbox {{ 'sent' if row.new_notice_sent else 'pending' }}.</p>{% if not row.old_notice_sent or not row.new_notice_sent %}<form method="post">{{ csrf() }}<button class="identity-button" name="action" value="notify">Retry completion notices</button></form>{% endif %}<a href="{{ url_for('admin_user_detail',user_email=row.new_email) }}">Open account</a></section>{% endif %}
+<form method="post" class="identity-form identity-form-grid">{{ csrf() }}<input type="hidden" name="action" value="apply"><input type="hidden" name="token" value="{{ token }}"><label>Type the exact new email<input name="confirmed_email" required autocomplete="off"></label><label class="identity-check"><input type="checkbox" name="confirmed" value="yes" required> I reviewed the ownership evidence and impact.</label><p>Preview expires in 15 minutes. Changed account data requires a new preview.</p><button class="identity-button" type="submit">Confirm email change</button></form></section>{% endif %}
+{% if receipt %}<section class="identity-card"><div class="identity-row"><h2>Completed change</h2><a class="identity-button identity-button-secondary identity-button-sm" href="{{ url_for('admin_user_detail',user_email=row.new_email) }}">Open account</a></div><p>Completed {{ row.completed_at|localtime }}. Stable account ID: {{ row.user_stable_id }}.</p><p>Completion notices: old mailbox {{ 'sent' if row.old_notice_sent else 'pending' }}, new mailbox {{ 'sent' if row.new_notice_sent else 'pending' }}.</p>{% if not row.old_notice_sent or not row.new_notice_sent %}<form method="post">{{ csrf() }}<button class="identity-button" name="action" value="notify">Retry completion notices</button></form>{% endif %}</section>{% endif %}
 {% endif %}</div>
 {% endblock %}
