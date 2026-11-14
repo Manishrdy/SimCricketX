@@ -1,106 +1,260 @@
-{% extends "public_base.html" %}{% block title %}About SimCricketX — Formats, modes & capabilities{% endblock %}{% block content %}
-<section class="about-hero">
-<p class="eyebrow">THE COMPLETE PLAYBOOK</p>
-<h1>A whole cricket world.<br>
-<em>Written ball by ball.</em>
-</h1>
-<p class="lead">SimCricketX brings text-based cricket simulators, squad building and competition management together in your browser. Follow the commentary, study the numbers and build a cricket world of your own.</p>
-<div class="actions">
-<a class="button" href="{{ '/' if current_user.is_authenticated else '/register' }}">{{ 'Open dashboard' if current_user.is_authenticated else 'Get started free' }} ↗</a>
-<a href="#formats">Browse the capabilities ↓</a>
+{% extends "public_base.html" %}
+{% set about_title = "About SimCricketX | Cricket Simulator Features & Algorithms" %}
+{% block title %}{{ about_title }}{% endblock %}
+{% block social_title %}{{ about_title }}{% endblock %}
+{% block description %}Explore SimCricketX, a free browser cricket simulator with five match formats, ball-by-ball commentary, custom squads, stadiums, tournaments, tours and stats.{% endblock %}
+{% block social_description %}{{ self.description() }}{% endblock %}
+{% block body_class %}about-page{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/about.css') }}">
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "AboutPage",
+    "@id": "https://simcricketx.app/about#page",
+    "url": "https://simcricketx.app/about",
+    "name": {{ about_title | tojson }},
+    "description": {{ self.description() | string | tojson }},
+    "inLanguage": "en",
+    "about": {"@id": "https://simcricketx.app/#app"}
+}
+</script>
+{% endblock %}
+{% block content %}
+{% macro section_heading(icon, title) %}
+<h2 class="about-section-heading"><i class="fa-solid fa-{{ icon }}" aria-hidden="true"></i>{{ title }}</h2>
+{% endmacro %}
+<header class="about-hero">
+    <img class="about-hero-image" src="{{ url_for('static', filename='images/about-cricket-ground.webp') }}" alt="" width="1600" height="819" fetchpriority="high">
+    <div class="about-hero-copy">
+        <h1>About <span>SimCricketX</span></h1>
+        <p class="about-summary">SimCricketX is a free, open-source, text-based cricket simulator you play in your browser. Build your own teams, choose the conditions, and follow every ball in a one-off match, a tournament or a multi-format tour.</p>
+        <div class="about-actions">
+            {% if current_user.is_authenticated %}
+            <a class="button" href="/match/setup">Set up a match</a>
+            {% else %}
+            <a class="button" href="/register">Create a free account</a>
+            {% endif %}
+            <a class="about-hero-link" href="#about-contents-title">Explore the game <span aria-hidden="true">↓</span></a>
+        </div>
+    </div>
+</header>
+
+<div class="about-layout">
+    <nav class="about-contents" aria-labelledby="about-contents-title">
+        <h2 id="about-contents-title">On this page</h2>
+        <ul>
+            <li><a href="#formats">Formats and playing rules</a></li>
+            <li><a href="#play">The match experience</a></li>
+            <li><a href="#teams">Teams and players</a></li>
+            <li><a href="#stadiums">Stadiums and conditions</a></li>
+            <li><a href="#engine">Simulation algorithms</a></li>
+            <li><a href="#competitions">Tournaments and tours</a></li>
+            <li><a href="#statistics">Scorecards and statistics</a></li>
+            <li><a href="#community">Community and account</a></li>
+            <li><a href="#start">Getting started</a></li>
+        </ul>
+    </nav>
+
+    <div class="about-content">
+        <section id="formats">
+            {{ section_heading("baseball", "Formats and playing rules") }}
+            <p>Auto mode is available in every format. T10, T20, List A and The Hundred also offer Manual mode. Each format has its own match records and statistics.</p>
+            <dl class="about-rows about-formats">
+                <div>
+                    <dt>T10 <span>10 overs</span></dt>
+                    <dd>Ten overs per side and two overs per bowler in a full innings. Overs 1–3 are the powerplay, with the death phase starting in over 8. Copy a T20 squad to start a dedicated T10 squad with independently editable ratings.</dd>
+                </div>
+                <div>
+                    <dt>T20 <span>20 overs</span></dt>
+                    <dd>Twenty overs per side and up to four overs per bowler in a full innings. The powerplay, middle overs and death overs each bring different scoring and bowling conditions.</dd>
+                </div>
+                <div>
+                    <dt>List A <span>40 or 50 overs</span></dt>
+                    <dd>Schedule 40 or 50 overs per side with a full-length quota of eight or ten overs per bowler. Both lengths share List A squads and career totals. Filter statistics by the original scheduled length, including for rain-shortened matches.</dd>
+                </div>
+                <div>
+                    <dt>The Hundred <span>100 balls</span></dt>
+                    <dd>One hundred legal balls per side. Bowlers deliver five-ball sets, may bowl two sets in a row and can deliver up to 20 balls in a full innings. Ends change every ten legal balls. The first 25 balls are the powerplay. This format uses your T20 squad and captaincy profile, with separate match and career records.</dd>
+                </div>
+                <div>
+                    <dt>First-Class <span>4 or 5 days</span></dt>
+                    <dd>Four- or five-day, two-innings cricket in Auto mode. Play moves through sessions, intervals and stumps. The engine handles declarations, follow-ons, the second new ball, innings victories and draws. The minimum follow-on lead is 150 runs in a four-day match and 200 in a five-day match.</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section id="play">
+            {{ section_heading("circle-play", "The match experience") }}
+            <div class="about-grid">
+                <article>
+                    <h3>Set up a fixture</h3>
+                    <p>Pick two teams, choose a home or neutral venue, set the pitch, forecast and day/night conditions, then pick each playing XI and batting order. Reuse a saved lineup or make changes for this fixture. The toss determines who gets the choice to bat or field.</p>
+                </article>
+                <article>
+                    <h3>Watch or make the calls</h3>
+                    <p>Auto chooses batters and bowlers as play advances. Manual pauses at selection points so you can send in a batter or pick an eligible bowler. The Hundred also offers a manual fielding timeout. The <strong>Make Match Interesting</strong> option in limited-overs matches selects a dramatic finish at random when the match situation allows it.</p>
+                </article>
+                <article>
+                    <h3>Follow every delivery</h3>
+                    <p>Switch between text commentary and the Match Center. See the live score, batters, current bowler, recent deliveries and chase requirement. Worm charts show cumulative scoring and Manhattan charts show scoring by over or set. Copy the commentary log or save an image of the Match Center.</p>
+                </article>
+                <article>
+                    <h3>Pick up where you left off</h3>
+                    <p>When an unfinished match is available, <strong>Continue Match</strong> on the dashboard opens it with its score and commentary. First-Class, The Hundred and tie-breaks also save simulation checkpoints.</p>
+                </article>
+            </div>
+        </section>
+
+        <section id="teams">
+            {{ section_heading("people-group", "Teams, players and captaincy") }}
+            <div class="about-grid">
+                <article>
+                    <h3>Create or import players</h3>
+                    <p>Search and filter the shared Player Pool, create private players or import a roster using CSV or JSON templates. Set roles, batting and bowling hands, bowling style and format ratings. Save personal overrides for shared players and reuse pool players across teams.</p>
+                </article>
+                <article>
+                    <h3>Build and publish squads</h3>
+                    <p>Give a team a name and home ground, and manage its T10, T20, List A and First-Class squads separately. Drafts let you build in stages. To publish, assemble {{ SQUAD_MIN_PLAYERS }}–{{ SQUAD_MAX_PLAYERS }} players, including at least {{ SQUAD_MIN_BOWLING_OPTIONS }} bowlers or all-rounders and a wicketkeeper, and select a captain and keeper. Readiness guidance points you to missing roles and leadership choices.</p>
+                </article>
+                <article>
+                    <h3>Give each side a tactical style</h3>
+                    <p>Choose Balanced, Attacking or Conservative captaincy per squad format. Tune batting and bowling aggression separately, along with match awareness, batting management, bowling management, adaptability and composure. The captaincy profile stays with the squad when you appoint a different captain.</p>
+                </article>
+            </div>
+        </section>
+
+        <section id="stadiums">
+            {{ section_heading("location-dot", "Stadiums, pitches and weather") }}
+            <div class="about-grid">
+                <article>
+                    <h3>Choose or create a ground</h3>
+                    <p>Browse the stadium catalogue, adopt an official venue as a private copy or build your own. Set pitch defaults by format, four straight and square boundary distances, outfield speed and average temperature. Use the venue as a team’s home ground or select it for a match.</p>
+                </article>
+                <article>
+                    <h3>Tune the playing conditions</h3>
+                    <p>Choose how much the engine weighs pitch conditions and player skill in each format. Adjust scoring, wickets and the wicket-taking effect of pace or spin for individual pitches. Limited-overs settings also cover powerplay, middle, death and second-innings chase effects. Matches keep the venue and conditions captured at setup.</p>
+                </article>
+                <article>
+                    <h3>Play through changing conditions</h3>
+                    <p>Choose among Green, Dry, Hard, Flat and Dead pitches. Simulate clear skies, showers, rain or storms. Day/night settings can introduce dew in supported formats. Rain can reduce the innings allocation, revise targets or cause a no result in limited-overs cricket. In First-Class, rain and bad light take time out of sessions and can leave a match drawn.</p>
+                </article>
+            </div>
+            <p class="about-resource"><a href="/stadiums/conditions-guide">Read the stadium conditions guide</a></p>
+        </section>
+
+        <section id="engine">
+            {{ section_heading("sliders", "How the simulation algorithms work") }}
+            <p>SimCricketX uses weighted probabilities to model deliveries and tactical policies to make decisions. The resulting scores and records describe simulated cricket.</p>
+            <div class="about-models">
+                <article>
+                    <h3>Delivery outcome and fielding model</h3>
+                    <p>Each ball starts with format and pitch weights for dots, runs, boundaries, extras and wickets. The engine adjusts the weights for factors such as ratings, handedness matchups, pace or spin, batter form, bowler workload, innings phase, pitch wear and stadium conditions before sampling an outcome. Fielding logic resolves chances and credits catches, stumpings and run-outs. Separate scoring rules handle extras, strike rotation, free hits and legal-ball counts.</p>
+                </article>
+                <article>
+                    <h3>Pressure, momentum and batting intent</h3>
+                    <p>The match-state model reads the score, wickets in hand, deliveries remaining, run rates and recent events. Batters can rebuild after a cluster of wickets or take on more risk when the required rate rises. Settling in, surviving a difficult spell and building a partnership can change the balance between scoring and dismissal risk.</p>
+                </article>
+                <article>
+                    <h3>Captaincy and bowling allocation</h3>
+                    <p>Automatic captains reassess batting intent and bowling plans at events such as wickets, phase changes, breaks and revised targets. They consider conditions, matchups, workload and recent performance. Bowling selection checks quotas and consecutive overs or sets, and plans ahead to retain enough eligible bowling for the end of the innings. First-Class bowlers tire during spells and recover with rest.</p>
+                </article>
+                <article>
+                    <h3>First-Class decision forecasts</h3>
+                    <p>A rate-and-wicket model fitted to the delivery engine estimates what different batting tempos can buy. Dynamic programming over time, wickets and runs estimates possible innings outcomes. Captains weigh win, draw and loss chances when considering declarations and follow-ons, using the match situation, forecast time and their appetite for risk.</p>
+                </article>
+                <article>
+                    <h3>Rain and target revision</h3>
+                    <p>Weather presets generate simulated interruptions. For shortened limited-overs games, the engine records resources lost using remaining balls and wickets lost. Its Duckworth–Lewis Standard Edition approximation interpolates between rows of the resource table. This can produce different targets and par scores from official professional DLS. Revised allocations also change powerplays and bowling limits where applicable.</p>
+                </article>
+                <article>
+                    <h3>Ties and shootouts</h3>
+                    <p>Eligible ties in T10, T20 and List A can go to a Super Over, with repeat rounds and boundary countback if five rounds stay level. In The Hundred, exhibition and league ties stand. Knockout ties use repeated five-ball, two-wicket Super Fives. First-Class outcomes distinguish ties from draws.</p>
+                </article>
+            </div>
+        </section>
+
+        <section id="competitions">
+            {{ section_heading("trophy", "Tournaments and multi-format tours") }}
+            <p>Choose a match format, enter eligible teams and follow fixtures, results, league tables and bracket progression. Select from seven competition structures.</p>
+            <dl class="about-rows">
+                <div><dt>Round Robin</dt><dd>Every team plays every other team once.</dd></div>
+                <div><dt>Double Round Robin</dt><dd>Each pairing meets twice, home and away.</dd></div>
+                <div><dt>Pure Knockout</dt><dd>Winners advance through elimination rounds to a final. The bracket can assign byes.</dd></div>
+                <div><dt>League + Semis + Final</dt><dd>A single round robin sends the top four to semi-finals, then a final.</dd></div>
+                <div><dt>Double League + Semis + Final</dt><dd>A double round robin sends the top four to semi-finals, then a final.</dd></div>
+                <div><dt>IPL Style Playoffs</dt><dd>Four league qualifiers progress through Qualifier 1, the Eliminator, Qualifier 2 and the Final. The Qualifier 1 winner goes straight to the final, and the loser gets a second chance.</dd></div>
+                <div><dt>Custom Series</dt><dd>Schedule one to seven matches between exactly two teams.</dd></div>
+            </dl>
+            <div class="about-grid about-competition-details">
+                <article>
+                    <h3>Standings and qualification</h3>
+                    <p>Formats use their own standings tiebreakers. Limited-overs league tables use points and net run rate. The Hundred can also use head-to-head points, wicket-taking strike rate and a reproducible simulated drawing of lots. First-Class uses win percentage after points. The Hundred uses the same custom competition structures listed above. League-to-finals structures require at least four teams.</p>
+                </article>
+                <article>
+                    <h3>Replay a completed fixture</h3>
+                    <p>Preview the results and dependent fixtures a replay would affect. After confirmation, the simulator reverses affected standings and statistics, resets dependent rounds and takes you into fresh match setup with the current squads.</p>
+                </article>
+                <article id="tours">
+                    <h3>Take two teams on tour</h3>
+                    <p>Choose a host and visitor, select which formats to include, specify how many matches to play and arrange the series order. Follow each series, its fixtures and results, and an overall tour summary.</p>
+                </article>
+            </div>
+        </section>
+
+        <section id="statistics">
+            {{ section_heading("chart-column", "Scorecards, statistics and exports") }}
+            <div class="about-grid">
+                <article>
+                    <h3>Revisit a match</h3>
+                    <p>Search match history, open full innings scorecards and review batting and bowling figures, extras, dismissals and partnerships. My Matches also provides downloadable match archives when available.</p>
+                </article>
+                <article>
+                    <h3>Explore records and compare players</h3>
+                    <p>Browse batting, bowling and fielding statistics, leaderboards, best bowling figures, career milestones and team records. Compare players across formats, explore batting partnerships, or see how two teams have fared head-to-head. Use format, tournament and List A length filters where available.</p>
+                </article>
+                <article>
+                    <h3>How player of the match is picked</h3>
+                    <p>The Impact Index awards one point per run, 20 per wicket, eight per catch and ten per run-out. The match award gives a 20% weighting bonus to players on the winning side. Both teams’ players remain eligible.</p>
+                </article>
+                <article>
+                    <h3>Take the numbers with you</h3>
+                    <p>Export supported statistics as CSV, plain text or PDF. If PDF generation is unavailable, the export can be downloaded as HTML.</p>
+                </article>
+            </div>
+        </section>
+
+        <section id="community">
+            {{ section_heading("comments", "Community and account") }}
+            <div class="about-grid">
+                <article>
+                    <h3>Discuss cricket and give feedback</h3>
+                    <p>Ask questions, report bugs, suggest ideas and talk cricket on the Community board. Search as you type, vote on posts, attach screenshots, reply in threads and mention other members. Notifications surface replies and mentions. Moderators can review reports, pin discussions and update the status of feedback.</p>
+                </article>
+                <article>
+                    <h3>See your own cricket activity</h3>
+                    <p>My Profile is a private view of your teams, squad sizes, match activity, recent results, venues and community participation. Manage your display name, email and password in Account Settings, review sessions and login history, or download your personal data from My Profile.</p>
+                </article>
+            </div>
+        </section>
+
+        <section id="start" class="about-start">
+            <h2>Play your first match</h2>
+            <ol>
+                <li>Create a free account and complete email verification when prompted.</li>
+                <li>Build and publish two teams with eligible squads for the format you want to play.</li>
+                <li>Open Simulate Match, set the conditions and choose both XIs. Start in Auto or make the selection calls in Manual where supported.</li>
+            </ol>
+            <p class="about-resource">In-app walkthroughs guide you through setup and key pages. Use the help button on supported pages to replay a walkthrough.</p>
+            <p>If you enjoy the game, you can optionally help the developer cover hosting and other running costs.</p>
+            <div class="about-actions">
+                <a class="button" href="{{ '/' if current_user.is_authenticated else '/register' }}">{{ 'Open dashboard' if current_user.is_authenticated else 'Create a free account' }}</a>
+                <a href="/changelog">Changelog</a>
+                <a href="https://github.com/ManishYelam/SimCricketX">Source code</a>
+                <a href="/llms.txt">LLM guide</a>
+                <a href="{{ support_url }}" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
+            </div>
+        </section>
+    </div>
 </div>
-</section>
-<nav class="chapter-nav" aria-label="About chapters">
-<a href="#formats">Formats</a>
-<a href="#play">Modes & squads</a>
-<a href="#competitions">Competitions</a>
-<a href="#tours">Tours & analytics</a>
-<a href="#start">Getting started</a>
-</nav>
-<section id="formats">
-<p class="eyebrow">01 / FORMATS</p>
-<h2>Five formats. Distinct challenges.</h2>
-{% include 'partials/public_formats.html' %}
-</section>
-<section id="play">
-<p class="eyebrow">02 / THE SIMULATOR</p>
-<h2>What goes into every match.</h2>
-<div class="detail-grid">
-<article>
-<h3>Your squads, your selection</h3>
-<p>Create custom teams, manage format-specific squads, select playing XIs and batting orders, and build a player pool. Import players with CSV or JSON and customize player ratings. The Hundred uses your T20 squad.</p>
-</article>
-<article>
-<h3>Conditions that change the contest</h3>
-<p>Configure your private stadium conditions by format. Pitch and skill blending, scoring, pace/spin favour and phase adjustments shape future matches while saved matches keep their original conditions.</p>
-</article>
-<article>
-<h3>Ball-by-ball simulation</h3>
-<p>Follow text commentary and scorecards as deliveries resolve through a probabilistic engine. Player attributes, matchups, pitch and match state influence outcomes. Results are simulations, not predictions of real matches.</p>
-</article>
-<article>
-<h3>Auto and Manual play</h3>
-<p>Let Auto run the match, or use Manual mode for supported limited-overs formats. First-Class is Auto-only. T20 also supports optional Impact Player rules.</p>
-</article>
-<article>
-<h3>Story Mode</h3>
-<p>Play a scenario inspired by a legendary match arc using your own teams. Story packs steer the pressure and narrative of a supported match; they do not guarantee a historical result.</p>
-</article>
-</div>
-</section>
-<section id="competitions">
-<p class="eyebrow">03 / COMPETITIONS</p>
-<h2>Build a season worth following.</h2>
-<p class="section-intro">Fixtures, results, standings for league stages and progression through knockout rounds. Modes require enough eligible teams: league-to-semi-final structures and IPL-style playoffs need at least four; custom series use exactly two.</p>
-{% include 'partials/public_competitions.html' %}
-</section>
-<section id="tours">
-<p class="eyebrow">04 / BEYOND THE MATCH</p>
-<h2>Keep the story going.</h2>
-<div class="detail-grid">
-<article>
-<h3>Tours across formats</h3>
-<p>Bring two teams together for a multi-format tour. Configure series, match counts and series order, then follow fixtures, individual series results and the tour summary.</p>
-</article>
-<article>
-<h3>Statistics with context</h3>
-<p>Explore batting and bowling leaderboards, player careers, team statistics, player comparisons, partnerships and head-to-head records. List A statistics can be filtered by the original 40- or 50-over scheduled length.</p>
-</article>
-<article>
-<h3>Records you can revisit</h3>
-<p>Return to match history and detailed scorecards. Export statistics as CSV or text; the PDF export can fall back to downloadable HTML when PDF generation is unavailable.</p>
-</article>
-<article>
-<h3>A community around the game</h3>
-<p>Use the community board to discuss the simulator and share feedback. Account features and administrative moderation support the shared platform.</p>
-</article>
-</div>
-</section>
-<section id="start" class="ink-panel">
-<p class="eyebrow">05 / YOUR FIRST INNINGS</p>
-<h2>From a blank page to the first ball.</h2>
-<ol class="steps">
-<li>
-<h3>Create an account</h3>
-<p>Register with your email and complete any required verification.</p>
-</li>
-<li>
-<h3>Build two teams</h3>
-<p>Add players, prepare squads for your chosen format and select your lineups.</p>
-</li>
-<li>
-<h3>Set the stage</h3>
-<p>Choose a format and conditions, then run a match or create a competition.</p>
-</li>
-</ol>
-</section>
-<section class="closing">
-<h2>Made for people who read the scorecard.</h2>
-<p>Free to play and open source. Explore the conditions guide for deeper configuration, or read the machine-readable capability guide.</p>
-<p>SimCricketX is built and paid for by one developer. If you enjoy it, you can chip in towards hosting, the domain and future features. It is entirely optional, and the game stays free either way.</p>
-<div class="actions">
-<a class="button" href="/stadiums/conditions-guide">Stadium conditions guide ↗</a>
-<a href="/llms.txt">Read the LLM guide →</a>
-<a href="{{ support_url }}" target="_blank" rel="noopener noreferrer">Buy me a coffee ↗</a>
-</div>
-</section>{% endblock %}
+{% endblock %}

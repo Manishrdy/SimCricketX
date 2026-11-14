@@ -73,7 +73,7 @@ def register_admin_issue_routes(app, *, db):
             "generated_at": datetime.utcnow().isoformat() + "Z",
         }
 
-    @app.route("/admin/issues")
+    @app.route("/admin/issues", strict_slashes=False)
     @login_required
     @admin_required
     def admin_issues():
@@ -174,6 +174,36 @@ def register_admin_issue_routes(app, *, db):
             log_exception(exc, source="backend", context={"scope": "admin_exception_retry"})
             return jsonify({"error": "retry failed"}), 500
         return jsonify({"status": "queued", "id": row.id})
+
+    @app.route("/admin/issues/exceptions/<int:row_id>/delete", methods=["POST", "DELETE"])
+    @login_required
+    @admin_required
+    def admin_exception_delete(row_id):
+        row = db.session.get(ExceptionLog, row_id)
+        if row is None:
+            return jsonify({"error": "not found"}), 404
+        try:
+            db.session.delete(row)
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            log_exception(exc, source="backend", context={"scope": "admin_exception_delete", "id": row_id})
+            return jsonify({"error": "delete failed"}), 500
+        return jsonify({"status": "deleted", "deleted": 1, "id": row_id})
+
+    @app.route("/admin/issues/delete", methods=["POST", "DELETE"])
+    @app.route("/admin/issues/delete-all", methods=["POST", "DELETE"])
+    @login_required
+    @admin_required
+    def admin_issues_delete_all():
+        try:
+            deleted = ExceptionLog.query.delete(synchronize_session=False)
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            log_exception(exc, source="backend", context={"scope": "admin_issues_delete_all"})
+            return jsonify({"error": "delete failed"}), 500
+        return jsonify({"status": "deleted", "deleted": int(deleted)})
 
     @app.route("/admin/issues/sync", methods=["POST"])
     @login_required
