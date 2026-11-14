@@ -151,6 +151,28 @@
                     </span>
                 </div>
 
+                <!-- Where did you come across SimCricketX? -->
+                <div class="auth-field">
+                    <label class="auth-label" for="referral_source">Where did you come across SimCricketX?</label>
+                    <div class="auth-input-wrap">
+                        <i class="fas fa-compass auth-input-icon" aria-hidden="true"></i>
+                        <select class="auth-input auth-select"
+                                id="referral_source"
+                                name="referral_source">
+                            <option value="">Select an option (optional)</option>
+                            <option value="Google Search">Google Search</option>
+                            <option value="Planet Cricket">Planet Cricket</option>
+                            <option value="AI Search">AI Search (ChatGPT, Claude, Perplexity, etc.)</option>
+                            <option value="Reddit">Reddit</option>
+                            <option value="YouTube">YouTube</option>
+                            <option value="Social Media">Social Media (X, Discord, etc.)</option>
+                            <option value="Friend / Word of Mouth">Friend / Word of Mouth</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <i class="fas fa-chevron-down auth-select-caret" aria-hidden="true"></i>
+                    </div>
+                </div>
+
                 {% if cf_turnstile_site_key %}
                 <div class="cf-turnstile" style="margin-bottom:0.75rem;"
                      data-sitekey="{{ cf_turnstile_site_key }}"

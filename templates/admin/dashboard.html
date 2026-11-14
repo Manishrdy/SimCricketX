@@ -76,6 +76,195 @@
         font-weight: 600;
         color: var(--fg-secondary);
     }
+
+    /* Interactive Signups Today card & drawer */
+    .a-stat-card-interactive {
+        cursor: pointer;
+        transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+        user-select: none;
+    }
+    .a-stat-card-interactive:hover,
+    .a-stat-card-interactive:focus-visible {
+        transform: translateY(-2px);
+        border-color: #22c55e;
+        box-shadow: 0 6px 18px rgba(34, 197, 94, .14);
+        outline: none;
+    }
+    .a-stat-card-interactive.is-open {
+        border-color: #22c55e;
+        box-shadow: 0 0 0 2px rgba(34, 197, 94, .22);
+    }
+    .dash-card-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        margin-top: .35rem;
+        font-size: .72rem;
+        font-weight: 600;
+        color: #16a34a;
+    }
+    [data-theme="dark"] .dash-card-cta { color: #4ade80; }
+    .dash-card-cta i {
+        font-size: .65rem;
+        transition: transform .2s ease;
+    }
+    .a-stat-card-interactive.is-open .dash-card-cta i {
+        transform: rotate(180deg);
+    }
+
+    .signups-drawer {
+        display: none;
+        margin-top: .85rem;
+        border: 1px solid var(--card-border);
+        border-top: 3px solid #22c55e;
+        border-radius: var(--radius-md, 10px);
+        background: var(--card-bg);
+        padding: 1.1rem 1.25rem;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, .06);
+    }
+    .signups-drawer.is-open {
+        display: block;
+    }
+    .signups-drawer-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: .9rem;
+    }
+    .signups-drawer-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--fg);
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        margin: 0;
+    }
+    .signups-drawer-sub {
+        font-size: .78rem;
+        color: var(--fg-secondary);
+        margin-top: .2rem;
+    }
+    .signups-kpi-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
+        margin-bottom: .9rem;
+    }
+    .signups-kpi-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        padding: .28rem .68rem;
+        border-radius: 999px;
+        border: 1px solid var(--card-border);
+        background: var(--bg-secondary);
+        font-size: .75rem;
+        font-weight: 600;
+        color: var(--fg-secondary);
+    }
+    .signups-kpi-pill strong {
+        color: var(--fg);
+        font-family: var(--font-mono, monospace);
+    }
+    .signups-ref-strip {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: .4rem;
+        padding: .65rem .85rem;
+        margin-bottom: .95rem;
+        border-radius: 8px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--card-border);
+    }
+    .signups-ref-label {
+        font-size: .73rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: var(--fg-secondary);
+        margin-right: .35rem;
+    }
+    .signups-ref-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        padding: .22rem .6rem;
+        border-radius: 6px;
+        border: 1px solid var(--card-border);
+        background: var(--card-bg);
+        font-size: .75rem;
+        font-weight: 600;
+        color: var(--fg);
+        cursor: pointer;
+        transition: border-color .15s, background .15s;
+    }
+    .signups-ref-chip:hover,
+    .signups-ref-chip.active {
+        border-color: #22c55e;
+        background: rgba(34, 197, 94, .1);
+    }
+    .signups-ref-chip .cnt {
+        font-family: var(--font-mono, monospace);
+        font-size: .7rem;
+        padding: .05rem .35rem;
+        border-radius: 4px;
+        background: var(--bg-secondary);
+        color: var(--fg-secondary);
+    }
+    .signups-user-cell {
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+    }
+    .signups-avatar {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: rgba(34, 197, 94, .14);
+        color: #16a34a;
+        font-weight: 700;
+        font-size: .78rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    [data-theme="dark"] .signups-avatar { color: #4ade80; }
+    .signups-user-meta {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.3;
+    }
+    .signups-user-name {
+        font-weight: 600;
+        color: var(--fg);
+        font-size: .83rem;
+        text-decoration: none;
+    }
+    .signups-user-name:hover { text-decoration: underline; }
+    .signups-user-email {
+        font-size: .74rem;
+        color: var(--fg-secondary);
+        font-family: var(--font-mono, monospace);
+    }
+    .signups-mono {
+        font-family: var(--font-mono, monospace);
+        font-size: .76rem;
+    }
+    .signups-subtime {
+        display: block;
+        font-size: .7rem;
+        color: var(--fg-secondary);
+    }
+    .signups-activity-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .28rem;
+    }
 </style>
 
 {# ── Breadcrumb ── #}
@@ -111,13 +300,24 @@
             </div>
             <div class="a-stat-value" id="live-total_users">{{ stats.total_users }}</div>
         </div>
-        <div class="a-stat-card" style="--a-stat-accent:#22c55e; --a-stat-accent-lt:rgba(34,197,94,.1)">
+        <div class="a-stat-card a-stat-card-interactive"
+             id="signupsTodayCard"
+             role="button"
+             tabindex="0"
+             aria-expanded="false"
+             aria-controls="signupsTodayDrawer"
+             title="View all users who signed up today and their referral metadata"
+             style="--a-stat-accent:#22c55e; --a-stat-accent-lt:rgba(34,197,94,.1)">
             <div class="a-stat-icon"><i class="fas fa-user-plus"></i></div>
             <div class="a-stat-header">
                 <div class="a-stat-icon-pill"><i class="fas fa-user-plus"></i></div>
                 <div class="a-stat-label">Signups Today</div>
             </div>
             <div class="a-stat-value" id="live-signups_today">{{ stats.signups_today }}</div>
+            <div class="a-stat-sub dash-card-cta">
+                <span id="signupsTodayCtaText">View sign-ups &amp; sources</span>
+                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+            </div>
         </div>
         <div class="a-stat-card" style="--a-stat-accent:#06b6d4; --a-stat-accent-lt:rgba(6,182,212,.1)">
             <div class="a-stat-icon"><i class="fas fa-signal"></i></div>
@@ -136,6 +336,63 @@
             <div class="a-stat-value" id="live-total_teams">{{ stats.total_teams }}</div>
         </div>
     </div>
+
+    {# ── Expandable Signups Today Inspector ── #}
+    <section class="signups-drawer" id="signupsTodayDrawer" aria-label="Sign-ups today details">
+        <div class="signups-drawer-header">
+            <div>
+                <h2 class="signups-drawer-title">
+                    <i class="fas fa-user-plus" style="color:#22c55e" aria-hidden="true"></i>
+                    Sign-ups Today
+                    <span class="a-badge a-badge-success" id="stTotalBadge">{{ signups_today_data.total }}</span>
+                </h2>
+                <p class="signups-drawer-sub">
+                    UTC day starting <span id="stDateUtc">{{ signups_today_data.date_utc }}</span> 00:00 UTC · Includes referral source, verification status, network IP, and early onboarding activity.
+                </p>
+            </div>
+            <div style="display:flex; gap:.45rem; align-items:center;">
+                <button type="button" class="a-btn a-btn-secondary a-btn-sm" id="stRefreshBtn" title="Refresh today's sign-ups">
+                    <i class="fas fa-sync-alt" aria-hidden="true"></i> Refresh
+                </button>
+                <a href="{{ url_for('admin_users', filter='recent') }}" class="a-btn a-btn-secondary a-btn-sm">
+                    <i class="fas fa-users" aria-hidden="true"></i> All Users
+                </a>
+                <button type="button" class="a-btn a-btn-secondary a-btn-sm" id="stCloseBtn" aria-label="Close sign-ups panel">
+                    <i class="fas fa-times" aria-hidden="true"></i> Close
+                </button>
+            </div>
+        </div>
+
+        <div class="signups-kpi-strip" id="stKpiStrip">
+            <span class="signups-kpi-pill"><i class="fas fa-users" style="color:#6366f1"></i> Total: <strong id="stKpiTotal">{{ signups_today_data.total }}</strong></span>
+            <span class="signups-kpi-pill"><i class="fas fa-check-circle" style="color:#22c55e"></i> Email Verified: <strong id="stKpiVerified">{{ signups_today_data.verified_count }}</strong></span>
+            <span class="signups-kpi-pill"><i class="fas fa-hourglass-half" style="color:#f59e0b"></i> Pending Verify: <strong id="stKpiUnverified">{{ signups_today_data.unverified_count }}</strong></span>
+            <span class="signups-kpi-pill"><i class="fas fa-bolt" style="color:#06b6d4"></i> Active (Team / Match / Community): <strong id="stKpiEngaged">{{ signups_today_data.engaged_count }}</strong></span>
+        </div>
+
+        <div class="signups-ref-strip" id="stRefStrip">
+            <span class="signups-ref-label"><i class="fas fa-compass"></i> Where they found us:</span>
+            <div id="stRefChips" style="display:flex; flex-wrap:wrap; gap:.4rem;"></div>
+        </div>
+
+        <div class="a-table-wrap" id="stTableWrap">
+            <table class="a-table a-table-pro">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Referral Source</th>
+                        <th>Email Status</th>
+                        <th>Signed Up (UTC)</th>
+                        <th>Last Login</th>
+                        <th>IP Address</th>
+                        <th>Onboarding Activity</th>
+                        <th style="text-align:right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="stTableBody"></tbody>
+            </table>
+        </div>
+    </section>
 </div>
 
 {# ── Game Activity ── #}
@@ -333,18 +590,200 @@
             .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    /* ── Signups Today drawer state & rendering ── */
+    let signupsTodayData = {{ signups_today_data | tojson }};
+    let activeRefFilter  = 'ALL';
+
+    const stCard       = document.getElementById('signupsTodayCard');
+    const stDrawer     = document.getElementById('signupsTodayDrawer');
+    const stCtaText    = document.getElementById('signupsTodayCtaText');
+    const stCloseBtn   = document.getElementById('stCloseBtn');
+    const stRefreshBtn = document.getElementById('stRefreshBtn');
+    const stTableBody  = document.getElementById('stTableBody');
+    const stRefChips   = document.getElementById('stRefChips');
+
+    function renderSignupsToday(data) {
+        if (!data) return;
+        signupsTodayData = data;
+
+        const setTxt = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = String(val ?? 0);
+        };
+        setTxt('stTotalBadge',    data.total);
+        setTxt('stDateUtc',       data.date_utc || '');
+        setTxt('stKpiTotal',      data.total);
+        setTxt('stKpiVerified',   data.verified_count);
+        setTxt('stKpiUnverified', data.unverified_count);
+        setTxt('stKpiEngaged',    data.engaged_count);
+
+        const breakdown = Array.isArray(data.referral_breakdown) ? data.referral_breakdown : [];
+        if (stRefChips) {
+            if (!breakdown.length) {
+                stRefChips.innerHTML = '<span style="font-size:.76rem;color:var(--fg-secondary)">No sign-ups recorded today yet.</span>';
+            } else {
+                const allBtn = `<button type="button" class="signups-ref-chip ${activeRefFilter === 'ALL' ? 'active' : ''}" data-ref="ALL">
+                    All sources <span class="cnt">${data.total}</span>
+                </button>`;
+                const chips = breakdown.map(item => {
+                    const isAct = activeRefFilter === item.source ? 'active' : '';
+                    return `<button type="button" class="signups-ref-chip ${isAct}" data-ref="${escHtml(item.source)}">
+                        ${escHtml(item.source)} <span class="cnt">${item.count}</span>
+                    </button>`;
+                }).join('');
+                stRefChips.innerHTML = allBtn + chips;
+                stRefChips.querySelectorAll('.signups-ref-chip').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        activeRefFilter = btn.getAttribute('data-ref') || 'ALL';
+                        renderSignupsToday(signupsTodayData);
+                    });
+                });
+            }
+        }
+
+        if (!stTableBody) return;
+        const allUsers = Array.isArray(data.users) ? data.users : [];
+        const users = activeRefFilter === 'ALL'
+            ? allUsers
+            : allUsers.filter(u => u.referral_label === activeRefFilter);
+
+        if (!users.length) {
+            stTableBody.innerHTML = `<tr><td colspan="8">
+                <div class="a-empty" style="padding:1.5rem 1rem;">
+                    <i class="fas fa-user-clock"></i>
+                    <p>${allUsers.length ? 'No sign-ups match the selected referral source.' : 'No sign-ups recorded today yet.'}</p>
+                </div>
+            </td></tr>`;
+            return;
+        }
+
+        stTableBody.innerHTML = users.map(u => {
+            const initial = escHtml(((u.display_name || u.email || '?')[0] || '?').toUpperCase());
+            const nameHtml = u.display_name
+                ? `<a class="signups-user-name" href="${escHtml(u.detail_url)}">${escHtml(u.display_name)}</a>
+                   <span class="signups-user-email">${escHtml(u.email)}</span>`
+                : `<a class="signups-user-name signups-mono" href="${escHtml(u.detail_url)}">${escHtml(u.email)}</a>`;
+
+            const statusFlags = [
+                u.is_admin ? '<span class="a-badge a-badge-admin"><i class="fas fa-shield-alt"></i> Admin</span>' : '',
+                u.is_banned ? '<span class="a-badge a-badge-danger">Banned</span>' : '',
+                u.is_locked ? '<span class="a-badge a-badge-warning">Locked</span>' : '',
+            ].filter(Boolean).join(' ');
+
+            const refBadgeClass = u.referral_source ? 'a-badge-info' : 'a-badge-neutral';
+            const refIcon = u.referral_source ? '<i class="fas fa-compass"></i> ' : '';
+            const refHtml = `<span class="a-badge ${refBadgeClass}">${refIcon}${escHtml(u.referral_label)}</span>`;
+
+            const verifyHtml = u.email_verified
+                ? '<span class="a-badge a-badge-success"><i class="fas fa-check-circle"></i> Verified</span>'
+                : '<span class="a-badge a-badge-warning"><i class="fas fa-clock"></i> Unverified</span>';
+
+            const loginHtml = u.last_login_utc
+                ? `<span class="signups-mono">${escHtml(u.last_login_utc)}</span>
+                   <span class="signups-subtime">${escHtml(u.last_login_rel || '')}</span>`
+                : '<span style="font-size:.75rem;color:var(--fg-secondary)">Not logged in yet</span>';
+
+            const activityParts = [];
+            if (u.teams_count > 0)       activityParts.push(`<span class="a-badge a-badge-info" title="Teams created"><i class="fas fa-layer-group"></i> ${u.teams_count} team${u.teams_count === 1 ? '' : 's'}</span>`);
+            if (u.matches_count > 0)     activityParts.push(`<span class="a-badge a-badge-info" title="Matches played"><i class="fas fa-baseball-ball"></i> ${u.matches_count} match${u.matches_count === 1 ? '' : 'es'}</span>`);
+            if (u.tournaments_count > 0) activityParts.push(`<span class="a-badge a-badge-info" title="Tournaments created"><i class="fas fa-trophy"></i> ${u.tournaments_count}</span>`);
+            if (u.active_sessions > 0)   activityParts.push(`<span class="a-badge a-badge-success" title="Active sessions"><i class="fas fa-desktop"></i> ${u.active_sessions} online</span>`);
+            if (u.community_engaged)     activityParts.push(`<span class="a-badge a-badge-user" title="Community participation"><i class="fas fa-comments"></i> Community</span>`);
+            const activityHtml = activityParts.length
+                ? `<div class="signups-activity-pills">${activityParts.join('')}</div>`
+                : '<span style="font-size:.75rem;color:var(--fg-secondary)">No activity yet</span>';
+
+            return `<tr>
+                <td>
+                    <div class="signups-user-cell">
+                        <span class="signups-avatar" aria-hidden="true">${initial}</span>
+                        <div class="signups-user-meta">
+                            ${nameHtml}
+                            ${statusFlags ? `<div style="margin-top:.2rem">${statusFlags}</div>` : ''}
+                        </div>
+                    </div>
+                </td>
+                <td>${refHtml}</td>
+                <td>${verifyHtml}</td>
+                <td>
+                    <span class="signups-mono">${escHtml(u.created_at_utc)}</span>
+                    <span class="signups-subtime">${escHtml(u.created_at_rel)}</span>
+                </td>
+                <td>${loginHtml}</td>
+                <td><span class="signups-mono">${escHtml(u.ip_address)}</span></td>
+                <td>${activityHtml}</td>
+                <td style="text-align:right">
+                    <a href="${escHtml(u.detail_url)}" class="a-btn a-btn-secondary a-btn-sm">
+                        Inspect <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                    </a>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    async function refreshSignupsToday() {
+        const res = await adminFetchJson('/admin/dashboard?format=signups_today');
+        if (res.ok && res.data) {
+            renderSignupsToday(res.data);
+            const liveCountEl = document.getElementById('live-signups_today');
+            if (liveCountEl) liveCountEl.textContent = String(res.data.total ?? 0);
+        }
+    }
+
+    function setDrawerOpen(open) {
+        if (!stCard || !stDrawer) return;
+        stCard.classList.toggle('is-open', open);
+        stDrawer.classList.toggle('is-open', open);
+        stCard.setAttribute('aria-expanded', String(open));
+        if (stCtaText) {
+            stCtaText.textContent = open ? 'Hide sign-ups' : 'View sign-ups & sources';
+        }
+        if (open) {
+            refreshSignupsToday();
+        }
+    }
+
+    if (stCard) {
+        stCard.addEventListener('click', () => {
+            setDrawerOpen(!stDrawer.classList.contains('is-open'));
+        });
+        stCard.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter' || ev.key === ' ') {
+                ev.preventDefault();
+                setDrawerOpen(!stDrawer.classList.contains('is-open'));
+            }
+        });
+    }
+    if (stCloseBtn) {
+        stCloseBtn.addEventListener('click', () => setDrawerOpen(false));
+    }
+    if (stRefreshBtn) {
+        stRefreshBtn.addEventListener('click', () => adminWithButton(stRefreshBtn, refreshSignupsToday));
+    }
+
+    renderSignupsToday(signupsTodayData);
+
     /* ── Stats event ── */
     function handleStats(e) {
         let d;
         try { d = JSON.parse(e.data); } catch { return; }
         if (!d || !Object.keys(d).length) return;
 
+        let signupsChanged = false;
         STATS_FIELDS.forEach(key => {
             const el  = document.getElementById('live-' + key);
             if (!el) return;
             const str = String(d[key] ?? '');
-            if (el.textContent !== str) { el.textContent = str; flashEl(el); }
+            if (el.textContent !== str) {
+                el.textContent = str;
+                flashEl(el);
+                if (key === 'signups_today') signupsChanged = true;
+            }
         });
+
+        if (signupsChanged && stDrawer && stDrawer.classList.contains('is-open')) {
+            refreshSignupsToday();
+        }
 
         lastUpdateTs = new Date();
         if (lastUpdated) lastUpdated.textContent = 'updated just now';

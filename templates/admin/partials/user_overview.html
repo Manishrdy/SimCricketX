@@ -9,6 +9,7 @@
         <dl class="user-details">
             <div><dt>Display name</dt><dd>{{ user.display_name or 'Not set' }}</dd></div>
             <div><dt>Email address</dt><dd>{{ user.id }}</dd></div>
+            <div><dt>Referral source</dt><dd>{{ user.referral_source or 'Not specified' }}</dd></div>
             <div><dt>Created</dt><dd>{{ user.created_at|localtime if user.created_at else 'Unknown' }}</dd></div>
             <div><dt>Last login</dt><dd>{{ user.last_login|localtime if user.last_login else 'Never recorded' }}</dd></div>
             <div><dt>Active sessions</dt><dd>{{ data.active_sessions }}</dd></div>

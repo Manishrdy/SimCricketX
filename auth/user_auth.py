@@ -46,12 +46,18 @@ def log_admin_action(admin_email: str, action: str, target: str = None, details:
 
 # --- Core Auth Functions ---
 
-def register_user(email: str, password: str, display_name: Optional[str] = None) -> bool:
+def register_user(
+    email: str,
+    password: str,
+    display_name: Optional[str] = None,
+    referral_source: Optional[str] = None,
+) -> bool:
     """Register a new user in the database."""
     if not email or not password:
         return False
 
     display_name = display_name.strip() if display_name else None
+    referral_source = referral_source.strip()[:100] if referral_source and referral_source.strip() else None
     from services import identity_signup as signup
     from services import identity_network as network
     from flask import g, request
@@ -76,7 +82,9 @@ def register_user(email: str, password: str, display_name: Optional[str] = None)
             g.identity_signup_error = message
             return False
         try:
-            g.identity_signup_email = signup.create_user(email, password, display_name)
+            g.identity_signup_email = signup.create_user(
+                email, password, display_name, referral_source=referral_source
+            )
             return True
         except InvalidEmail as exc:
             g.identity_signup_error = signup.MESSAGES.get(exc.code, 'Enter a valid email address.')
@@ -108,6 +116,7 @@ def register_user(email: str, password: str, display_name: Optional[str] = None)
             password_hash=generate_password_hash(password),
             ip_address=get_client_ip(),
             display_name=display_name,
+            referral_source=referral_source,
             email_verified=False,
             email_verify_token=_hash_token(token),
             email_verify_token_expires=datetime.utcnow() + timedelta(minutes=EMAIL_VERIFY_TTL_MINUTES),

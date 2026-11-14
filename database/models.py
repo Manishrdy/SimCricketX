@@ -30,6 +30,7 @@ class User(UserMixin, db.Model):
     mac_address = db.Column(db.String(50))
     hostname = db.Column(db.String(100))
     display_name = db.Column(db.String(100))
+    referral_source = db.Column(db.String(100), nullable=True)
     
     # Admin flag for role-based access control
     is_admin = db.Column(db.Boolean, default=False, nullable=False, index=True)

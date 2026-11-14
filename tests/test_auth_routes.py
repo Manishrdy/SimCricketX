@@ -52,7 +52,29 @@ class TestRegistrationRoute:
         ).scalar_one_or_none()
         assert user is not None
         assert user.display_name == "New User"
+        assert user.referral_source is None
         assert user.is_admin is False
+
+    def test_register_with_referral_source(self, client, app):
+        """Test registration stores the selected referral source."""
+        response = client.post(
+            "/register",
+            data={
+                "email": "referred@example.com",
+                "password": "SecurePass123!",
+                "confirm_password": "SecurePass123!",
+                "display_name": "Referred User",
+                "referral_source": "Planet Cricket",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        user = db.session.execute(
+            db.select(User).filter_by(email="referred@example.com")
+        ).scalar_one_or_none()
+        assert user is not None
+        assert user.referral_source == "Planet Cricket"
 
     def test_register_duplicate_email(self, client, regular_user):
         """Test registration with an already-registered email shows an error."""
