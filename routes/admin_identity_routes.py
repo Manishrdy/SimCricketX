@@ -159,14 +159,18 @@ def account_review_report():
     q = request.args.get('q', '').strip()[:254]
     finding = request.args.get('finding', '')
     view = request.args.get('view', 'findings')
+    group_by = request.args.get('group_by', '')
+    if group_by == 'none':
+        group_by = ''
     page = page_number()
     try:
-        report = account_review.read(q=q, finding=finding, view=view, page=page)
+        report = account_review.read(q=q, finding=finding, view=view, group_by=group_by, page=page)
     except ValueError as exc:
         abort(400, description=str(exc))
     return render_template('admin/identity_account_review.html', report=report,
-                           labels=account_review.LABELS, observation_time=timestamp,
-                           q=q, finding=finding, view=view, page=page)
+                           labels=account_review.LABELS, group_modes=account_review.GROUP_MODES,
+                           observation_time=timestamp,
+                           q=q, finding=finding, view=view, group_by=group_by, page=page)
 
 
 @bp.get('/duplicates')

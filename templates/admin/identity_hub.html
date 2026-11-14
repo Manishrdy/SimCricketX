@@ -1,69 +1,203 @@
 {% extends 'admin/layout.html' %}
-{% block title %}Identity operations · Admin{% endblock %}
-{% block extra_css %}{{ super() }}<link rel="stylesheet" href="{{ url_for('static',filename='css/admin_identity.css', v='identity-3') }}">{% endblock %}
-{% macro activity(items) %}
+{% block title %}{{ {'overview':'Identity operations','account':'Account identity','audit':'Activity & receipts','approvals':'Approvals','exemptions':'Scoped exemptions','policy':'Policy status'}[view] }} · Admin{% endblock %}
+{% block extra_css %}{{ super() }}<link rel="stylesheet" href="{{ url_for('static',filename='css/admin_identity.css', v='identity-6') }}">{% endblock %}
+{% set raw_back = request.args.get('back', '') %}
+{% set safe_back = raw_back if raw_back.startswith('/admin/') and not raw_back.startswith('//') else '' %}
+{% macro with_back(url, back_url) %}{% if back_url and url %}{{ url ~ ('&' if '?' in url else '?') ~ 'back=' ~ (back_url|urlencode) }}{% else %}{{ url }}{% endif %}{% endmacro %}
+{% macro activity(items, back_url='') %}
 {% for row in items %}<article class="identity-card hub-event" data-workflow="{{ row.workflow }}">
-<div class="identity-row"><h3>{{ workflows[row.workflow] }} · {{ row.action|replace('_',' ')|capitalize }}</h3><time>{{ row.occurred|localtime }}</time></div>
-<p class="identity-note">{{ row.reason }}</p><p>{{ row.account_label or 'Account details unavailable or no longer retained.' }}</p>
+<div class="identity-row">
+  <div class="identity-actions"><span class="a-badge">{{ workflows[row.workflow] }}</span><h3>{{ row.action|replace('_',' ')|capitalize }}</h3></div>
+  <div class="identity-actions"><time>{{ row.occurred|localtime }}</time>{% if row.url %}<a class="identity-button identity-button-secondary identity-button-sm" href="{{ with_back(row.url, back_url) }}">Open review / receipt</a>{% endif %}</div>
+</div>
+<p class="identity-note">{{ row.reason }}</p>
+<p><strong>Account:</strong> {{ row.account_label or 'Account details unavailable or no longer retained.' }}</p>
 {% if row.references %}<details><summary>Identity references</summary><p>{{ row.references }}</p></details>{% endif %}
-<p>Actor: {{ row.actor_label }}{% if row.status %} · Current workflow status: {{ row.status }}{% endif %}</p>
-{% if row.url %}<a href="{{ row.url }}">Open review / receipt</a>{% else %}<p>Linked detail is unavailable or no longer retained.</p>{% endif %}
 {% if row.backup %}<details><summary>Backup reference</summary><p>{{ row.backup }}</p>{% if row.artifact_backup %}<p>{{ row.artifact_backup }}</p>{% endif %}<p>Reference only; this does not confirm that the 30-day backup still exists. Operator recovery required.</p></details>{% endif %}
+<div class="hub-event-meta"><span>Actor: {{ row.actor_label }}{% if row.status %} · Current workflow status: {{ row.status }}{% endif %}</span>{% if not row.url %}<span>Linked detail is unavailable or no longer retained.</span>{% endif %}</div>
 </article>{% else %}<div class="identity-card hub-empty"><strong>No activity to display</strong><p>No retained activity matches these filters.</p></div>{% endfor %}
 {% endmacro %}
 {% macro filter_form(grants=false, account_view=false) %}
 <form method="get" class="identity-filters">
+{% if safe_back %}<input type="hidden" name="back" value="{{ safe_back }}">{% endif %}
 <label>Workflow<select name="workflow"><option value="">All workflows</option>{% for key,label in workflows.items() if not grants or key in ['signup','network'] %}<option value="{{ key }}" {% if f.workflow==key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
-{% if not account_view %}<label>Account email or stable ID<input name="q" value="{{ f.q }}" type="search" maxlength="254"></label>{% endif %}
+{% if not account_view %}<label>Account email or stable ID<input name="q" value="{{ f.q }}" type="search" maxlength="254" placeholder="Search email or ID…"></label>{% endif %}
 {% if grants %}<label>State<select name="status"><option value="">All states</option>{% for state in ['open','active','expired','revoked','used','rejected','unavailable'] %}<option value="{{ state }}" {% if f.status==state %}selected{% endif %}>{{ state|capitalize }}</option>{% endfor %}</select></label>{% else %}<label>Action<input name="action" value="{{ f.action }}" maxlength="40" placeholder="e.g. completed, approve, note"></label>{% endif %}
-<label>From (UTC)<input type="date" name="from" value="{{ f['from'] }}"></label><label>Through (UTC)<input type="date" name="to" value="{{ f.to }}"></label><button class="identity-button">Filter</button>
+<label>From (UTC)<input type="date" name="from" value="{{ f['from'] }}"></label><label>Through (UTC)<input type="date" name="to" value="{{ f.to }}"></label><button class="identity-button" type="submit"><i class="fas fa-filter" aria-hidden="true"></i> Filter</button>
 </form>
 {% endmacro %}
-{% macro paginate() %}<div class="identity-pagination">{% if pages.previous %}<a href="{{ pages.previous }}">Previous</a>{% endif %}<span>Page {{ f.page }}</span>{% if more %}<a href="{{ pages.next }}">Next</a>{% endif %}</div>{% endmacro %}
+{% macro paginate() %}<div class="identity-pagination">{% if pages.previous %}<a href="{{ with_back(pages.previous, safe_back) }}">Previous</a>{% endif %}<span>Page {{ f.page }}</span>{% if more %}<a href="{{ with_back(pages.next, safe_back) }}">Next</a>{% endif %}</div>{% endmacro %}
 {% block admin_content %}
 <div class="identity-workspace identity-hub {% if view != 'overview' %}identity-screen{% endif %}">
-<header class="identity-header"><div><p class="identity-eyebrow">Private admin workspace</p><h1>{{ {'overview':'Identity operations','account':'Account identity','audit':'Activity & receipts','approvals':'Approvals','exemptions':'Scoped exemptions','policy':'Policy status'}[view] }}</h1><p>Review accounts, resolve requests, and keep identity safeguards in view.</p></div><span class="hub-private"><i class="fas fa-lock" aria-hidden="true"></i> Admin access only</span></header>
-{% include 'admin/partials/identity_nav.html' %}
+<header class="identity-header">
+  <div>
+    <p class="identity-eyebrow">Private admin workspace</p>
+    <h1>{{ {'overview':'Identity operations','account':'Account identity','audit':'Activity & receipts','approvals':'Approvals','exemptions':'Scoped exemptions','policy':'Policy status'}[view] }}</h1>
+    <p>{% if view=='account' %}Review account status, run user actions, and inspect identity evidence in one place.{% else %}Review accounts, resolve requests, and keep identity safeguards in view.{% endif %}</p>
+  </div>
+  <div class="identity-header-actions">
+    {% if view=='overview' %}
+    <form method="post" action="{{ url_for('admin_identity.account_review_run') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="identity-button identity-button-gold" type="submit"><i class="fas fa-play" aria-hidden="true"></i> Run identity review</button></form>
+    <form method="post" action="{{ url_for('admin_identity.scan_preview') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="identity-button identity-button-header" type="submit"><i class="fas fa-search" aria-hidden="true"></i> Preview duplicate scan</button></form>
+    {% elif view=='account' %}
+    <a class="identity-button identity-button-header" href="{{ safe_back or url_for('admin_identity.account_review_report') }}" onclick="if (!this.dataset.hasBack && window.history.length > 1) { window.history.back(); return false; }" {% if safe_back %}data-has-back="1"{% endif %}><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to previous page</a>
+    <a class="identity-button identity-button-header" href="{{ url_for('admin_identity.overview') }}"><i class="fas fa-th-large" aria-hidden="true"></i> Identity overview</a>
+    {% else %}
+    <a class="identity-button identity-button-header" href="{{ safe_back or url_for('admin_identity.overview') }}" onclick="if (!this.dataset.hasBack && window.history.length > 1) { window.history.back(); return false; }" {% if safe_back %}data-has-back="1"{% endif %}><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to previous page</a>
+    {% endif %}
+  </div>
+</header>
+{% if view != 'account' %}{% include 'admin/partials/identity_nav.html' %}{% endif %}
 {% if view=='overview' %}
 <div class="hub-section-heading"><div><p class="identity-eyebrow">Work queue</p><h2>At a glance</h2></div><span>Current workload across identity workflows</span></div>
-<div class="identity-stats">{% set icons = ['clone','ban','user-plus','network-wired','envelope','users','envelope-open-text','pause'] %}{% for label,value,endpoint,args in cards %}<a class="identity-card hub-stat {% if value %}has-work{% endif %}" href="{{ url_for(endpoint,**args) }}"><span class="hub-stat-top"><i class="fas fa-{{ icons[loop.index0] }}" aria-hidden="true"></i><span aria-hidden="true">↗</span></span><strong>{{ value }}</strong><span class="hub-stat-label">{{ label }}</span></a>{% endfor %}</div>
-<div class="hub-section-heading"><div><p class="identity-eyebrow">System oversight</p><h2>Operations & safeguards</h2></div><a href="{{ url_for('admin_identity.policy') }}">View policy <span aria-hidden="true">→</span></a></div>
+<div class="identity-stats">{% set icons = ['clone','ban','user-plus','network-wired','envelope','users','envelope-open-text','pause'] %}{% for label,value,endpoint,args in cards %}<a class="identity-card hub-stat {% if value %}has-work{% endif %}" href="{{ url_for(endpoint,**args) }}"><span class="hub-stat-top"><span class="hub-stat-icon"><i class="fas fa-{{ icons[loop.index0] }}" aria-hidden="true"></i></span><span aria-hidden="true">↗</span></span><strong>{{ value }}</strong><span class="hub-stat-label">{{ label }}</span></a>{% endfor %}</div>
+<div class="hub-section-heading"><div><p class="identity-eyebrow">System oversight</p><h2>Operations & safeguards</h2></div><a class="identity-button identity-button-secondary identity-button-sm" href="{{ url_for('admin_identity.policy') }}">View policy <span aria-hidden="true">→</span></a></div>
 <div class="identity-pair hub-operations">
 <section class="identity-card"><div class="hub-card-heading"><h2>Delivery and cleanup</h2><span class="hub-tag">Follow-up</span></div><dl class="hub-metrics">
-{% for label,value,endpoint in [('Email delivery / notice retries',failures.email,'identity_email.overview'),('Merge proof delivery failures',failures.merge,'identity_merge.overview'),('Campaign notice failures',failures.notices,'identity_campaign.overview'),('Campaign deletion errors',failures.deletion,'identity_campaign.overview'),('Pending campaign file cleanup',failures.files,'identity_campaign.overview')] %}<div><dt>{{ label }}</dt><dd><a class="hub-count {% if value %}needs-attention{% endif %}" href="{{ url_for(endpoint) }}">{{ value }}</a></dd></div>{% endfor %}</dl><a class="hub-panel-link" href="{{ url_for('identity_campaign.overview') }}">Review campaign operations <span aria-hidden="true">→</span></a></section>
+{% for label,value,endpoint in [('Email delivery / notice retries',failures.email,'identity_email.overview'),('Merge proof delivery failures',failures.merge,'identity_merge.overview'),('Campaign notice failures',failures.notices,'identity_campaign.overview'),('Campaign deletion errors',failures.deletion,'identity_campaign.overview'),('Pending campaign file cleanup',failures.files,'identity_campaign.overview')] %}<div><dt>{{ label }}</dt><dd><a class="hub-count {% if value %}needs-attention{% endif %}" href="{{ url_for(endpoint) }}">{{ value }}</a></dd></div>{% endfor %}</dl><a class="hub-panel-link" href="{{ url_for('identity_campaign.overview') }}"><span>Review campaign operations</span><span aria-hidden="true">→</span></a></section>
 <section class="identity-card"><div class="hub-card-heading"><h2>Enforcement & classifier</h2><span class="hub-tag">Configuration</span></div><dl class="hub-metrics">
 {% for label,enabled in [('Signup enforcement',config.signup),('Network enforcement',config.network),('ProxyCheck credential',config.provider),('Private Relay feed',feed_fresh)] %}<div><dt>{{ label }}</dt><dd><span class="hub-status {{ 'is-on' if enabled else 'is-off' }}">{{ ('Fresh' if enabled else 'Missing / stale') if label=='Private Relay feed' else (('Configured' if enabled else 'Not configured') if label=='ProxyCheck credential' else ('Enabled' if enabled else 'Disabled')) }}</span></dd></div>{% endfor %}
-</dl><details class="hub-diagnostics"><summary>Classifier diagnostics</summary><p>Today’s recorded lookup attempts (UTC): {{ budget.attempts if budget else 0 }}. Last recorded outcome: {{ budget.last_status if budget else 'not available' }}{% if budget %} at {{ budget.updated_at|localtime }}{% endif %}.</p>{% if feed %}<p>Private Relay feed imported {{ feed|localtime }}.</p>{% endif %}<p>Unexpired cache entries: {% for state,n in cache_counts.items() %}{{ state }} {{ n }}{% if not loop.last %} · {% endif %}{% else %}none{% endfor %}.</p><p>Retained network observations: {% for state,n in observations.items() %}{{ state }} {{ n }}{% if not loop.last %} · {% endif %}{% else %}none{% endfor %}. These are historical detections, not a live count of restricted users.</p></details><a class="hub-panel-link" href="{{ url_for('identity_network.overview') }}">Open network diagnostics <span aria-hidden="true">→</span></a></section>
+</dl><details class="hub-diagnostics"><summary>Classifier diagnostics</summary><p>Today’s recorded lookup attempts (UTC): {{ budget.attempts if budget else 0 }}. Last recorded outcome: {{ budget.last_status if budget else 'not available' }}{% if budget %} at {{ budget.updated_at|localtime }}{% endif %}.</p>{% if feed %}<p>Private Relay feed imported {{ feed|localtime }}.</p>{% endif %}<p>Unexpired cache entries: {% for state,n in cache_counts.items() %}{{ state }} {{ n }}{% if not loop.last %} · {% endif %}{% else %}none{% endfor %}.</p><p>Retained network observations: {% for state,n in observations.items() %}{{ state }} {{ n }}{% if not loop.last %} · {% endif %}{% else %}none{% endfor %}. These are historical detections, not a live count of restricted users.</p></details><a class="hub-panel-link" href="{{ url_for('identity_network.overview') }}"><span>Open network diagnostics</span><span aria-hidden="true">→</span></a></section>
 </div>
 <div class="identity-pair hub-secondary">
-<section class="identity-card"><div class="hub-card-heading"><h2>Campaign deadlines</h2><i class="far fa-calendar" aria-hidden="true"></i></div>{% for row in campaigns %}<p>Deadline {{ row.deadline|localtime }} · expiry deletion {{ 'enabled' if row.deletion_enabled else 'paused / not enabled' }}</p>{% else %}<div class="hub-empty"><strong>No upcoming deadlines</strong><p>No retained active or recent campaigns.</p></div>{% endfor %}<a class="hub-panel-link" href="{{ url_for('identity_campaign.overview') }}">All campaigns, holds and results <span aria-hidden="true">→</span></a></section>
-<section class="identity-card hub-scan"><p class="identity-eyebrow">Duplicate discovery</p><h2>Find accounts to review</h2><p>Preview a duplicate scan before importing evidence. Shared signals are not proof of common ownership.</p><form method="post" action="{{ url_for('admin_identity.account_review_run') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="identity-button">Run identity review</button></form>
-<p><a href="{{ url_for('admin_identity.account_review_report') }}">Latest account review</a> · Checks every account without changing access or opening cases.</p>
-<form method="post" action="{{ url_for('admin_identity.scan_preview') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="identity-button"><i class="fas fa-search" aria-hidden="true"></i> Preview duplicate scan</button></form></section>
+<section class="identity-card"><div class="hub-card-heading"><h2>Campaign deadlines</h2><span class="hub-tag"><i class="far fa-calendar" aria-hidden="true"></i> Schedule</span></div>{% for row in campaigns %}<p>Deadline {{ row.deadline|localtime }} · expiry deletion {{ 'enabled' if row.deletion_enabled else 'paused / not enabled' }}</p>{% else %}<div class="hub-empty"><strong>No upcoming deadlines</strong><p>No retained active or recent campaigns.</p></div>{% endfor %}<a class="hub-panel-link" href="{{ url_for('identity_campaign.overview') }}"><span>All campaigns, holds and results</span><span aria-hidden="true">→</span></a></section>
+<section class="identity-card hub-scan">
+  <div>
+    <div class="hub-card-heading"><h2>Find accounts to review</h2><span class="hub-tag">Discovery</span></div>
+    <p>Preview a duplicate scan before importing evidence, or run a read-only account review across all accounts. Shared signals are not proof of common ownership.</p>
+  </div>
+  <div class="identity-actions">
+    <form method="post" action="{{ url_for('admin_identity.account_review_run') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="identity-button" type="submit"><i class="fas fa-play" aria-hidden="true"></i> Run identity review</button></form>
+    <form method="post" action="{{ url_for('admin_identity.scan_preview') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="identity-button identity-button-secondary" type="submit"><i class="fas fa-search" aria-hidden="true"></i> Preview duplicate scan</button></form>
+    <a class="identity-button identity-button-secondary" href="{{ url_for('admin_identity.account_review_report') }}">Latest account review</a>
+  </div>
+</section>
 </div>
-<section class="hub-activity"><div class="hub-section-heading"><div><p class="identity-eyebrow">Audit trail</p><h2>Recent activity</h2></div><a href="{{ url_for('admin_identity.audit') }}">All activity and receipts <span aria-hidden="true">→</span></a></div>{{ activity(recent) }}</section>
+<section class="hub-activity"><div class="hub-section-heading"><div><p class="identity-eyebrow">Audit trail</p><h2>Recent activity</h2></div><a class="identity-button identity-button-secondary identity-button-sm" href="{{ url_for('admin_identity.audit') }}">All activity and receipts <span aria-hidden="true">→</span></a></div>{{ activity(recent) }}</section>
 {% elif view=='audit' %}
 <p>Recorded events and completed receipts, newest first. Request rows show their current status; cancellation or expiry is not presented as a dated event unless its workflow recorded one. Dates filter event time in UTC. Retention differs by workflow; missing history is not reconstructed.</p>
-{{ filter_form() }}{{ activity(rows) }}{{ paginate() }}
+{{ filter_form() }}{{ activity(rows, safe_back) }}{{ paginate() }}
 {% elif view in ['approvals','exemptions'] %}
-<p>Signup grants are email-bound, scoped, single-use and valid for seven days. Network exemptions are account-bound, network-only, revocable and valid for seven days. Open the linked workflow to review evidence or make a reasoned decision.</p>
+<div class="identity-row"><p>Signup grants are email-bound, scoped, single-use and valid for seven days. Network exemptions are account-bound, network-only, revocable and valid for seven days.</p><div class="identity-subnav"><a href="{{ with_back(url_for('admin_identity.approvals', q=f.q, status=f.status, workflow=f.workflow), safe_back) }}" {% if view=='approvals' %}aria-current="page"{% endif %}>Approvals</a><a href="{{ with_back(url_for('admin_identity.exemptions', q=f.q, status=f.status, workflow=f.workflow), safe_back) }}" {% if view=='exemptions' %}aria-current="page"{% endif %}>Scoped exemptions</a></div></div>
 {% if view=='exemptions' %}<section class="identity-card"><h2>Role-based administrator exemptions</h2><p>Authenticated administrators bypass network restrictions and the approved device/IP signup checks for admin creation. Password authentication, authorization, bans, verified email and canonical uniqueness still apply. Public signup cannot claim an administrator exemption. Admin accounts are excluded from merges and the legacy-email campaign.</p><p>These are role rules, not transferable grants. No blanket exemption can be created here.</p></section>{% endif %}
 {{ filter_form(true) }}<p>Dates filter the request creation time (UTC).</p>
-{% for row in rows %}<article class="identity-card hub-grant"><h2>{{ workflows[row.workflow] }} · {{ row.status|capitalize }}</h2><p>{{ row.account_label }}</p>{% if row.references %}<details><summary>Identity references</summary><p>{{ row.references }}</p></details>{% endif %}<p>Created {{ row.occurred|localtime }}{% if row.expires %} · Expires {{ row.expires|localtime }}{% endif %}</p><p>Scope: {{ row.scope_labels|join(', ') if row.scope_labels else 'Not granted; review required' }}</p><a href="{{ row.url }}">Review evidence / manage grant</a></article>{% else %}<div class="identity-empty"><i class="far fa-folder-open" aria-hidden="true"></i><p>No retained requests or grants match these filters.</p></div>{% endfor %}{{ paginate() }}
+{% for row in rows %}<article class="identity-card hub-grant"><div class="identity-row"><h2>{{ workflows[row.workflow] }} · {{ row.status|capitalize }}</h2><a class="identity-button identity-button-secondary identity-button-sm" href="{{ with_back(row.url, safe_back or request.full_path.rstrip('?')) }}">Review evidence / manage grant</a></div><p><strong>{{ row.account_label }}</strong></p>{% if row.references %}<details><summary>Identity references</summary><p>{{ row.references }}</p></details>{% endif %}<p>Created {{ row.occurred|localtime }}{% if row.expires %} · Expires {{ row.expires|localtime }}{% endif %}</p><p>Scope: {{ row.scope_labels|join(', ') if row.scope_labels else 'Not granted; review required' }}</p></article>{% else %}<div class="identity-empty"><i class="far fa-folder-open" aria-hidden="true"></i><p>No retained requests or grants match these filters.</p></div>{% endfor %}{{ paginate() }}
 {% elif view=='account' %}
-<section class="identity-card"><h2>{{ account.id if account else 'Unavailable identity with merge history' }}</h2><p>Stable identity: {{ stable }}</p>
-{% if account %}<p>{{ 'Administrator' if account.is_admin else 'Member' }} · Email {{ 'verified' if account.email_verified else 'unverified' }}</p><dl><dt>Ban flag</dt><dd>{{ 'Set' if account.is_banned else 'Not set' }}{% if account.banned_until %} · until {{ account.banned_until|localtime }}{% endif %}</dd><dt>Password remediation</dt><dd>{{ 'Required' if account.force_password_reset else 'Not required' }}</dd><dt>Legacy email correction flag</dt><dd>{{ 'Set' if account.force_email_verify else 'Not set' }}; campaign membership below is checked independently.</dd><dt>Community mute</dt><dd>{{ account.community_muted_until|localtime if account.community_muted_until and account.community_muted_until>at else 'No active mute' }}</dd><dt>Login lockout</dt><dd>{{ account.lockout_until|localtime if account.lockout_until and account.lockout_until>at else 'No active lockout' }}</dd></dl>
-<div class="identity-tabs"><a href="{{ url_for('admin_user_detail',user_email=account.id) }}">Account administration</a><a href="{{ url_for('identity_email.overview',email=account.id) }}">Request email change</a><a href="{{ url_for('admin_identity.approvals',q=account.id,status='') }}">Related approvals</a></div>
-{% else %}<p>This account no longer exists. Follow its recorded merge links below; no restoration, active survivor or new grant is implied.</p>{% endif %}</section>
-{% if lineage %}<section class="identity-card"><h2>Merge history</h2>{% for row in lineage %}<p><a href="{{ url_for('admin_identity.account',stable_id=row.source) }}">{{ row.source_address }}</a> → <a href="{{ url_for('admin_identity.account',stable_id=row.survivor) }}">{{ row.survivor_address }}</a> · {{ row.completed_at|localtime }} · <a href="{{ url_for('identity_merge.detail',mid=row.id) }}">Receipt</a></p>{% endfor %}<p>Latest 20 retained merge links.</p></section>{% endif %}
-<div class="identity-pair"><section class="identity-card"><h2>Device observations</h2><p>Latest 10 unexpired sightings; probabilistic evidence, never ownership proof. Raw cookie/fingerprint hashes are not displayed.</p>{% for row in sightings %}<p>{{ row.first_seen|localtime }} – {{ row.last_seen|localtime }} · cookie {{ 'confirmed' if row.cookie_confirmed else 'unconfirmed' }} · fingerprint {{ row.fingerprint_status }}</p>{% else %}<p>No unexpired observations.</p>{% endfor %}</section><section class="identity-card"><h2>Network observations</h2><p>Latest 5 retained events, not a live access decision.</p>{% for row in observations %}<p>{{ row.state }} · {{ row.created_at|localtime }}</p>{% else %}<p>No retained observations.</p>{% endfor %}<a href="{{ url_for('admin_identity.exemptions',q=stable,status='') }}">Related scoped exemptions</a></section></div>
-<section class="identity-card"><h2>Email campaign membership</h2>{% for row in campaigns %}<p><a href="{{ url_for('identity_campaign.detail',member_id=row.id) }}">{{ row.status|capitalize }} · deadline {{ row.deadline|localtime }}</a>{% if row.hold_until and row.hold_until>at %} · hold until {{ row.hold_until|localtime }}{% endif %}{% if row.error %} · operator attention required{% endif %}</p>{% else %}<p>No retained campaign membership.</p>{% endfor %}</section>
-<section class="identity-card"><h2>Duplicate reviews</h2>{% for row in cases %}<p><a href="{{ url_for('admin_identity.detail',case_id=row.id) }}">Review #{{ row.id }}</a> · {{ row.status }}</p>{% else %}<p>No retained reviews.</p>{% endfor %}<p>Latest 10 cases. A review case alone does not restrict access.</p>{% if account %}<a href="{{ url_for('admin_identity.duplicates',q=account.id) }}">All matching reviews</a>{% endif %}</section>
-<h2>Account activity and receipts</h2>{{ filter_form(false,true) }}{{ activity(rows) }}{{ paginate() }}
+{% set account_back = url_for('admin_identity.account', stable_id=stable) %}
+<section class="identity-card account-summary-card">
+  <div class="identity-row">
+    <div>
+      <h2>{{ account.id if account else 'Unavailable identity with merge history' }}</h2>
+      <p>Stable identity: <code>{{ stable }}</code>{% if account %} · {{ 'Administrator' if account.is_admin else 'Member' }} · Email {{ 'verified' if account.email_verified else 'unverified' }}{% endif %}</p>
+    </div>
+  </div>
+  {% if account %}
+  <dl>
+    <dt>Ban flag</dt><dd>{{ 'Set' if account.is_banned else 'Not set' }}{% if account.banned_until %} · until {{ account.banned_until|localtime }}{% endif %}</dd>
+    <dt>Password remediation</dt><dd>{{ 'Required' if account.force_password_reset else 'Not required' }}</dd>
+    <dt>Legacy email correction flag</dt><dd>{{ 'Set' if account.force_email_verify else 'Not set' }}; campaign membership below is checked independently.</dd>
+    <dt>Community mute</dt><dd>{{ account.community_muted_until|localtime if account.community_muted_until and account.community_muted_until>at else 'No active mute' }}</dd>
+    <dt>Login lockout</dt><dd>{{ account.lockout_until|localtime if account.lockout_until and account.lockout_until>at else 'No active lockout' }}</dd>
+  </dl>
+  {% else %}<p>This account no longer exists. Follow its recorded merge links below; no restoration, active survivor or new grant is implied.</p>{% endif %}
+</section>
+
+<section class="identity-card account-actions-card" aria-labelledby="account-actions-heading">
+  <div class="hub-card-heading">
+    <div>
+      <p class="identity-eyebrow">What you can do with this account</p>
+      <h2 id="account-actions-heading">Account actions</h2>
+    </div>
+    <span class="hub-tag">Each action includes a Back button</span>
+  </div>
+  {% if account %}
+  <div class="account-action-grid">
+    <a class="account-action-item" href="{{ url_for('admin_user_detail',user_email=account.id,tab='actions',back=account_back) }}">
+      <span class="account-action-icon"><i class="fas fa-user-cog" aria-hidden="true"></i></span>
+      <span class="account-action-body">
+        <span class="account-action-title-row"><strong>User settings, password &amp; ban</strong><span class="account-action-pill">User panel</span></span>
+        <small>Reset password, ban/unban, unlock login, terminate sessions, change admin role, export data, or delete account.</small>
+      </span>
+      <i class="fas fa-arrow-right account-action-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="account-action-item" href="{{ url_for('identity_email.overview',email=account.id,back=account_back) }}">
+      <span class="account-action-icon"><i class="fas fa-envelope" aria-hidden="true"></i></span>
+      <span class="account-action-body">
+        <span class="account-action-title-row"><strong>Email changes</strong><span class="account-action-pill">Change login email</span></span>
+        <small>Replace this user’s login email after verifying mailbox ownership (supports recovery if old mailbox is lost).</small>
+      </span>
+      <i class="fas fa-arrow-right account-action-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="account-action-item" href="{{ url_for('admin_identity.duplicates',q=account.id,back=account_back) }}">
+      <span class="account-action-icon"><i class="fas fa-clone" aria-hidden="true"></i></span>
+      <span class="account-action-body">
+        <span class="account-action-title-row"><strong>Duplicate reviews</strong><span class="account-action-pill">{{ cases|length }} case{{ '' if cases|length == 1 else 's' }}</span></span>
+        <small>Inspect suspected duplicate accounts paired with this user and record an investigation note or decision.</small>
+      </span>
+      <i class="fas fa-arrow-right account-action-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="account-action-item" href="{{ url_for('identity_merge.overview',source=account.id,back=account_back) }}">
+      <span class="account-action-icon"><i class="fas fa-code-merge" aria-hidden="true"></i></span>
+      <span class="account-action-body">
+        <span class="account-action-title-row"><strong>Account merges</strong><span class="account-action-pill">Combine accounts</span></span>
+        <small>Retire a confirmed duplicate account and transfer its teams, matches, and history into a survivor account.</small>
+      </span>
+      <i class="fas fa-arrow-right account-action-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="account-action-item" href="{{ url_for('admin_identity.exemptions',q=stable,status='',back=account_back) }}">
+      <span class="account-action-icon"><i class="fas fa-user-shield" aria-hidden="true"></i></span>
+      <span class="account-action-body">
+        <span class="account-action-title-row"><strong>Approvals &amp; scoped exemptions</strong><span class="account-action-pill">7-day grants</span></span>
+        <small>Review signup/return appeals or grant/revoke temporary 7-day VPN &amp; network exemptions for this user.</small>
+      </span>
+      <i class="fas fa-arrow-right account-action-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="account-action-item" href="{{ url_for('identity_campaign.detail',member_id=campaigns[0].id,back=account_back) if campaigns else url_for('identity_campaign.overview',back=account_back) }}">
+      <span class="account-action-icon"><i class="fas fa-calendar-check" aria-hidden="true"></i></span>
+      <span class="account-action-body">
+        <span class="account-action-title-row"><strong>Email campaign &amp; holds</strong><span class="account-action-pill">{{ campaigns[0].status|capitalize if campaigns else 'No active campaign' }}</span></span>
+        <small>Grant or release a 30-day deadline hold if this account was flagged for a disposable or plus-tag email.</small>
+      </span>
+      <i class="fas fa-arrow-right account-action-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+  {% else %}
+  <div class="account-action-grid">
+    <a class="account-action-item" href="{{ url_for('admin_identity.exemptions',q=stable,status='',back=account_back) }}">
+      <span class="account-action-icon"><i class="fas fa-user-shield" aria-hidden="true"></i></span>
+      <span class="account-action-body">
+        <span class="account-action-title-row"><strong>Approvals &amp; scoped exemptions</strong><span class="account-action-pill">Historical grants</span></span>
+        <small>Inspect historical signup/return appeals and 7-day exemptions for this retired stable ID.</small>
+      </span>
+      <i class="fas fa-arrow-right account-action-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="account-action-item" href="{{ url_for('identity_merge.overview',back=account_back) }}">
+      <span class="account-action-icon"><i class="fas fa-code-merge" aria-hidden="true"></i></span>
+      <span class="account-action-body">
+        <span class="account-action-title-row"><strong>Account merges</strong><span class="account-action-pill">Merge receipts</span></span>
+        <small>Open the merge queue and completed receipts showing where this retired account was transferred.</small>
+      </span>
+      <i class="fas fa-arrow-right account-action-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+  {% endif %}
+</section>
+
+{% if lineage %}<section class="identity-card"><h2>Merge history</h2>{% for row in lineage %}<p><a href="{{ url_for('admin_identity.account',stable_id=row.source,back=account_back) }}">{{ row.source_address }}</a> → <a href="{{ url_for('admin_identity.account',stable_id=row.survivor,back=account_back) }}">{{ row.survivor_address }}</a> · {{ row.completed_at|localtime }} · <a href="{{ url_for('identity_merge.detail',mid=row.id,back=account_back) }}">Receipt</a></p>{% endfor %}<p>Latest 20 retained merge links.</p></section>{% endif %}
+<div class="identity-pair"><section class="identity-card"><h2>Device observations</h2><p>Latest 10 unexpired sightings; probabilistic evidence, never ownership proof. Raw cookie/fingerprint hashes are not displayed.</p>{% for row in sightings %}<p>{{ row.first_seen|localtime }} – {{ row.last_seen|localtime }} · cookie {{ 'confirmed' if row.cookie_confirmed else 'unconfirmed' }} · fingerprint {{ row.fingerprint_status }}</p>{% else %}<p>No unexpired observations.</p>{% endfor %}</section><section class="identity-card"><h2>Network observations</h2><p>Latest 5 retained events, not a live access decision.</p>{% for row in observations %}<p>{{ row.state }} · {{ row.created_at|localtime }}</p>{% else %}<p>No retained observations.</p>{% endfor %}</section></div>
+<div class="identity-pair">
+<section class="identity-card"><h2>Email campaign membership</h2>{% for row in campaigns %}<p><a href="{{ url_for('identity_campaign.detail',member_id=row.id,back=account_back) }}">{{ row.status|capitalize }} · deadline {{ row.deadline|localtime }}</a>{% if row.hold_until and row.hold_until>at %} · hold until {{ row.hold_until|localtime }}{% endif %}{% if row.error %} · operator attention required{% endif %}</p>{% else %}<p>No retained campaign membership.</p>{% endfor %}</section>
+<section class="identity-card"><h2>Duplicate reviews</h2>{% for row in cases %}<p><a href="{{ url_for('admin_identity.detail',case_id=row.id,back=account_back) }}">Review #{{ row.id }}</a> · {{ row.status }}</p>{% else %}<p>No retained reviews.</p>{% endfor %}<p>Latest 10 cases. A review case alone does not restrict access.</p></section>
+</div>
+<div class="identity-section-heading"><div><p class="identity-eyebrow">Audit trail</p><h2>Account activity and receipts</h2></div></div>{{ filter_form(false,true) }}{{ activity(rows, account_back) }}{{ paginate() }}
 {% elif view=='policy' %}
+<div class="identity-pair">
 <section class="identity-card"><h2>Current configuration</h2><dl><dt>Device collection</dt><dd>{{ config.device }}</dd><dt>Signup enforcement</dt><dd>{{ 'Enabled' if config.signup else 'Disabled' }}</dd><dt>Network enforcement</dt><dd>{{ 'Enabled' if config.network else 'Disabled' }}</dd><dt>Identity marker key</dt><dd>{{ config.marker }} (value never displayed)</dd><dt>Classifier credential</dt><dd>{{ 'Configured' if config.provider else 'Not configured' }}</dd></dl><p>Configuration presence does not verify key continuity, provider delivery, backup capacity or scheduled jobs. Those require operator rehearsal.</p></section>
 <section class="identity-card"><h2>Adopted rules</h2><p>Ordinary personal, work, school and custom domains are allowed. Known disposable domains and new plus-tag addresses are rejected. Provider-specific Gmail/googlemail aliases are canonicalized for duplicate checks; login and recovery use the stored address.</p><p>Recognized devices and exact basic fingerprints can block signup pending review. One successful signup per exact IP per rolling 24 hours; a subnet alone is not identity proof. Browser language, timezone, screen and platform are the only fingerprint signals; cookies and sightings expire 180 days after last use.</p><p>Detected VPN/proxy/Tor/datacenter networks restrict non-exempt members to Community/support. Unknown/timeouts fail open for the network rule only. Classifier cache: clean 15 minutes, flagged 5 minutes, unknown 1 minute. Private Relay feed expires after 48 hours.</p></section>
-<section class="identity-card"><h2>Operations and retention</h2><p>Schedule the documented evidence/proof cleanup, campaign processing and 30-day operation-backup cleanup. Retained closed reviews and scoped grants generally expire after 180 days; campaign receipts wait for file cleanup. Email-change and merge receipts remain durable. Minimal identity markers persist until separately authorized removal. Keep signup enforcement enabled for retired identities.</p><p>Campaign activation, expiry deletion and account merges retain their own previews and confirmation requirements. This page cannot enable them.</p><div class="identity-tabs"><a href="{{ url_for('admin_ip_whitelist') }}">Existing IP whitelist</a><a href="{{ url_for('admin_ip_blocklist') }}">Existing IP blocklist</a></div><p>Those network-management tools do not grant identity-policy exemptions.</p></section>
+</div>
+<div class="identity-pair">
+<section class="identity-card"><h2>Operations and retention</h2><p>Schedule the documented evidence/proof cleanup, campaign processing and 30-day operation-backup cleanup. Retained closed reviews and scoped grants generally expire after 180 days; campaign receipts wait for file cleanup. Email-change and merge receipts remain durable. Minimal identity markers persist until separately authorized removal. Keep signup enforcement enabled for retired identities.</p><p>Campaign activation, expiry deletion and account merges retain their own previews and confirmation requirements. This page cannot enable them.</p><div class="identity-actions"><a class="identity-button identity-button-secondary identity-button-sm" href="{{ url_for('admin_ip_whitelist') }}">Existing IP whitelist</a><a class="identity-button identity-button-secondary identity-button-sm" href="{{ url_for('admin_ip_blocklist') }}">Existing IP blocklist</a></div><p>Those network-management tools do not grant identity-policy exemptions.</p></section>
 <section class="identity-card"><h2>Policy changes require separate review</h2><p>This is a read-only status page. Domain-classification overrides, scoring/threshold editors, browser enforcement switches, new exemption types and marker removal are outside this module. Production-copy rehearsal and rollout remain module 12.</p></section>
+</div>
 {% endif %}</div>
 {% endblock %}

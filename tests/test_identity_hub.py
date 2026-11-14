@@ -70,13 +70,37 @@ def test_activity_union_order_actor_and_filter(data):
 
 
 def test_account_includes_signup_and_restrictions_without_hashes(data):
+    account_path = '/admin/identity/accounts/' + data['user']
     response=request(data,'/accounts/'+data['user'])
     assert response.status_code==200
+    assert b'Identity sections' not in response.data
+    assert b'Account actions' in response.data
+    assert b'Back to previous page' in response.data
+    assert b'User settings, password &amp; ban' in response.data
+    assert b'Email changes' in response.data
+    assert b'Duplicate reviews' in response.data
+    assert b'Account merges' in response.data
+    assert b'Approvals &amp; scoped exemptions' in response.data
+    assert b'Email campaign &amp; holds' in response.data
+    assert f'back={account_path}'.encode() in response.data or b'back=%2Fadmin%2Fidentity%2Faccounts%2F' in response.data
     assert b'QA scoped return approved' in response.data
     assert b'SECRET_' not in response.data
     assert b'hold until' in response.data
     assert b'not a live access decision' in response.data
-    assert b'Email changes' in response.data
+    # Visiting an action from the account page renders a Back to previous page link and suppresses the full workflow bar
+    for dest in (
+        f"/admin/users/{ACCOUNTS['user1']['email']}?tab=actions&back={account_path}",
+        f"/admin/identity/email-changes?email={ACCOUNTS['user1']['email']}&back={account_path}",
+        f"/admin/identity/duplicates?q={ACCOUNTS['user1']['email']}&back={account_path}",
+        f"/admin/identity/merges?source={ACCOUNTS['user1']['email']}&back={account_path}",
+        f"/admin/identity/exemptions?q={data['user']}&status=&back={account_path}",
+    ):
+        with data['app'].app_context():
+            sub = data['admin'].get(dest)
+        assert sub.status_code == 200
+        assert b'Back to previous page' in sub.data
+        assert account_path.encode() in sub.data
+        assert b'Identity sections' not in sub.data
 
 
 def test_expiry_without_cleanup_and_retention(data):

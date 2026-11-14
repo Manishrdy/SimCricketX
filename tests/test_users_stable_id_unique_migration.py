@@ -27,11 +27,15 @@ def _seed(path, ids):
 
 def test_creates_index_and_fixes_foreign_key_mismatch(tmp_path):
     path = tmp_path / 't.db'
-    conn = _seed(path, ['a', 'b', None, None])
+    conn = _seed(path, ['a', 'b', None, ''])
     with pytest.raises(sqlite3.OperationalError, match='foreign key mismatch'):
         conn.execute('PRAGMA foreign_key_check').fetchall()
     run_migration(db, _app(path))
-    run_migration(db, _app(path))  # idempotent
+    first_ids = conn.execute("SELECT id, stable_id FROM users ORDER BY id").fetchall()
+    assert all(sid and sid.strip() for _, sid in first_ids)
+    assert len({sid for _, sid in first_ids}) == 4
+    run_migration(db, _app(path))  # idempotent: preserves backfilled IDs
+    assert conn.execute("SELECT id, stable_id FROM users ORDER BY id").fetchall() == first_ids
     conn.close()
     fresh = sqlite3.connect(str(path))
     assert fresh.execute('PRAGMA foreign_key_check').fetchall() == []

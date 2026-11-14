@@ -24,6 +24,31 @@ LABELS = {
     'missing_device': 'No usable retained device evidence', 'missing_network': 'No retained network observation',
 }
 GAPS = {'missing_device', 'missing_network'}
+FINDING_ORDER = (
+    'canonical_email', 'confirmed_device', 'fingerprint', 'open_review',
+    'malformed_email', 'email_policy', 'legacy_correction',
+    'active_ban', 'forced_verification', 'unverified_email',
+    'missing_device', 'missing_network',
+)
+GROUP_MODES = {
+    '': 'List view',
+    'finding': 'Finding',
+    'category': 'Category',
+    'domain': 'Email domain',
+    'status': 'Verification status',
+}
+CATEGORIES = (
+    ('duplicate_signals', 'Duplicate & shared-signal findings', 'Shared canonical email, device, fingerprint or open duplicate case',
+     {'canonical_email', 'confirmed_device', 'fingerprint', 'open_review'}, 'finding'),
+    ('email_policy', 'Email syntax & policy findings', 'Malformed, disposable, plus-tagged or pending legacy remediation',
+     {'malformed_email', 'email_policy', 'legacy_correction'}, 'finding'),
+    ('account_state', 'Verification & account restrictions', 'Active ban, forced verification or unverified email address',
+     {'active_ban', 'forced_verification', 'unverified_email'}, 'finding'),
+    ('coverage_gaps', 'Coverage gaps only', 'No duplicate or policy findings; missing retained device or network observations',
+     GAPS, 'gap'),
+    ('clear', 'Clear accounts', 'No findings or coverage gaps',
+     set(), 'clear'),
+)
 
 
 class ReviewUnavailable(ValueError):
@@ -215,10 +240,33 @@ def database_path():
     return path
 
 
+class _Job:
+    def __init__(self, async_result):
+        self._result = async_result
+
+    def ready(self):
+        return self._result.ready()
+
+    def get(self):
+        ok, payload = self._result.get()
+        if not ok:
+            raise payload
+        return payload
+
+
+def _run_safely(path, actor, configuration, kwargs):
+    try:
+        return True, run(path, actor, configuration, **kwargs)
+    except Exception as exc:
+        return False, exc
+
+
 def start(path, actor, configuration, **kwargs):
     # gevent's native thread pool keeps SQLite and grouping off the request hub.
+    # Capture exceptions as return values inside the worker thread so gevent's
+    # ThreadPool does not dump unhandled tracebacks to stderr before .get() runs.
     from gevent import get_hub
-    return get_hub().threadpool.spawn(run, path, actor, configuration, **kwargs)
+    return _Job(get_hub().threadpool.spawn(_run_safely, path, actor, configuration, kwargs))
 
 
 def execute(actor, configuration):
@@ -237,9 +285,145 @@ def effective(item, at):
     return item
 
 
-def read(*, q='', finding='', view='findings', page=1, at=None):
+def _build_groups(items, group_by, finding_filter=''):
+    if not group_by or not items:
+        return []
+    groups = []
+    if group_by == 'finding':
+        codes = [finding_filter] if finding_filter in LABELS else list(FINDING_ORDER)
+        for code in codes:
+            matched = [item for item in items if code in item['findings']]
+            if not matched:
+                continue
+            kind = 'gap' if code in GAPS else 'finding'
+            groups.append({
+                'key': code,
+                'title': LABELS[code],
+                'subtitle': 'Coverage gap' if kind == 'gap' else 'Actionable finding',
+                'kind': kind,
+                'count': len(matched),
+                'actionable_count': sum(1 for i in matched if i['actionable_findings']),
+                'items': matched[:50],
+                'more_count': max(0, len(matched) - 50),
+                'filter_finding': code,
+                'filter_q': '',
+                'open_default': kind == 'finding' or finding_filter == code,
+            })
+        clean = [item for item in items if not item['findings']]
+        if clean and not finding_filter:
+            groups.append({
+                'key': 'clear',
+                'title': 'No findings or coverage gaps',
+                'subtitle': 'Clear accounts',
+                'kind': 'clear',
+                'count': len(clean),
+                'actionable_count': 0,
+                'items': clean[:50],
+                'more_count': max(0, len(clean) - 50),
+                'filter_finding': '',
+                'filter_q': '',
+                'open_default': not groups,
+            })
+    elif group_by == 'category':
+        buckets = {key: [] for key, *_ in CATEGORIES}
+        for item in items:
+            codes = set(item['findings'])
+            actionable = codes - GAPS
+            if actionable & CATEGORIES[0][3]:
+                buckets['duplicate_signals'].append(item)
+            elif actionable & CATEGORIES[1][3]:
+                buckets['email_policy'].append(item)
+            elif actionable & CATEGORIES[2][3]:
+                buckets['account_state'].append(item)
+            elif codes:
+                buckets['coverage_gaps'].append(item)
+            else:
+                buckets['clear'].append(item)
+        for key, title, subtitle, _, kind in CATEGORIES:
+            matched = buckets[key]
+            if not matched:
+                continue
+            groups.append({
+                'key': key,
+                'title': title,
+                'subtitle': subtitle,
+                'kind': kind,
+                'count': len(matched),
+                'actionable_count': sum(1 for i in matched if i['actionable_findings']),
+                'items': matched[:50],
+                'more_count': max(0, len(matched) - 50),
+                'filter_finding': '',
+                'filter_q': '',
+                'open_default': kind == 'finding',
+            })
+    elif group_by == 'domain':
+        by_domain = {}
+        for item in items:
+            by_domain.setdefault(item['domain'], []).append(item)
+        ordered = sorted(
+            by_domain.items(),
+            key=lambda kv: (
+                0 if any(i['actionable_findings'] for i in kv[1]) else 1,
+                -sum(1 for i in kv[1] if i['actionable_findings']),
+                -len(kv[1]),
+                kv[0],
+            ),
+        )
+        for domain, matched in ordered:
+            act_count = sum(1 for i in matched if i['actionable_findings'])
+            kind = 'finding' if act_count else ('gap' if any(i['gap_findings'] for i in matched) else 'clear')
+            groups.append({
+                'key': domain,
+                'title': f'@{domain}' if domain != '(invalid address)' else domain,
+                'subtitle': f'{act_count} with actionable findings' if act_count else 'No actionable findings',
+                'kind': kind,
+                'count': len(matched),
+                'actionable_count': act_count,
+                'items': matched[:50],
+                'more_count': max(0, len(matched) - 50),
+                'filter_finding': '',
+                'filter_q': f'@{domain}' if domain != '(invalid address)' else '',
+                'open_default': act_count > 0 or len(ordered) <= 5,
+            })
+    elif group_by == 'status':
+        status_defs = (
+            ('banned', 'Active ban', 'Accounts currently suspended', 'finding',
+             lambda i: 'active_ban' in i['findings']),
+            ('forced_verify', 'Forced email verification', 'Accounts requiring email verification or legacy correction on sign-in', 'finding',
+             lambda i: 'active_ban' not in i['findings'] and (i.get('force_email_verify') or 'legacy_correction' in i['findings'])),
+            ('unverified', 'Unverified email', 'Email address not yet recorded as verified', 'finding',
+             lambda i: 'active_ban' not in i['findings'] and not (i.get('force_email_verify') or 'legacy_correction' in i['findings']) and not i.get('email_verified')),
+            ('verified', 'Verified & active', 'Email verified with no active ban or forced-verification hold', 'clear',
+             lambda i: 'active_ban' not in i['findings'] and not (i.get('force_email_verify') or 'legacy_correction' in i['findings']) and bool(i.get('email_verified'))),
+        )
+        for key, title, subtitle, kind, predicate in status_defs:
+            matched = [item for item in items if predicate(item)]
+            if not matched:
+                continue
+            act_count = sum(1 for i in matched if i['actionable_findings'])
+            groups.append({
+                'key': key,
+                'title': title,
+                'subtitle': subtitle,
+                'kind': 'finding' if act_count else kind,
+                'count': len(matched),
+                'actionable_count': act_count,
+                'items': matched[:50],
+                'more_count': max(0, len(matched) - 50),
+                'filter_finding': '',
+                'filter_q': '',
+                'open_default': kind == 'finding' or act_count > 0,
+            })
+    if groups and not any(g['open_default'] for g in groups):
+        groups[0]['open_default'] = True
+    return groups
+
+
+def read(*, q='', finding='', view='findings', group_by='', page=1, at=None):
     at = at or utcnow()
-    if finding and finding not in LABELS or view not in ('findings', 'all'):
+    if group_by == 'none':
+        group_by = ''
+    if finding and finding not in LABELS or view not in ('findings', 'all') or group_by not in GROUP_MODES:
         raise ValueError('Unknown report filter.')
     # Header and results are read together; a concurrent publication cannot mix them.
     with db.engine.connect() as conn:
@@ -254,17 +438,44 @@ def read(*, q='', finding='', view='findings', page=1, at=None):
         if q:
             query = query.where(User.id.contains(q, autoescape=True) | User.stable_id.contains(q, autoescape=True))
         items = []
+        raw_counts = {code: 0 for code in FINDING_ORDER}
+        unfiltered_total = 0
         for stable, payload, label in conn.execute(query):
             item = effective(json.loads(payload), at)
             codes = set(item['findings'])
-            if finding and finding not in codes or view == 'findings' and not codes:
+            if view == 'findings' and not codes:
                 continue
-            item.update(stable_id=stable, label=label)
+            unfiltered_total += 1
+            for code in codes:
+                if code in raw_counts:
+                    raw_counts[code] += 1
+            if finding and finding not in codes:
+                continue
+            actionable = {c: item['findings'][c] for c in FINDING_ORDER if c in item['findings'] and c not in GAPS}
+            gaps = {c: item['findings'][c] for c in FINDING_ORDER if c in item['findings'] and c in GAPS}
+            domain = label.rsplit('@', 1)[1].lower() if '@' in label else '(invalid address)'
+            item.update(stable_id=stable, label=label, actionable_findings=actionable, gap_findings=gaps, domain=domain)
             items.append(item)
         items.sort(key=lambda x: (0 if set(x['findings'])-GAPS else 1 if x['findings'] else 2,
                                  min((RANKS[c] for c in x['findings'] if c in RANKS), default=4), x['stable_id']))
+        finding_counts = [
+            {'code': code, 'label': LABELS[code], 'count': raw_counts[code], 'is_gap': code in GAPS}
+            for code in FINDING_ORDER if raw_counts.get(code)
+        ]
+        actionable_total = sum(1 for item in items if item['actionable_findings'])
+        groups = _build_groups(items, group_by, finding)
         offset = (page-1)*30
-        return {'header': header, 'items': items[offset:offset+30], 'total': len(items), 'more': len(items)>offset+30}
+        return {
+            'header': header,
+            'items': items[offset:offset+30],
+            'total': len(items),
+            'more': len(items) > offset+30,
+            'actionable_total': actionable_total,
+            'unfiltered_total': unfiltered_total,
+            'finding_counts': finding_counts,
+            'group_by': group_by,
+            'groups': groups,
+        }
 
 
 def cleanup(conn, at):

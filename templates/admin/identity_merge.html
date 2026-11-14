@@ -1,10 +1,25 @@
 {% extends 'admin/layout.html' %}
 {% block title %}Account merges · Admin{% endblock %}
-{% block extra_css %}{{ super() }}<link rel="stylesheet" href="{{ url_for('static',filename='css/admin_identity.css', v='identity-3') }}">{% endblock %}
+{% block extra_css %}{{ super() }}<link rel="stylesheet" href="{{ url_for('static',filename='css/admin_identity.css', v='identity-6') }}">{% endblock %}
+{% set raw_back = request.args.get('back', '') %}
+{% set safe_back = raw_back if raw_back.startswith('/admin/') and not raw_back.startswith('//') else '' %}
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
 {% block admin_content %}
 <div class="identity-workspace identity-hub identity-screen">
-<header class="identity-header"><div><p class="identity-eyebrow">Identity administration</p><h1>Account merges</h1><p>Establish common ownership, verify mailboxes and review every change.</p></div></header>
+<header class="identity-header">
+  <div>
+    <p class="identity-eyebrow">Identity administration</p>
+    <h1>Account merges</h1>
+    <p>Establish common ownership, verify mailboxes and review every change.</p>
+  </div>
+  <div class="identity-header-actions">
+    {% if view!='overview' %}
+    <a class="identity-button identity-button-header" href="{{ safe_back or url_for('identity_merge.overview') }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> {{ 'Back to previous page' if safe_back else 'All merge requests' }}</a>
+    {% else %}
+    <a class="identity-button identity-button-header" href="{{ safe_back or url_for('admin_identity.overview') }}" onclick="if (!this.dataset.hasBack && window.history.length > 1) { window.history.back(); return false; }" {% if safe_back %}data-has-back="1"{% endif %}><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to previous page</a>
+    {% endif %}
+  </div>
+</header>
 {% include 'admin/partials/identity_nav.html' %}
 {% if error %}<section class="identity-card" role="alert">{{ error }}</section>{% endif %}
 {% if view=='overview' %}
@@ -12,23 +27,23 @@
 <section class="identity-card"><h2>Request a merge</h2><p>Admin accounts are excluded. The survivor keeps its email, password and profile. Mailbox proofs expire after 24 hours. No accounts change at this step.</p>
 <form method="post" class="identity-form identity-form-grid">{{ csrf() }}
 <label>Duplicate review number<input name="case_key" type="number" min="1" required value="{{ request.args.get('case','') }}"></label>
-<label>Source email — login to retire<input name="source" required maxlength="254"></label>
+<label>Source email — login to retire<input name="source" value="{{ request.args.get('source','') }}" required maxlength="254"></label>
 <label>Survivor email — login to keep<input name="survivor" type="email" required maxlength="254"></label>
 <label>Common ownership evidence and reason<textarea name="reason" minlength="20" maxlength="2000" rows="3" required></textarea></label>
 <label>Source mailbox recovery exception (optional)<textarea name="recovery" minlength="20" maxlength="2000" rows="3" placeholder="Only if the source mailbox is unavailable: document how ownership was established. Never include passwords or tokens."></textarea></label>
 <label class="identity-check"><input type="checkbox" name="ownership" value="yes" required>I established common ownership. Shared IP, device or fingerprint alone is insufficient.</label>
-<button class="identity-button">Request mailbox confirmations</button></form></section>
-</div><section class="identity-request-list"><div class="identity-section-heading"><p class="identity-eyebrow">Tracking</p><h2>Requests and receipts</h2></div>
-{% for row in rows %}<article class="identity-card"><a href="{{ url_for('identity_merge.detail',mid=row.id) }}">{{ row.source_address }} → {{ row.survivor_address }}</a><p>{{ 'expired' if row.status=='pending' and row.expires_at<=at else row.status }} · {{ row.created_at|localtime }}</p></article>{% else %}<div class="identity-empty"><i class="far fa-folder-open" aria-hidden="true"></i><p>No merge requests.</p></div>{% endfor %}
+<button class="identity-button" type="submit">Request mailbox confirmations</button></form></section>
+</div><section class="identity-request-list"><div class="identity-section-heading"><div><p class="identity-eyebrow">Tracking</p><h2>Requests and receipts</h2></div></div>
+{% for row in rows %}<article class="identity-card"><div class="identity-row"><a href="{{ url_for('identity_merge.detail',mid=row.id) }}">{{ row.source_address }} → {{ row.survivor_address }}</a><span class="a-badge">{{ 'expired' if row.status=='pending' and row.expires_at<=at else row.status }}</span></div><p>{{ row.created_at|localtime }}</p></article>{% else %}<div class="identity-empty"><i class="far fa-folder-open" aria-hidden="true"></i><p>No merge requests.</p></div>{% endfor %}
 <div class="identity-pagination">{% if page>1 %}<a href="{{ url_for('identity_merge.overview',page=page-1) }}">Previous</a>{% endif %}<span>Page {{ page }}</span>{% if more %}<a href="{{ url_for('identity_merge.overview',page=page+1) }}">Next</a>{% endif %}</div>
 </section></div>
 {% else %}
-<section class="identity-card"><h2>{{ row.source_address }} → {{ row.survivor_address }}</h2>
-<p>Status: {{ 'expired' if row.status=='pending' and row.expires_at<=at else row.status }}</p><p>Ownership evidence: {{ row.reason }}</p>
+<section class="identity-card"><div class="identity-row"><h2>{{ row.source_address }} → {{ row.survivor_address }}</h2><span class="a-badge">{{ 'expired' if row.status=='pending' and row.expires_at<=at else row.status }}</span></div>
+<p>Ownership evidence: {{ row.reason }}</p>
 {% if row.recovery %}<p>Source recovery exception: {{ row.recovery }}</p>{% endif %}
 <p>Source mailbox: {{ 'recovery approved' if row.recovery else ('verified' if row.source_verified else 'waiting') }}. Survivor mailbox: {{ 'verified' if row.survivor_verified else 'waiting' }}.</p><p>Verification delivery: {{ row.delivery }}. Expires {{ row.expires_at|localtime }}.</p>
 {% if row.delivery=='failed' %}<p role="alert">Delivery failed. Cancel and create a new request to retry.</p>{% endif %}
-{% if row.status=='pending' and row.expires_at>at %}<form method="post">{{ csrf() }}<button class="identity-button" name="action" value="preview">Preview merge</button> <button class="identity-button identity-button-secondary" name="action" value="cancel">Cancel request</button></form>{% endif %}</section>
+{% if row.status=='pending' and row.expires_at>at %}<form method="post" class="identity-actions">{{ csrf() }}<button class="identity-button" name="action" value="preview">Preview merge</button> <button class="identity-button identity-button-secondary" name="action" value="cancel">Cancel request</button></form>{% endif %}</section>
 {% if plan %}<section class="identity-card"><h2>Review merge impact</h2>
 <p><strong>{{ plan.source }} loses login access. {{ plan.survivor }} keeps its password, profile and stable account identity.</strong> Both accounts are signed out and their outstanding security tokens revoked. Source network exemptions are revoked; the stronger Community mute is preserved.</p>
 <p>All source private Community history becomes accessible to the survivor. Distinct gameplay objects remain distinct. Historical provenance is retained in the receipt. Matching device sightings are combined, preserving their earliest and latest timestamps. Pending email changes and signup approvals are cancelled.</p>
@@ -38,7 +53,7 @@
 <h3>Renames ({{ plan.renames|length }})</h3>{% for item in plan.renames %}<p>{{ item.table|replace('_',' ') }} · {{ item.key }} · {{ item.field }}: {{ item.old }} → {{ item.new }}</p>{% else %}<p>No naming conflicts.</p>{% endfor %}
 <h3>Player pool links ({{ plan.relinks|length }})</h3><p>These squad/auction references move to the retained override. Existing ratings and historical statistics stay unchanged.</p>{% for item in plan.relinks %}<p>{{ item.table|replace('_',' ') }} · {{ item.key }} · override {{ item.source_id }} → {{ item.survivor_id }}</p>{% else %}<p>No player pool links need updating.</p>{% endfor %}
 <h3>Discarded duplicate rows ({{ plan.losses|length }})</h3><p>Each listed source row is discarded; the survivor's value wins.</p>{% for item in plan.losses %}<p>{{ item.table|replace('_',' ') }} · source {{ item.key }} → survivor {{ item.survivor_key }} · {{ item.reason }}</p>{% else %}<p>No conflicting rows are discarded.</p>{% endfor %}
-<form method="post" class="identity-form identity-form-grid">{{ csrf() }}<input type="hidden" name="action" value="apply"><input type="hidden" name="token" value="{{ token }}"><label>Type the exact survivor email<input name="confirmed_email" required autocomplete="off"></label><label class="identity-check"><input type="checkbox" name="confirmed" value="yes" required>I reviewed common ownership, private-history access, renames, data losses and recovery limitations.</label><p>Preview expires in 15 minutes. Changed data requires a fresh preview.</p><button class="identity-button identity-button-danger">Confirm account merge</button></form></section>{% endif %}
-{% if receipt %}<section class="identity-card"><h2>Merge completed</h2><p>Completed {{ row.completed_at|localtime }}. Source login is retired and both accounts' sessions revoked.</p><p>Receipt: {{ row.id }} · Plan version {{ receipt.version }}</p><p>{{ receipt.renames|length }} renamed fields · {{ receipt.losses|length }} discarded duplicate rows.</p><a href="{{ url_for('admin_user_detail',user_email=row.survivor_address) }}">Open survivor account</a></section>{% endif %}
+<form method="post" class="identity-form identity-form-grid">{{ csrf() }}<input type="hidden" name="action" value="apply"><input type="hidden" name="token" value="{{ token }}"><label>Type the exact survivor email<input name="confirmed_email" required autocomplete="off"></label><label class="identity-check"><input type="checkbox" name="confirmed" value="yes" required>I reviewed common ownership, private-history access, renames, data losses and recovery limitations.</label><p>Preview expires in 15 minutes. Changed data requires a fresh preview.</p><button class="identity-button identity-button-danger" type="submit">Confirm account merge</button></form></section>{% endif %}
+{% if receipt %}<section class="identity-card"><div class="identity-row"><h2>Merge completed</h2><a class="identity-button identity-button-secondary identity-button-sm" href="{{ url_for('admin_user_detail',user_email=row.survivor_address) }}">Open survivor account</a></div><p>Completed {{ row.completed_at|localtime }}. Source login is retired and both accounts' sessions revoked.</p><p>Receipt: {{ row.id }} · Plan version {{ receipt.version }}</p><p>{{ receipt.renames|length }} renamed fields · {{ receipt.losses|length }} discarded duplicate rows.</p></section>{% endif %}
 {% endif %}</div>
 {% endblock %}

@@ -114,14 +114,31 @@ def test_report_expiry_purge_and_user_deletion(data):
 
 
 def test_current_labels_search_and_get_is_read_only(data):
+    user = data[4][0]
+    db.session.execute(update(m.User).where(m.User.stable_id == user).values(email_verified=False, force_email_verify=True))
+    db.session.commit()
     run(data)
     before=digest(data[2],reports=True)
     # Label resolution uses the live table, verified without mutating shared QA email.
     assert len(review.read(q=ACCOUNTS['user1']['email'],view='all',at=AT)['items'])==1
     assert len(review.read(q=data[4][0],view='all',at=AT)['items'])==1
     assert review.read(q='%',view='all',at=AT)['items']==[]
+    by_finding = review.read(group_by='finding', at=AT)
+    assert by_finding['actionable_total'] == 1
+    assert [g['key'] for g in by_finding['groups'][:2]] == ['forced_verification', 'unverified_email']
+    by_category = review.read(group_by='category', at=AT)
+    assert [g['key'] for g in by_category['groups']] == ['account_state', 'coverage_gaps']
+    assert sum(g['count'] for g in by_category['groups']) == 5
+    by_domain = review.read(group_by='domain', at=AT)
+    assert by_domain['groups'][0]['key'] == 'example.com' and by_domain['groups'][0]['count'] == 5
+    by_status = review.read(group_by='status', at=AT)
+    assert [g['key'] for g in by_status['groups']] == ['forced_verify', 'verified']
+    for mode in ('finding', 'category', 'domain', 'status'):
+        resp = data[1].get(f'/admin/identity/account-review?group_by={mode}')
+        assert resp.status_code == 200 and b'review-group' in resp.data
     assert data[1].get('/admin/identity/account-review?view=bad').status_code==400
     assert data[1].get('/admin/identity/account-review?finding=bad').status_code==400
+    assert data[1].get('/admin/identity/account-review?group_by=bad').status_code==400
     assert data[1].get('/admin/identity/account-review?page=bad').status_code==400
     assert digest(data[2],reports=True)==before
 
@@ -362,11 +379,16 @@ def test_real_30_account_pages_and_current_label_resolution(synthetic,monkeypatc
 
 
 def test_missing_stable_id_refuses_partial_report(synthetic,monkeypatch):
+    from gevent import get_hub
     monkeypatch.setattr(review,'utcnow',lambda:AT)
     with sqlite3.connect(synthetic) as conn:
         conn.execute("INSERT INTO users VALUES ('fixture@example.com',NULL,1,0,0,NULL)")
     with pytest.raises(review.ReviewUnavailable,match='distinct stable IDs'):
         review.snapshot(synthetic,{},review.Deadline(60))
+    with patch.object(get_hub(),'handle_error') as handle_error:
+        with pytest.raises(review.ReviewUnavailable,match='distinct stable IDs'):
+            review.start(synthetic,'actor',{}).get()
+        assert not handle_error.called
 
 
 def test_timeout_during_publication_rolls_back(data,monkeypatch):

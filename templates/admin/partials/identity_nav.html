@@ -1,7 +1,46 @@
 {% set current = request.endpoint %}
+{% set raw_back = request.args.get('back', '') %}
+{% set safe_back = raw_back if raw_back.startswith('/admin/') and not raw_back.startswith('//') else '' %}
+{% if current != 'admin_identity.account' %}
+{% if safe_back.startswith('/admin/identity/accounts/') %}
+<nav class="identity-tabs identity-nav identity-back-bar" aria-label="Account return navigation">
+  <a class="identity-button identity-button-secondary identity-button-sm" href="{{ safe_back }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to account</a>
+  <span class="identity-back-bar-note">Opened from an individual account review. Use the back button to return to the account page.</span>
+</nav>
+{% else %}
 {% set active = {'admin_identity.detail':'admin_identity.duplicates','admin_identity.scan_preview':'admin_identity.duplicates','admin_identity.scan_import':'admin_identity.duplicates','identity_signup.detail':'identity_signup.queue','identity_network.detail':'identity_network.overview','identity_email.detail':'identity_email.overview','identity_campaign.detail':'identity_campaign.overview','identity_merge.detail':'identity_merge.overview'}.get(current,current) %}
 <nav class="identity-tabs identity-nav" aria-label="Identity sections">
-{% for group,links in [('Workflows',[('admin_identity.overview','Overview'),('admin_identity.account_review_report','Account review'),('admin_identity.duplicates','Duplicate reviews'),('identity_signup.queue','Signup requests'),('identity_signup.attempts','Blocked attempts'),('identity_network.overview','Network access'),('identity_email.overview','Email changes'),('identity_campaign.overview','Email campaign'),('identity_merge.overview','Account merges')]),('Oversight',[('admin_identity.approvals','Approvals'),('admin_identity.exemptions','Exemptions'),('admin_identity.audit','Activity & receipts'),('admin_identity.policy','Policy status')])] %}
-<div class="identity-nav-group"><span class="identity-nav-label">{{ group }}</span><div class="identity-nav-links">{% for endpoint,label in links %}<a href="{{ url_for(endpoint) }}" {% if active == endpoint %}aria-current="{{ 'page' if current==endpoint else 'location' }}"{% endif %}>{{ label }}</a>{% endfor %}</div></div>
-{% endfor %}
+  <div class="identity-nav-group">
+    <span class="identity-nav-label">Workflows</span>
+    <div class="identity-nav-links">
+      {% for endpoint,label,icon in [
+        ('admin_identity.overview','Overview','fa-th-large'),
+        ('admin_identity.account_review_report','Account review','fa-user-check'),
+        ('admin_identity.duplicates','Duplicate reviews','fa-clone'),
+        ('identity_signup.queue','Signup requests','fa-user-plus'),
+        ('identity_signup.attempts','Blocked attempts','fa-ban'),
+        ('identity_network.overview','Network access','fa-network-wired'),
+        ('identity_email.overview','Email changes','fa-envelope'),
+        ('identity_campaign.overview','Email campaign','fa-calendar-check'),
+        ('identity_merge.overview','Account merges','fa-code-merge')
+      ] %}
+      <a href="{{ url_for(endpoint) }}" {% if active == endpoint %}aria-current="{{ 'page' if current==endpoint else 'location' }}"{% endif %}><i class="fas {{ icon }}" aria-hidden="true"></i><span>{{ label }}</span></a>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="identity-nav-group identity-nav-oversight">
+    <span class="identity-nav-label">Oversight</span>
+    <div class="identity-nav-links">
+      {% for endpoint,label,icon in [
+        ('admin_identity.approvals','Approvals','fa-check-circle'),
+        ('admin_identity.exemptions','Exemptions','fa-shield-halved'),
+        ('admin_identity.audit','Activity & receipts','fa-clock-rotate-left'),
+        ('admin_identity.policy','Policy status','fa-sliders')
+      ] %}
+      <a href="{{ url_for(endpoint) }}" {% if active == endpoint %}aria-current="{{ 'page' if current==endpoint else 'location' }}"{% endif %}><i class="fas {{ icon }}" aria-hidden="true"></i><span>{{ label }}</span></a>
+      {% endfor %}
+    </div>
+  </div>
 </nav>
+{% endif %}
+{% endif %}
