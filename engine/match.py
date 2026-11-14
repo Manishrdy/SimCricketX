@@ -572,6 +572,44 @@ class Match(CaptaincyMixin, HundredPresentation):
             return self.data["team_home"].split("_")[0]
         return self.data["team_away"].split("_")[0]
 
+    def get_live_innings(self):
+        """Players for the upcoming delivery, independent of the ball just bowled."""
+        decision = self.pending_decision or {}
+        decision_type = decision.get("type")
+        if decision_type == "fc_follow_on" or self._innings_should_end():
+            return {"status": "break"}
+
+        striker = (self.current_striker or {}).get("name")
+        non_striker = (self.current_non_striker or {}).get("name")
+        incoming_slot = None
+        next_batter = None
+        if decision_type == "next_batter":
+            # The engine has installed a provisional batter. The slot stays
+            # vacant in the sidebar until the user confirms the replacement.
+            incoming_slot = decision["context"]["incoming_slot"]
+            if incoming_slot == "striker":
+                striker = None
+            else:
+                non_striker = None
+        elif self.remaining_batter_indices:
+            next_batter = self.batting_team[min(self.remaining_batter_indices)]["name"]
+
+        bowler = None
+        if self.bowler_selected_for_over == self.current_over:
+            bowler = (self.current_bowler or {}).get("name")
+
+        return {
+            "status": "live",
+            "innings": self.fc_innings if self.is_fc else self.innings,
+            "batting_team": self._get_team_name(self.batting_team),
+            "striker": striker,
+            "non_striker": non_striker,
+            "bowler": bowler,
+            "next_batter": next_batter,
+            "selecting_batter": incoming_slot,
+            "selecting_bowler": decision_type == "next_bowler",
+        }
+
     def _balls_to_overs_notation(self, total_balls):
         return str(total_balls) if self.is_hundred else balls_to_overs_str(total_balls)
 
@@ -7250,6 +7288,8 @@ class Match(CaptaincyMixin, HundredPresentation):
             apply_result, status_code = self.submit_pending_decision(auto_index)
             if status_code != 200:
                 return {"error": apply_result.get("error", "Failed to auto-resolve pending decision")}
+            if apply_result.get("transition"):
+                return apply_result["transition"]
 
         # A completed FC chase takes precedence over weather, intervals and
         # stumps, including when the winning run came off the day's last ball.

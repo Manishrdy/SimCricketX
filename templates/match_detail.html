@@ -10,66 +10,21 @@
 {% endblock %}
 
 {% block content %}
-{% set role_abbr = {'Batsman': 'BAT', 'Bowler': 'BOWL', 'All-rounder': 'AR', 'Wicketkeeper': 'WK'} %}
 <div class="match-layout">
-    <!-- Sidebar: Match Info & Toss -->
-    <div class="info-card">
-        <div class="match-meta-grid">
-            {# Chips ellipsize in this narrow sidebar, so the full value goes
-               in the title — same as the stadium and pitch chips below. #}
-            {% set weather_text = weather_label ~ (' · Day/Night' if match.get('is_day_night') else '') %}
-            <div class="meta-item" title="Format: {{ format_label }}">
-                <span class="meta-icon"><i class="fa-solid fa-stopwatch"></i></span>
-                <span class="meta-value">{{ format_label }}</span>
-            </div>
-            {% if weather_label %}
-            <div class="meta-item" title="Forecast: {{ weather_text }}">
-                <span class="meta-icon"><i class="fa-solid fa-cloud-sun"></i></span>
-                <span class="meta-value">{{ weather_label }}{% if match.get('is_day_night') %} &middot; D/N{% endif %}</span>
-            </div>
-            {% endif %}
-            <div class="meta-item" title="{{ match.stadium }}">
-                <span class="meta-icon"><i class="fa-solid fa-map-location-dot"></i></span>
-                <span class="meta-value">{{ match.stadium }}</span>
-            </div>
-            <div class="meta-item" title="{{ match.pitch }}">
-                <span class="meta-icon"><i class="fa fa-paint-roller"></i></span>
-                <span class="meta-value">{{ match.pitch }}</span>
-            </div>
+    <aside class="info-card" aria-labelledby="live-innings-title">
+        <h2 id="live-innings-title">Live innings</h2>
+        <p id="live-innings-status" role="status" hidden></p>
+        <div id="live-innings-toss" class="toss-section">
+            <button id="spin-toss" type="button" class="impact-btn primary toss-btn">Spin Coin</button>
+            <div id="toss-result" role="status">Toss pending</div>
         </div>
-
-        <div class="toss-section">
-            <h3><i class="fa-solid fa-coins" aria-hidden="true"></i> Toss</h3>
-            <button id="spin-toss" class="impact-btn primary toss-btn">Spin Coin</button>
-            <div id="toss-result">Pending&hellip;</div>
-        </div>
-
-        <div class="team-list-container">
-            <div class="team-list-header" style="--team-accent:#3b82f6;">
-                <span class="team-dot"></span>{{ match.team_home.split('_')[0] }} XI
-            </div>
-            <ul class="xi-list" id="home-xi-display">
-                {% for p in match.playing_xi.home %}
-                <li data-role="{{ p.role }}">
-                    <span class="xi-role">{{ role_abbr.get(p.role, p.role) }}</span>
-                    <span class="xi-name">{{ p.name }}{% if p.is_captain %} <span class="xi-captain" title="Captain">C</span>{% endif %}</span>
-                </li>
-                {% endfor %}
-            </ul>
-
-            <div class="team-list-header" style="--team-accent:#ef4444;">
-                <span class="team-dot"></span>{{ match.team_away.split('_')[0] }} XI
-            </div>
-            <ul class="xi-list" id="away-xi-display">
-                {% for p in match.playing_xi.away %}
-                <li data-role="{{ p.role }}">
-                    <span class="xi-role">{{ role_abbr.get(p.role, p.role) }}</span>
-                    <span class="xi-name">{{ p.name }}{% if p.is_captain %} <span class="xi-captain" title="Captain">C</span>{% endif %}</span>
-                </li>
-                {% endfor %}
-            </ul>
-        </div>
-    </div>
+        <dl id="live-innings-players" hidden>
+            <div><dt>Striker</dt><dd id="live-innings-striker">—</dd></div>
+            <div><dt>Non-striker</dt><dd id="live-innings-non-striker">—</dd></div>
+            <div><dt>Bowler</dt><dd id="live-innings-bowler">—</dd></div>
+            <div><dt>Next in order</dt><dd id="live-innings-next">—</dd></div>
+        </dl>
+    </aside>
 
     <!-- Main Panel: Score & Commentary -->
     <div class="main-panel">
@@ -131,6 +86,30 @@
                 </div>
                 <div class="sb-target" id="sb-target" style="display:none;"></div>
             </div>
+            <details class="match-info">
+                <summary>Match info</summary>
+                <div class="match-meta-grid">
+                    {% set weather_text = weather_label ~ (' · Day/Night' if match.get('is_day_night') else '') %}
+                    <div class="meta-item" title="Format: {{ format_label }}">
+                        <span class="meta-icon"><i class="fa-solid fa-stopwatch"></i></span>
+                        <span class="meta-value">{{ format_label }}</span>
+                    </div>
+                    {% if weather_label %}
+                    <div class="meta-item" title="Forecast: {{ weather_text }}">
+                        <span class="meta-icon"><i class="fa-solid fa-cloud-sun"></i></span>
+                        <span class="meta-value">{{ weather_label }}{% if match.get('is_day_night') %} &middot; D/N{% endif %}</span>
+                    </div>
+                    {% endif %}
+                    <div class="meta-item" title="{{ match.stadium }}">
+                        <span class="meta-icon"><i class="fa-solid fa-map-location-dot"></i></span>
+                        <span class="meta-value">{{ match.stadium }}</span>
+                    </div>
+                    <div class="meta-item" title="{{ match.pitch }}">
+                        <span class="meta-icon"><i class="fa fa-paint-roller"></i></span>
+                        <span class="meta-value">{{ match.pitch }}</span>
+                    </div>
+                </div>
+            </details>
         </div>
 
         <div class="controls-bar">
@@ -302,13 +281,12 @@
                 border: 1px solid #333;
                 border-radius: 8px;
                 overflow: hidden;
-                box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
                 display: flex;
                 flex-direction: column;
                 flex: 1 1 auto;
                 min-height: 0;
                 height: 100%;
-                max-height: 100%;
                 margin-top: 0;
                 font-family: 'JetBrains Mono', 'Fira Code', monospace;
             }
@@ -321,6 +299,7 @@
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
+                flex-shrink: 0;
             }
 
             .window-controls {
@@ -424,8 +403,6 @@
                 font-size: 0.9rem;
                 line-height: 1.6;
                 min-height: 0;
-                height: 100%;
-                max-height: 100%;
             }
 
             /* Syntax Highlighting Vibe */
@@ -552,6 +529,33 @@
             <div class="impact-actions" style="margin-top:1rem;">
                 <button class="impact-btn" id="decision-auto-btn" style="margin-right:0.5rem;">Switch to Auto & Continue</button>
                 <button class="impact-btn primary" id="decision-submit-btn" disabled>Confirm Selection</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manual-mode Toss Popup -->
+<div class="overlay toss-overlay" id="toss-overlay" role="dialog" aria-modal="true" aria-labelledby="toss-title" data-focus-dialog data-viewport-dialog>
+    <div class="toss-card">
+        <div class="toss-live"><span class="toss-live-dot"></span> Toss</div>
+        <h2 class="toss-title" id="toss-title">Call the toss</h2>
+        <p class="toss-sub" id="toss-sub">The coin is in the air.</p>
+        <div class="toss-coin-stage" aria-hidden="true">
+            <div class="toss-coin" id="toss-coin">
+                <span class="toss-face toss-face-h">H</span>
+                <span class="toss-face toss-face-t">T</span>
+            </div>
+        </div>
+        <div class="toss-calls" id="toss-calls">
+            <button type="button" class="toss-call-btn" data-call="Heads"><span class="toss-call-mark">H</span>Heads</button>
+            <button type="button" class="toss-call-btn" data-call="Tails"><span class="toss-call-mark">T</span>Tails</button>
+        </div>
+        <div class="toss-verdict" id="toss-verdict" hidden>
+            <div class="toss-verdict-head" id="toss-verdict-head"></div>
+            <p class="toss-verdict-reason" id="toss-verdict-reason"></p>
+            <div class="toss-calls toss-picks" id="toss-picks">
+                <button type="button" class="toss-call-btn" data-decision="Bat"><span class="toss-call-mark"><i class="fa-solid fa-baseball-bat-ball"></i></span>Bat first</button>
+                <button type="button" class="toss-call-btn" data-decision="Bowl"><span class="toss-call-mark"><i class="fa-solid fa-circle"></i></span>Bowl first</button>
             </div>
         </div>
     </div>

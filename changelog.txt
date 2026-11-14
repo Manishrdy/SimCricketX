@@ -1,3 +1,9 @@
+[3.0.3] 2026-11-14
+- Expanded ball-by-ball commentary with 228 new lines across all outcome pools in the commentary pack
+- Replaced static Playing XI lists with a live innings sidebar that shows the striker, non-striker, bowler and next batter in order, and resets between innings.
+- Added a broadcast-style toss popup in Manual mode: call Heads or Tails, watch the coin land, then choose to bat or bowl for the winning side, with a pitch-based suggestion shown
+- Replaced the one-line toss commentary with a broadcast-style segment: a pitch report that blends stadium conditions, the toss and both captains' views
+
 [3.0.2] 2026-10-17
 - Made First-Class collapses fairer for incoming batters: they still face the usual difficult settling-in period and team collapse pressure, but no longer receive an extra penalty simply for arriving during a collapse, including against the new ball or on a worn pitch
 - Made difficult T20 and List A chases less prone to runaway collapses: desperate hitting still brings more scoring chances and wicket risk, but overlapping pressure effects no longer compound as severely

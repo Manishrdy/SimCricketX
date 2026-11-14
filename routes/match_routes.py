@@ -15,7 +15,8 @@ from datetime import datetime, timedelta
 from services.match_delivery import MatchDelivery, DeliveryConflict
 
 from engine.format_config import get_any_format as _get_any_format, resolve_scheduled_overs, format_label as cricket_format_label
-from engine.toss import decide_toss, home_bats_first
+from engine.toss_commentary import build_toss_commentary
+from engine.toss import correct_decision, decide_toss, explain_decision, home_bats_first
 from flask import flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import or_
@@ -820,7 +821,20 @@ def register_match_routes(
 
         return render_template(
             "match_detail.html", match=public_match_data(match_data),
+            resume_mode=bool(match_data.get("fc_snapshot") or match_data.get("hundred_snapshot")
+                             or match_data.get("super_over_snapshot")),
             show_support_note=_support_note_due(), **_match_header_meta(match_data))
+
+    def _live_innings_snapshot(match, outcome=None):
+        outcome = outcome or {}
+        if outcome.get("match_over"):
+            return {"status": "complete"}
+        if (outcome.get("match_tied") or outcome.get("super_over_in_progress")
+                or outcome.get("super_over_required")):
+            return {"status": "tiebreak"}
+        if outcome.get("innings_end"):
+            return {"status": "break"}
+        return match.get_live_innings()
 
     @app.route("/match/<match_id>/live-state", methods=["GET"])
     @login_required
@@ -834,7 +848,7 @@ def register_match_routes(
         if not match:
             db_match = DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first()
             if db_match:
-                return jsonify({"status": "completed"})
+                return jsonify({"status": "completed", "live_innings": {"status": "complete"}})
             # Not in memory — but a persisted super-over OR FC snapshot means
             # this match CAN be rebuilt. Restore it so the frontend resumes
             # play instead of offering a fresh toss (which would silently
@@ -870,7 +884,7 @@ def register_match_routes(
                 return jsonify({"error": str(exc), "reload_required": True}), 409
 
         if match.data.get("current_state") == "completed":
-            return jsonify({"status": "completed"})
+            return jsonify({"status": "completed", "live_innings": {"status": "complete"}})
 
         # Super-over state (innings >= 4): return a super-over-specific snapshot so
         # the frontend can rebuild the right modal / resume the ball loop instead
@@ -878,9 +892,10 @@ def register_match_routes(
         if getattr(match, "innings", 1) >= 4:
             so_state = match.get_super_over_resume_state()
             if so_state.get("phase") == "complete":
-                return jsonify({"status": "completed"})
+                return jsonify({"status": "completed", "live_innings": {"status": "complete"}})
             return jsonify({
                 "status": "in_progress",
+                "live_innings": {"status": "tiebreak"},
                 "super_over": so_state,
                 "match_format": match.data.get("match_format", "T20"),
                 "commentary_log": getattr(match, "commentary_replay_log", []),
@@ -901,9 +916,22 @@ def register_match_routes(
 
         batting_name = match._get_team_name(match.batting_team) if hasattr(match, "_get_team_name") else ""
         bowling_name = match._get_team_name(match.bowling_team) if hasattr(match, "_get_team_name") else ""
+        pending_card = match.pending_interval_card
+        decision = match.pending_decision
+        pending_selection = None
+        if decision:
+            pending_selection = {
+                "decision_type": decision["type"],
+                "decision_context": decision["context"],
+                "decision_options": decision["options"],
+                "score": match.score,
+                "wickets": match.wickets,
+            }
 
         return jsonify({
             "status": "in_progress",
+            "live_innings": _live_innings_snapshot(match, pending_card["payload"] if pending_card else None),
+            "pending_selection": pending_selection,
             # match.innings stays 1 for the whole match for FC by design
             # (it's the super-over-overloaded counter) — report fc_innings
             # instead so a reconnecting client sees the real innings number.
@@ -942,11 +970,9 @@ def register_match_routes(
             "match_format": match.data.get("match_format", "T20"),
             "commentary_log": getattr(match, "commentary_replay_log", []),
             "captaincy": match.captaincy_status(),
-            # An interval / stumps / innings-end card the client never
-            # confirmed seeing — normally because the socket died during the
-            # long call that built it. The client replays it before resuming
-            # the ball loop, then acks it.
-            "pending_card": getattr(match, "pending_interval_card", None),
+            # Interval cards awaiting acknowledgment, or an innings-end card
+            # that can be reopened until the next innings starts.
+            "pending_card": pending_card,
             "total_overs": getattr(match, "overs", None),
             "original_overs": getattr(match, "original_overs", None),
             "scheduled_overs": match.data.get("scheduled_overs"),
@@ -1208,8 +1234,25 @@ def register_match_routes(
 
             team_home = match_data["team_home"].split('_')[0]
             team_away = match_data["team_away"].split('_')[0]
+            # Manual mode lets the user make the away captain's call in the
+            # toss popup; anything else keeps the call chosen at match setup.
+            _body = request.get_json(silent=True) or {}
+            _call = str(_body.get("call", "")).strip().capitalize()
+            if _call in ("Heads", "Tails"):
+                match_data["toss"] = _call
             toss_choice = match_data["toss"]
-            toss_result = random.choice(["Heads", "Tails"])
+            # Manual mode is two requests: "flip" lands the coin and names the
+            # winner without deciding anything; the follow-up carries the
+            # user's Bat/Bowl pick and reuses that stored coin.
+            _phase = str(_body.get("phase", "")).strip().lower()
+            _pick = str(_body.get("decision", "")).strip().capitalize()
+            _pick = _pick if _pick in ("Bat", "Bowl") else None
+            _pending = match_data.get("toss_pending")
+            if _pick and not _pending:
+                return jsonify({"error": "Flip the coin before choosing"}), 400
+            toss_result = _pending["coin"] if _pick else random.choice(["Heads", "Tails"])
+            if _pick:
+                toss_choice = _pending["call"]
             
             # Get captain names with fallback logic
             def get_captain_name(team_players, team_short_code):
@@ -1241,7 +1284,25 @@ def register_match_routes(
             _toss_fmt = _get_any_format(
                 match_data.get("match_format", "T20"), days=match_data.get("days"), scheduled_overs=match_data.get("scheduled_overs")
             )
-            toss_decision = decide_toss(
+            _public_forecast = (match_data.get("conditions_snapshot") or {}).get("public_forecast")
+            if _phase == "flip" and not _pick:
+                _recommended = correct_decision(
+                    _toss_fmt, match_data.get("pitch"),
+                    is_day_night=bool(match_data.get("is_day_night", False)),
+                    venue_forecast=_public_forecast)
+                match_data["toss_pending"] = {"coin": toss_result, "call": toss_choice, "winner": toss_winner}
+                with open(match_path, "w") as f:
+                    json.dump(match_data, f, indent=2)
+                return jsonify({
+                    "toss_winner": toss_winner, "toss_call": toss_choice, "toss_coin": toss_result,
+                    "toss_caller": away_captain,
+                    "toss_recommended": _recommended,
+                    "toss_reason": explain_decision(
+                        _recommended, _toss_fmt, match_data.get("pitch"),
+                        is_day_night=bool(match_data.get("is_day_night", False)),
+                        venue_forecast=_public_forecast),
+                })
+            toss_decision = _pick or decide_toss(
                 _toss_fmt,
                 match_data.get("pitch"),
                 is_day_night=bool(match_data.get("is_day_night", False)),
@@ -1252,6 +1313,14 @@ def register_match_routes(
 
             match_data["toss_winner"] = toss_winner
             match_data["toss_decision"] = toss_decision
+            match_data.pop("toss_pending", None)
+            toss_reason = explain_decision(
+                toss_decision,
+                _toss_fmt,
+                match_data.get("pitch"),
+                is_day_night=bool(match_data.get("is_day_night", False)),
+                venue_forecast=(match_data.get("conditions_snapshot") or {}).get("public_forecast"),
+            )
 
             with open(match_path, "w") as f:
                 json.dump(match_data, f, indent=2)
@@ -1270,10 +1339,25 @@ def register_match_routes(
         full_commentary = f"{home_captain} spins the coin and {away_captain} calls for {toss_choice}.<br>" \
                         f"{toss_winner} won the toss and choose to {toss_decision} first.<br>"
 
+        try:
+            toss_lines = build_toss_commentary(
+                match_data, toss_call=toss_choice, toss_coin=toss_result, winner=toss_winner,
+                decision=toss_decision, caller=away_captain,
+                home_captain=home_captain, away_captain=away_captain, fmt=_toss_fmt)
+        except Exception:
+            # The broadcast is flavour; never let it fail the toss itself.
+            app.logger.exception("[MatchToss] toss commentary failed")
+            toss_lines = []
+
         return jsonify({
+            "toss_lines":      toss_lines,
             "toss_commentary": full_commentary,
             "toss_winner":     toss_winner,
-            "toss_decision":   toss_decision
+            "toss_decision":   toss_decision,
+            "toss_call":       toss_choice,
+            "toss_coin":       toss_result,
+            "toss_caller":     away_captain,
+            "toss_reason":     toss_reason,
         })
 
     @app.route("/match/<match_id>/impact-player-swap", methods=["POST"])
@@ -1754,6 +1838,9 @@ def register_match_routes(
         if match.is_fc and getattr(match, "fc_weather_v2", False):
             outcome.setdefault("fc_weather_status", match._fc_weather_status())
 
+        if not outcome.get("error") or outcome.get("match_over"):
+            outcome["live_innings"] = _live_innings_snapshot(match, outcome)
+
         # Accumulate commentary for resume replay
         commentary_html = outcome.get("commentary")
         if commentary_html:
@@ -1761,8 +1848,13 @@ def register_match_routes(
                 match.commentary_replay_log = []
             match.commentary_replay_log.append(commentary_html)
 
-        # Owed-card bookkeeping runs before any persistence below, so a
-        # snapshot written in this same call carries the card too.
+        # An innings-end card stays owed through the break, including after
+        # the user has opened it. Advancing play ends that break.
+        pending = getattr(match, "pending_interval_card", None)
+        resumed_from_break = pending and pending["payload"].get("innings_end") and not outcome.get("error")
+        if resumed_from_break:
+            match.pending_interval_card = None
+        # A snapshot written in this call carries any newly owed card.
         _remember_pending_card(match, outcome)
 
         # A tie just pushed the match into super-over state — persist the
@@ -1782,6 +1874,7 @@ def register_match_routes(
                 or outcome.get("fc_weather_event")
                 or outcome.get("fc_interval")
                 or outcome.get("day_break")
+                or resumed_from_break
                 # Any card the client still owes us an ack for must reach
                 # disk with the state that produced it.
                 or outcome.get("scorecard_data")
@@ -1813,6 +1906,7 @@ def register_match_routes(
                 "innings_end":     innings_end_flag,
                 "innings_number":  innings_number,
                 "match_over":      True,
+                "live_innings":    outcome["live_innings"],
                 "commentary":      outcome.get("commentary", "<b>Match Over!</b>"),
                 "scorecard_data":  outcome.get("scorecard_data"),
                 "score":           outcome.get("final_score", match.score),
@@ -1947,8 +2041,15 @@ def register_match_routes(
             return jsonify({"error": "Decision type mismatch"}), 400
 
         result, status_code = match.submit_pending_decision(selected_index)
-        if status_code == 200 and match.is_hundred:
-            _persist_hundred_snapshot(match, match_id)
+        if status_code == 200:
+            transition = result.get("transition")
+            result["live_innings"] = _live_innings_snapshot(match, transition)
+            if transition:
+                transition["live_innings"] = result["live_innings"]
+                _remember_pending_card(match, transition)
+                _persist_fc_snapshot(match, match_id)
+            elif match.is_hundred:
+                _persist_hundred_snapshot(match, match_id)
         return jsonify(result), status_code
     
 

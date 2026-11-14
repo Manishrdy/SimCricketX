@@ -1,11 +1,32 @@
 /* Match Detail - Full Page Layout with No Scroll */
 
-/* Override main-container to use full viewport */
+/* body is a column flex container (layout.html) with only min-height set.
+   A percentage height on main never resolves in that case, so the match
+   grid collapsed to the short innings card and the commentary pane was
+   left with nothing but its title bar. A definite viewport height lets
+   the main column, the sidebar and the log share the space under the nav. */
+body {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+}
+
+/* Keep the site footer on screen. The match columns fill the space
+   above it instead of covering it. */
+footer {
+    flex-shrink: 0;
+}
+
+/* Override main-container to use the full viewport under the nav */
 .main-container {
     max-width: none !important;
     padding: 1rem !important;
-    height: calc(100vh - var(--nav-height, 64px));
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 /* The nav is normally centred in a 1136px column (navigation.css), but this
@@ -18,22 +39,26 @@ body .scx-nav.navbar {
 /* Main Grid Layout - Fills Viewport */
 .match-layout {
     display: grid;
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 300px minmax(0, 1fr);
     gap: 1rem;
-    height: 100%;
+    /* flex-basis 0 so the grid's height is the space main actually has,
+       not the height of the innings card. height: 100% does not resolve
+       on this flex item. */
+    flex: 1 1 0;
     min-height: 0;
     overflow: hidden;
 }
 
 @media (max-width: 1024px) {
     .match-layout {
-        grid-template-columns: 280px 1fr;
+        grid-template-columns: 280px minmax(0, 1fr);
     }
 }
 
 @media (max-width: 768px) {
     .match-layout {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(25rem, 1fr);
         overflow-y: auto;
     }
 }
@@ -41,15 +66,62 @@ body .scx-nav.navbar {
 /* Sidebar - Scrollable if needed */
 .info-card {
     background: var(--card-bg);
-    border-radius: var(--radius-lg, var(--border-radius));
+    border-radius: var(--radius-lg, 16px);
     border: 1px solid var(--card-border);
     padding: 1.1rem;
     overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 1.1rem;
     min-height: 0;
-    position: relative;
+    min-width: 0;
+}
+
+.info-card h2 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--fg);
+}
+
+#live-innings-status {
+    margin: 0.35rem 0 0;
+    color: var(--fg-secondary);
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+}
+
+#live-innings-players {
+    margin: 0.7rem 0 0;
+}
+
+#live-innings-players > div {
+    display: grid;
+    grid-template-columns: minmax(0, 5.8rem) minmax(0, 1fr);
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--card-border);
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+}
+
+#live-innings-players dt {
+    color: var(--fg-secondary);
+}
+
+#live-innings-players dd {
+    margin: 0;
+    color: var(--fg);
+    font-weight: 650;
+}
+
+.match-info {
+    border-top: 1px solid rgba(255, 255, 255, 0.18);
+    padding: 0.3rem 0.8rem;
+    font-size: 0.78rem;
+}
+
+.match-info summary {
+    width: fit-content;
+    padding: 0.2rem 0;
+    cursor: pointer;
 }
 
 /* Meta Items — icon-chip tiles */
@@ -57,6 +129,7 @@ body .scx-nav.navbar {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
+    padding: 0.35rem 0 0.2rem;
 }
 
 .meta-item {
@@ -87,9 +160,7 @@ body .scx-nav.navbar {
     font-size: 0.78rem;
     font-weight: 600;
     color: var(--fg);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
     min-width: 0;
 }
 
@@ -97,26 +168,7 @@ body .scx-nav.navbar {
 /* Toss Section */
 .toss-section {
     text-align: center;
-    padding: 0.9rem 0;
-    border-top: 1px solid var(--card-border);
-    border-bottom: 1px solid var(--card-border);
-}
-
-.toss-section h3 {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.4rem;
-    font-size: 0.72rem;
-    font-weight: 700;
-    margin-bottom: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--fg-secondary);
-}
-
-.toss-section h3 i {
-    color: var(--brand-secondary, var(--accent));
+    margin-top: 0.75rem;
 }
 
 .toss-btn {
@@ -144,111 +196,13 @@ body .scx-nav.navbar {
     color: var(--accent);
 }
 
-/* Team Lists — roster cards */
-.team-list-container {
-    flex: 1;
-    overflow-y: auto;
-}
-
-.team-list-header {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin: 0.9rem 0 0.5rem 0;
-    color: var(--fg-secondary);
-    padding: 0.3rem 0.55rem;
-    border-radius: var(--radius-sm, 8px);
-    background: color-mix(in srgb, var(--team-accent, var(--accent)), transparent 92%);
-}
-
-.team-list-header:first-child {
-    margin-top: 0;
-}
-
-.team-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--team-accent, var(--accent));
-    flex-shrink: 0;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--team-accent, var(--accent)), transparent 75%);
-}
-
-.xi-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-}
-
-.xi-list li {
-    padding: 0.4rem 0.5rem;
-    font-size: 0.8rem;
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
-    border-radius: 7px;
-    transition: background 0.15s ease;
-}
-
-.xi-list li:hover {
-    background: var(--bg);
-}
-
-.xi-name {
-    color: var(--fg);
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.xi-captain {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--brand-secondary, #f59e0b);
-    color: var(--text-on-accent, #1a1a1a);
-    font-size: 0.55rem;
-    font-weight: 800;
-    vertical-align: middle;
-}
-
-.xi-role {
-    flex-shrink: 0;
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    color: var(--fg-secondary);
-    background: var(--bg);
-    border: 1px solid var(--card-border);
-    padding: 2px 6px;
-    border-radius: 5px;
-    min-width: 30px;
-    text-align: center;
-}
-
-.xi-list li[data-role="Batsman"] .xi-role { background: rgba(245, 158, 11, 0.14); color: #f59e0b; border-color: transparent; }
-.xi-list li[data-role="Bowler"] .xi-role { background: rgba(15, 118, 110, 0.16); color: var(--brand-primary, #0f766e); border-color: transparent; }
-.xi-list li[data-role="All-rounder"] .xi-role { background: rgba(139, 92, 246, 0.14); color: #8b5cf6; border-color: transparent; }
-.xi-list li[data-role="Wicketkeeper"] .xi-role { background: rgba(236, 72, 153, 0.14); color: #ec4899; border-color: transparent; }
-
 /* Main Panel - Fixed Height */
 .main-panel {
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr);
     gap: 0.75rem;
-    height: 100%;
     min-height: 0;
+    height: 100%;
     overflow: hidden;
 }
 
@@ -266,6 +220,7 @@ body .scx-nav.navbar {
     height: 100%;
     position: relative;
     overflow: hidden;
+    border-radius: 8px;
 }
 
 .view-pane {
@@ -680,7 +635,7 @@ body .scx-nav.navbar {
     gap: 0.5rem;
     background: var(--card-bg);
     padding: 0.4rem 0.75rem;
-    border-radius: var(--border-radius);
+    border-radius: var(--border-radius, 8px);
     border: 1px solid var(--card-border);
     flex-shrink: 0;
 }
@@ -779,17 +734,18 @@ body .scx-nav.navbar {
     .ctrl-btn span { display: none; }
 }
 
-/* Commentary Box - Fills Remaining Space */
+/* Commentary Box - Fills Remaining Space.
+   height/max-height 100% is the whole pane, not the space under the
+   title bar, so the log was pushed past the pane and clipped away. */
 .commentary-box {
-    background: var(--card-bg);
-    border-radius: var(--border-radius);
-    border: 1px solid var(--card-border);
-    flex: 1;
+    background: transparent;
+    border-radius: 0;
+    border: 0;
+    flex: 1 1 auto;
     overflow-y: auto;
     padding: 1rem;
     min-height: 0;
-    height: 100%;
-    /* Critical for flex overflow */
+    height: auto;
 }
 
 .commentary-placeholder {
@@ -1830,3 +1786,87 @@ body .scx-nav.navbar {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
+
+/* ======================= */
+/* TOSS POPUP (manual mode) */
+/* ======================= */
+.toss-overlay { backdrop-filter: blur(4px); }
+.toss-card {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    padding: 1.5rem 1.5rem 1.4rem;
+    text-align: center;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 18px;
+    box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+    animation: toss-rise 0.35s cubic-bezier(.2,.8,.2,1);
+}
+.toss-card::before {
+    content: "";
+    position: absolute; inset: 0 0 auto 0; height: 3px;
+    background: var(--brand-gradient, linear-gradient(90deg, var(--accent), var(--accent-hover)));
+}
+.toss-live {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.2rem 0.7rem;
+    font-size: 0.7rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); background: var(--accent-light);
+    border-radius: 999px;
+}
+.toss-live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: toss-pulse 1.4s ease-in-out infinite; }
+.toss-title { margin: 0.7rem 0 0.2rem; font-size: 1.35rem; font-weight: 800; color: var(--fg); }
+.toss-sub { margin: 0; font-size: 0.86rem; color: var(--fg-secondary); }
+.toss-coin-stage { perspective: 600px; height: 104px; margin: 1.1rem 0 1rem; display: flex; justify-content: center; align-items: center; }
+.toss-coin {
+    position: relative; width: 84px; height: 84px;
+    transform-style: preserve-3d;
+    transition: transform 1.6s cubic-bezier(.2,.7,.2,1);
+}
+.toss-face {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    font-size: 2rem; font-weight: 800; color: #5a3d00;
+    background: radial-gradient(circle at 32% 28%, #ffe9a8, #f0b73a 55%, #b9811b);
+    border: 3px solid #e2a62c;
+    box-shadow: inset 0 0 0 4px rgba(255,255,255,0.28), 0 6px 18px rgba(0,0,0,0.35);
+    backface-visibility: hidden;
+}
+.toss-face-t { transform: rotateY(180deg); }
+.toss-coin.is-idle { animation: toss-bob 2.4s ease-in-out infinite; }
+.toss-calls { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+.toss-call-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 0.35rem;
+    min-height: 44px; padding: 0.8rem 0.5rem;
+    font: inherit; font-weight: 700; font-size: 0.98rem; color: var(--fg);
+    background: var(--bg); border: 1px solid var(--card-border); border-radius: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+.toss-call-btn:hover:not(:disabled), .toss-call-btn:focus-visible {
+    border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow-sm); transform: translateY(-2px); outline: none;
+}
+.toss-call-btn:disabled { opacity: 0.5; cursor: default; }
+.toss-call-btn.picked { border-color: var(--accent); background: var(--accent-light); opacity: 1; }
+.toss-call-mark {
+    width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%; font-size: 0.85rem; font-weight: 800; color: #5a3d00;
+    background: linear-gradient(135deg, #ffe9a8, #f0b73a);
+}
+.toss-verdict { margin-top: 0.2rem; animation: toss-rise 0.35s ease; }
+.toss-verdict-head { font-size: 1.05rem; font-weight: 800; color: var(--accent); }
+.toss-verdict-reason { margin: 0.45rem 0 1rem; font-size: 0.86rem; line-height: 1.45; color: var(--fg-secondary); }
+.toss-go { width: 100%; padding: 0.7rem 1rem; border-radius: 999px; }
+@keyframes toss-rise { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes toss-pulse { 50% { opacity: 0.35; } }
+@keyframes toss-bob { 50% { transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) {
+    .toss-card, .toss-verdict { animation: none; }
+    .toss-coin { transition: none; }
+    .toss-coin.is-idle, .toss-live-dot { animation: none; }
+}
+.toss-calls[hidden], .toss-verdict[hidden] { display: none; }
+.toss-picks { margin-top: 0.2rem; }
+.toss-picks .toss-call-btn.picked::after { content: "Pitch suggests"; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }

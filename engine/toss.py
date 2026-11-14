@@ -80,3 +80,31 @@ def decide_toss(fmt, pitch, is_day_night=False, rng=None, venue_forecast=None, c
     if rng.random() >= rate:
         decision = "Bowl" if decision == "Bat" else "Bat"
     return decision
+
+
+_PITCH_REASONS = {
+    "Bat": "the surface looks like it will play best early, so runs on the board first is the safer plan",
+    "Bowl": "the surface should offer the bowlers something early, so fielding first is the safer plan",
+}
+
+
+def explain_decision(decision, fmt, pitch, is_day_night=False, venue_forecast=None):
+    """One plain-English sentence on why the winning captain chose `decision`.
+
+    Grades the choice against correct_decision() (the same helper decide_toss
+    uses), so the sentence can say the captain went with the conditions or
+    against them -- decide_toss deliberately misreads the track one time in
+    five, and explaining that call as if it were obvious would be wrong.
+    """
+    favoured = correct_decision(fmt, pitch, is_day_night=is_day_night, venue_forecast=venue_forecast)
+    verb = "bat" if decision == "Bat" else "bowl"
+    if decision != favoured:
+        other = "bowl" if favoured == "Bowl" else "bat"
+        return (f"Chose to {verb} first, a judgement call against the {pitch or 'pitch'} conditions "
+                f"that would normally point to {other}ing first.")
+    if venue_forecast and is_day_night and venue_forecast.get("expected_dew", 0) >= .15 and decision == "Bowl":
+        return "Chose to bowl first: dew is expected under the lights, which makes chasing easier."
+    if (venue_forecast and venue_forecast.get("wear_rate_multiplier", 1) > 1.1
+            and pitch in ("Dry", "Hard") and decision == "Bat"):
+        return f"Chose to bat first: the {pitch} pitch is expected to wear and turn later, so batting first beats batting last."
+    return f"Chose to {verb} first on a {pitch or 'typical'} pitch: {_PITCH_REASONS[decision]}."
