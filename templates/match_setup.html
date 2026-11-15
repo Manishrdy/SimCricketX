@@ -310,6 +310,37 @@
         .color-dot { width: 40px; height: 40px; font-size: 0.7rem; }
     }
 
+    /* Team logo inside the badge. "has-logo" is dropped (and the image
+       removed) by team_logo_fallback.js if the logo cannot be loaded. */
+    .color-dot, .ms-ticket-avatar { position: relative; overflow: hidden; }
+    .color-dot > img, .ms-ticket-avatar > img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+    }
+    .color-dot.has-logo, .ms-ticket-avatar.has-logo {
+        background: var(--bg-secondary, #f1f5f9) !important;
+        box-shadow: inset 0 0 0 2px var(--team-color, var(--card-border));
+        padding: 3px;
+    }
+    .color-dot.has-logo .color-dot-code,
+    .ms-ticket-avatar.has-logo .ms-ticket-avatar-code { display: none; }
+
+    .ms-ticket-avatar.is-swapping { animation: ms-ticket-swap 0.35s var(--ease-elastic, ease) both; }
+    @keyframes ms-ticket-swap {
+        from { transform: scale(0.6) rotate(-8deg); opacity: 0; }
+        to   { transform: scale(1) rotate(0); opacity: 1; }
+    }
+    .ms-ticket-team-name.is-swapping { animation: ms-ticket-name-swap 0.3s ease both; }
+    @keyframes ms-ticket-name-swap {
+        from { transform: translateY(4px); opacity: 0; }
+        to   { transform: translateY(0); opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .ms-ticket-avatar.is-swapping, .ms-ticket-team-name.is-swapping { animation: none; }
+    }
+
     .team-format-badges {
         display: flex;
         gap: 4px;
@@ -1114,7 +1145,10 @@
                 <div class="teams-grid">
                     {% for team in teams %}
                     <div class="team-card" data-team-color="{{ team.team_color }}" data-index="{{ loop.index0 }}" tabindex="0" role="button" aria-pressed="false" aria-label="Select {{ team.team_name }}">
-                        <span class="color-dot" data-bg="{{ team.team_color }}">{{ team.short_code }}</span>
+                        <span class="color-dot{% if team.logo_url %} has-logo{% endif %}" data-logo-slot data-bg="{{ team.team_color }}">
+                            {%- if team.logo_url %}<img src="{{ team.logo_url }}" alt="" width="46" height="46" decoding="async" data-logo-fallback>{% endif -%}
+                            <span class="color-dot-code">{{ team.short_code }}</span>
+                        </span>
                         <div class="team-info">
                             <h3>{{ team.team_name }}</h3>
                             <div class="team-meta">
@@ -1387,7 +1421,7 @@
 
             <div class="ms-ticket-teams">
                 <div class="ms-ticket-team">
-                    <span class="ms-ticket-avatar" id="ticket-home-avatar">H</span>
+                    <span class="ms-ticket-avatar" id="ticket-home-avatar" data-logo-slot><span class="ms-ticket-avatar-code">H</span></span>
                     <div class="ms-ticket-team-info">
                         <span class="ms-ticket-team-label">Home</span>
                         <span class="ms-ticket-team-name" id="summary-home-team">Select a team</span>
@@ -1395,7 +1429,7 @@
                 </div>
                 <span class="ms-ticket-vs">VS</span>
                 <div class="ms-ticket-team">
-                    <span class="ms-ticket-avatar" id="ticket-away-avatar">A</span>
+                    <span class="ms-ticket-avatar" id="ticket-away-avatar" data-logo-slot><span class="ms-ticket-avatar-code">A</span></span>
                     <div class="ms-ticket-team-info">
                         <span class="ms-ticket-team-label">Away</span>
                         <span class="ms-ticket-team-name" id="summary-away-team">Select a team</span>
@@ -1478,6 +1512,8 @@
 <script id="pitch-conditions-data" type="application/json">
     {{ pitch_conditions_by_format | tojson | safe }}
 </script>
+
+<script src="{{ url_for('static', filename='js/team_logo_fallback.js') }}"></script>
 
 <script>
     let TEAMS = [];
@@ -1722,6 +1758,7 @@
             tag.textContent = order === 0 ? 'HOME' : 'AWAY';
             card.appendChild(tag);
         });
+        refreshTicketTeams();
     }
 
     /**
@@ -1995,13 +2032,64 @@
     }
 
     /**
-     * Fill a Match Ticket avatar chip (initials + team color) for the given side.
+     * Fill a Match Ticket avatar chip for the given side: the team logo when
+     * it has one (falling back to initials + team color if it fails to load),
+     * or the H/A placeholder when no team is picked for that side yet.
      */
     function updateTicketAvatar(side, team) {
         const avatar = document.getElementById(`ticket-${side}-avatar`);
-        if (!avatar || !team) return;
-        avatar.textContent = (team.short_code || team.team_name || '?').slice(0, 3).toUpperCase();
+        if (!avatar) return;
+        const key = team ? `${team.id}|${team.logo_url || ''}` : '';
+        if (avatar.dataset.teamKey === key) return;  // unchanged: don't re-animate
+        avatar.dataset.teamKey = key;
+
+        avatar.textContent = '';
+        avatar.classList.remove('has-logo', 'is-swapping');
+        const code = document.createElement('span');
+        code.className = 'ms-ticket-avatar-code';
+        avatar.appendChild(code);
+
+        if (!team) {
+            code.textContent = side === 'home' ? 'H' : 'A';
+            avatar.style.background = '';
+            avatar.style.removeProperty('--team-color');
+            return;
+        }
+
+        code.textContent = (team.short_code || team.team_name || '?').slice(0, 3).toUpperCase();
         avatar.style.background = team.team_color || 'var(--brand-primary, #0f766e)';
+        avatar.style.setProperty('--team-color', team.team_color || 'var(--card-border)');
+        if (team.logo_url) {
+            const img = document.createElement('img');
+            img.alt = '';
+            img.decoding = 'async';
+            img.dataset.logoFallback = '';
+            img.src = team.logo_url;
+            avatar.classList.add('has-logo');
+            avatar.prepend(img);
+            if (window.scxLogoFallback) window.scxLogoFallback.watch(img);
+        }
+        void avatar.offsetWidth;  // restart the swap animation
+        avatar.classList.add('is-swapping');
+    }
+
+    /**
+     * Mirror the current team selection into the Match Ticket as it happens
+     * ([0] = home, [1] = away), so the ticket updates live on Step 1.
+     */
+    function refreshTicketTeams() {
+        ['home', 'away'].forEach((side, order) => {
+            const team = TEAMS[selectedTeamIndices[order]];
+            const nameEl = document.getElementById(`summary-${side}-team`);
+            const name = team ? team.team_name : 'Select a team';
+            if (nameEl && nameEl.textContent !== name) {
+                nameEl.textContent = name;
+                nameEl.classList.remove('is-swapping');
+                void nameEl.offsetWidth;
+                nameEl.classList.add('is-swapping');
+            }
+            updateTicketAvatar(side, team);
+        });
     }
 
     function syncStoryControl() {

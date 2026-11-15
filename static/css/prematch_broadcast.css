@@ -6,7 +6,13 @@
 .pm-hero { position:relative; isolation:isolate; overflow:hidden; padding:38px 30px; background:linear-gradient(120deg,var(--accent-light),var(--bg-secondary) 65%); }
 .pm-eyebrow { font-size:10px; letter-spacing:2px; color:var(--fg-secondary); font-weight:600; margin:0 0 12px; }
 .pm-hero h2 { position:relative; max-width:85%; margin:0; font-size:clamp(28px,4vw,48px); font-weight:800; line-height:1.15; overflow-wrap:anywhere; color:var(--fg); }
-.pm-hero h2 span { color:var(--accent); font-size:.55em; font-weight:400; }
+.pm-hero-matchup { display:flex; align-items:center; flex-wrap:wrap; gap:0.32em; }
+.pm-hero h2.pm-hero-matchup:has(.has-logo) { max-width:100%; gap:clamp(28px,7vw,88px); margin:6px 0 4px; }
+.pm-hero h2 .pm-hero-vs { color:var(--accent); font-size:.55em; font-weight:400; }
+.pm-hero-side { display:inline-flex; align-items:center; justify-content:center; }
+.pm-hero-side.has-logo { width:clamp(104px,14vw,144px); height:clamp(104px,14vw,144px); border-radius:18px; background:var(--bg-secondary,#f1f5f9); border:1px solid var(--card-border); padding:8px; box-shadow:0 6px 18px rgba(0,0,0,0.12); overflow:hidden; }
+.pm-hero-side > img { width:100%; height:100%; object-fit:contain; display:block; }
+.pm-hero-side.has-logo .pm-hero-code { display:none; }
 .pm-venue { position:relative; color:var(--fg-secondary); margin:14px 0 0; font-size:15px; }
 .pm-ground { position:absolute; z-index:-1; right:-60px; top:10px; width:360px; height:230px; border:24px solid var(--accent-light); border-radius:50%; transform:rotate(-25deg); box-shadow:0 0 0 2px var(--card-border),0 0 0 22px var(--accent-light),0 0 0 45px var(--bg-secondary); }
 .pm-ground div { width:25px; height:80px; margin:50px auto; background:var(--accent-light); border:1px solid var(--accent); }
@@ -30,7 +36,7 @@
 .pm-controls button { flex-shrink:0; cursor:pointer; }
 .pm-controls button:focus-visible { outline:3px solid var(--border-focused); outline-offset:4px; }
 .pm-controls button:disabled { opacity:.65; cursor:wait; }
-@media(max-width:600px) { .prematch-overlay { padding:12px; } .pm-topline,.pm-footer { padding:14px 18px; font-size:8px; letter-spacing:1px; } .pm-hero { padding:28px 18px; } .pm-conditions { padding:18px; gap:10px; } .pm-conditions strong { font-size:13px; } .pm-conditions span { font-size:8px; letter-spacing:.5px; } .pm-toss { margin:20px 18px 0; } .pm-teams { grid-template-columns:1fr; padding:22px 18px; gap:24px; } .pm-controls { flex-direction:column; align-items:stretch; } .pm-hero h2 { max-width:100%; } }
+@media(max-width:600px) { .prematch-overlay { padding:12px; } .pm-topline,.pm-footer { padding:14px 18px; font-size:8px; letter-spacing:1px; } .pm-hero { padding:28px 18px; } .pm-hero h2.pm-hero-matchup:has(.has-logo) { gap:clamp(14px,5vw,28px); } .pm-hero-side.has-logo { width:clamp(76px,22vw,108px); height:clamp(76px,22vw,108px); border-radius:14px; padding:6px; } .pm-conditions { padding:18px; gap:10px; } .pm-conditions strong { font-size:13px; } .pm-conditions span { font-size:8px; letter-spacing:.5px; } .pm-toss { margin:20px 18px 0; } .pm-teams { grid-template-columns:1fr; padding:22px 18px; gap:24px; } .pm-controls { flex-direction:column; align-items:stretch; } .pm-hero h2 { max-width:100%; } }
 
 /* Reuse the match UI's theme tokens in both the dialog and its archived image. */
 .prematch-card { border-top:3px solid var(--accent); }

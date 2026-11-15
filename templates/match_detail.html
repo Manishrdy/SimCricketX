@@ -44,8 +44,13 @@
         <div class="score-banner">
             <!-- Top Row: Score + Overs + Batsmen -->
             <div class="sb-top">
+                {% set home_code = match.team_home.split('_')[0] %}
+                {% set logos = team_logos or {} %}
                 <div class="sb-team sb-batting" id="sb-batting-team">
-                    <span class="sb-team-name" id="sb-bat-name">{{ match.team_home.split('_')[0] }}</span>
+                    <span class="sb-team-badge{% if logos.get('home') %} has-logo{% endif %}" id="sb-bat-badge" data-logo-slot>
+                        {%- if logos.get('home') %}<img src="{{ logos.home }}" alt="" width="48" height="48" decoding="async" data-logo-fallback>{% endif -%}
+                        <span class="sb-team-name" id="sb-bat-name">{{ home_code }}</span>
+                    </span>
                     <span class="sb-score" id="sb-score">0/0</span>
                 </div>
                 <div class="sb-center-col">
@@ -741,6 +746,9 @@
 <script id="match-data-json" type="application/json">
     {{ match | tojson | safe }}
 </script>
+<script id="team-logos-json" type="application/json">
+    {{ (team_logos or {'home': None, 'away': None}) | tojson | safe }}
+</script>
 
 <script>
     // Initialize Match Data safely
@@ -750,9 +758,15 @@
         console.error("Failed to parse match data", e);
         window.matchData = {};
     }
+    try {
+        window.teamLogos = JSON.parse(document.getElementById('team-logos-json').textContent) || {};
+    } catch (e) {
+        window.teamLogos = {};
+    }
     window.resumeMode = {{ resume_mode | default(false) | tojson }};
 </script>
 
+<script src="{{ url_for('static', filename='js/team_logo_fallback.js') }}"></script>
 <script src="{{ url_for('static', filename='js/prematch_broadcast.js') }}"></script>
 <!-- Load Main Logic -->
 <script src="{{ url_for('static', filename='js/match_detail.js') }}"></script>

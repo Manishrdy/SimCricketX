@@ -295,6 +295,10 @@ def register_match_routes(
             # Engine expects "ShortCode_UserEmail" format to parse ShortCode via split('_')[0]
             data["team_home"] = f"{home_code}_{home_db.user_id}"
             data["team_away"] = f"{away_code}_{away_db.user_id}"
+            # DB ids survive a later short-code rename; the match page uses
+            # them to find each team's logo.
+            data["team_home_id"] = home_db.id
+            data["team_away_id"] = away_db.id
 
             data["is_knockout"] = False
             # Never trust league positions supplied by the client.
@@ -783,7 +787,36 @@ def register_match_routes(
         return {
             "format_label": fmt_label,
             "weather_label": forecast_label(forecast) if forecast else None,
+            "team_logos": _match_team_logos(match_data),
         }
+
+    def _match_team_logos(match_data):
+        """Logo URL (or None) for each side of a match, keyed "home"/"away".
+
+        Teams are found by the stored DB id, falling back to the owner's
+        short code for matches created before ids were stored. Any lookup
+        problem just means no logo: the page keeps its short-code display.
+        """
+        logos = {"home": None, "away": None}
+        owner = match_data.get("created_by")
+        if not owner:
+            return logos
+        for side in ("home", "away"):
+            try:
+                team = None
+                team_id = match_data.get(f"team_{side}_id")
+                if team_id is not None:
+                    team = DBTeam.query.filter_by(id=int(team_id), user_id=owner).first()
+                if team is None:
+                    code = str(match_data.get(f"team_{side}") or "").split("_")[0]
+                    if code:
+                        team = DBTeam.query.filter_by(short_code=code, user_id=owner).first()
+                if team is not None and team.logo_version:
+                    logos[side] = url_for("team_logo", team_id=team.id, v=team.logo_version)
+            except Exception:
+                app.logger.warning("Could not resolve %s team logo for match %s",
+                                   side, match_data.get("match_id"), exc_info=True)
+        return logos
 
     @app.route("/match/<match_id>")
     @login_required
