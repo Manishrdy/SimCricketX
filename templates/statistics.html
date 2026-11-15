@@ -873,7 +873,7 @@
         <div class="kpi-card">
             <div class="kpi-icon"><i class="fas fa-baseball-ball"></i></div>
             <div class="kpi-value" id="kpi-runs">—</div>
-            <div class="kpi-label">Total Runs</div>
+            <div class="kpi-label">Batting Runs</div>
             <div class="kpi-sub" id="kpi-innings-sub">across all innings</div>
         </div>
         <div class="kpi-card">
@@ -884,7 +884,7 @@
         </div>
         <div class="kpi-card">
             <div class="kpi-icon"><i class="fas fa-crown"></i></div>
-            <div class="kpi-value" id="kpi-top-name" style="font-size:1rem;line-height:1.3">—</div>
+            <div class="kpi-value" id="kpi-top-name" style="font-size:1rem;line-height:1.3;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</div>
             <div class="kpi-label">Top Scorer</div>
             <div class="kpi-sub" id="kpi-top-runs"></div>
         </div>
@@ -968,7 +968,7 @@
                     <div class="lb-icon sr"><i class="fas fa-bolt"></i></div>
                     <div>
                         <div class="lb-card-title">Highest Strike Rate</div>
-                        <div class="lb-card-sub">Min 50 balls faced</div>
+                        <div class="lb-card-sub">Min {{ leaderboards.sr_min_balls|default(50) }} balls faced</div>
                     </div>
                 </div>
                 <div class="lb-list">
@@ -1134,12 +1134,12 @@
                     <span class="insight-head-sub">Venue &amp; pitch analysis</span>
                 </div>
                 <div class="insight-body">
-                    <div class="cond-label"><i class="fas fa-map-marker-alt"></i> Venues (Avg Runs)</div>
+                    <div class="cond-label"><i class="fas fa-map-marker-alt"></i> Venues (Avg Runs / Innings)</div>
                     {% if insights.conditions.venues %}
                     {% for v in insights.conditions.venues %}
                     <div class="venue-row">
                         <div class="venue-name" title="{{ v.label }}">{{ v.label }}</div>
-                        <div class="venue-meta">{{ v.matches }}m</div>
+                        <div class="venue-meta" title="{{ v.matches }} matches, {{ v.innings }} innings">{{ v.matches }}m</div>
                         <span class="venue-badge">{{ v.avg_runs }}</span>
                     </div>
                     {% endfor %}
@@ -1148,7 +1148,7 @@
                     {% endif %}
 
                     <hr class="divider">
-                    <div class="cond-label"><i class="fas fa-layer-group"></i> Pitches (Avg Runs)</div>
+                    <div class="cond-label"><i class="fas fa-layer-group"></i> Pitches (Avg Runs / Innings)</div>
                     {% if insights.conditions.pitches %}
                     {% for p in insights.conditions.pitches %}
                     <div class="pitch-row">
@@ -1297,7 +1297,7 @@
                                 <th onclick="handleSort('batting-table',12)" title="Half-centuries">50s <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('batting-table',13)" title="Centuries">100s <span class="sa">⇕</span></th>
                                 {% endif %}
-                            {% if match_format == "Hundred" %}<th>HS</th><th>Dots</th>{% endif %}
+                            {% if match_format == "Hundred" %}<th onclick="handleSort('batting-table',14)" title="Highest Score">HS <span class="sa">⇕</span></th><th onclick="handleSort('batting-table',15)">Dots <span class="sa">⇕</span></th>{% endif %}
                             </tr>
                         </thead>
                         <tbody>
@@ -1384,7 +1384,7 @@
                                 <th onclick="handleSort('bowling-table',11)">Wides <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('bowling-table',12)" title="No Balls">NB <span class="sa">⇕</span></th>
                                 {% endif %}
-                            {% if match_format == "Hundred" %}<th>SR</th><th>Dot %</th><th>4WI</th><th>5WI</th>{% endif %}
+                            {% if match_format == "Hundred" %}<th onclick="handleSort('bowling-table',13)" title="Strike Rate">SR <span class="sa">⇕</span></th><th onclick="handleSort('bowling-table',14)">Dot % <span class="sa">⇕</span></th><th onclick="handleSort('bowling-table',15)">4WI <span class="sa">⇕</span></th><th onclick="handleSort('bowling-table',16)">5WI <span class="sa">⇕</span></th>{% endif %}
                             </tr>
                         </thead>
                         <tbody>
@@ -1701,10 +1701,14 @@ function handleSort(tableId, colIdx) {
         .sort((a, b) => {
             const at = (a.querySelectorAll('td')[colIdx]?.textContent || '').trim();
             const bt = (b.querySelectorAll('td')[colIdx]?.textContent || '').trim();
+            // An undefined value ('-') is not a small number: it goes last in
+            // both directions, so "best average first" never opens with
+            // bowlers who have no wickets.
+            const aMissing = isMissingCell(at), bMissing = isMissingCell(bt);
+            if (aMissing || bMissing) return aMissing === bMissing ? 0 : (aMissing ? 1 : -1);
             const af = parseBowlingFigure(at), bf = parseBowlingFigure(bt);
             if (af || bf) {
-                const aFig = af || (isMissingCell(at) ? { wickets: -1, runs: Infinity } : null);
-                const bFig = bf || (isMissingCell(bt) ? { wickets: -1, runs: Infinity } : null);
+                const aFig = af, bFig = bf;
                 if (aFig && bFig) {
                     const cmp = aFig.wickets !== bFig.wickets
                         ? aFig.wickets - bFig.wickets
@@ -1868,11 +1872,15 @@ function computeKPIs() {
     });
     const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     setEl('kpi-runs', totalRuns.toLocaleString());
-    setEl('kpi-innings-sub', 'across ' + totalInnings + ' innings');
+    // The table has one row per batter, so this is a count of individual
+    // innings (about 11 per team innings), and the runs exclude extras.
+    setEl('kpi-innings-sub', 'off the bat, ' + totalInnings.toLocaleString() + ' batting innings');
     setEl('kpi-wickets', totalWkts.toLocaleString());
     if (topName) {
-        const firstName = topName.split(' ')[0];
-        setEl('kpi-top-name', firstName.length > 10 ? firstName.slice(0, 9) + '…' : firstName);
+        // Full name; the card ellipsises it. Cutting at the first space
+        // turned "M. Labuschagne" into "M.".
+        const el = document.getElementById('kpi-top-name');
+        if (el) { el.textContent = topName; el.title = topName; }
         setEl('kpi-top-runs', topRuns + ' runs');
     }
 }
@@ -2122,11 +2130,11 @@ function comparePlayers() {
     const res = document.getElementById('comparison-results');
     res.style.display = 'block';
     res.innerHTML = '<div class="loading-spin"><i class="fas fa-spinner fa-spin"></i>Comparing…</div>';
-    const params = new URLSearchParams(window.location.search);
+    // Same resolved scope the player list was loaded with: a tournament URL
+    // may omit match_format, and defaulting to T20 compared the wrong format.
     let url = '/api/compare-players?player_ids=' + p1 + ',' + p2;
-    if (params.get('view') === 'tournament' && params.get('tournament_id'))
-        url += '&tournament_id=' + params.get('tournament_id');
-    url += '&match_format=' + encodeURIComponent(params.get('match_format') || 'T20');
+    if (RESOLVED_TOURNAMENT) url += '&tournament_id=' + encodeURIComponent(RESOLVED_TOURNAMENT);
+    url += '&match_format=' + encodeURIComponent(RESOLVED_FORMAT || 'T20');
     fetch(withListALength(url)).then(r => r.json()).then(data => {
         if (data.success && data.data?.length >= 2) displayComparison(data.data);
         else res.innerHTML = '<div class="no-data"><i class="fas fa-exclamation-triangle"></i>Could not compare players</div>';

@@ -109,9 +109,16 @@ def impact(engine, fixture, user_id):
             if not MatchScorecard.query.filter_by(match_id=match.id).first() and not engine._is_no_result(match):
                 raise ReplayError('A scorecard is missing or still being saved. Replay is unavailable until it is complete.')
             match_ids.add(match.id)
-        elif item.standings_applied or (item.status == 'Completed' and not (
-                (item.home_team and item.home_team.is_placeholder) or
-                (item.away_team and item.away_team.is_placeholder))):
+        elif item.standings_applied or (
+                item.status == 'Completed'
+                and item.home_team and not item.home_team.is_placeholder
+                and item.away_team and not item.away_team.is_placeholder):
+            # Completed with no match is only an anomaly when two real teams
+            # were paired: that result must have come from a played match.
+            # An empty slot (None) or a BYE placeholder means the bracket
+            # advanced the fixture by itself — a bye or a phantom, resolved
+            # by _resolve_round_pair — so there was never a match to lose,
+            # and the reset below lets progression resolve it again.
             raise ReplayError('A dependent result is missing its match data. Repair it before replaying.')
         if item.active_match_id:
             if item.active_match_id in match_ids or db.session.get(Match, item.active_match_id):

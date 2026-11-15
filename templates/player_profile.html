@@ -130,8 +130,7 @@
             <div class="pp-stat-row"><span>Not Outs</span><span class="pp-stat-val">{{ profile.batting.not_outs }}</span></div>
             <div class="pp-stat-row"><span>4s / 6s</span><span class="pp-stat-val">{{ profile.batting.fours }} / {{ profile.batting.sixes }}</span></div>
             <div class="pp-stat-row"><span>50s / 100s</span><span class="pp-stat-val">{{ profile.batting.fifties }} / {{ profile.batting.hundreds }}</span></div>
-            {% if match_format == 'Hundred' %}<div class="pp-stat-row"><span>Dots / Ducks</span><span>{{ profile.batting.dots }} / {{ profile.batting.ducks }}</span></div>{% endif %}
-            {% if match_format == 'Hundred' %}<div class="pp-stat-row"><span>Dots / Dot %</span><span>{{ profile.bowling.dots }} / {{ profile.bowling.dot_percentage }}</span></div><div class="pp-stat-row"><span>4WI / 5WI</span><span>{{ profile.bowling.four_wicket_hauls }} / {{ profile.bowling.five_wicket_hauls }}</span></div>{% endif %}
+            {% if match_format == 'Hundred' %}<div class="pp-stat-row"><span>Dots / Ducks</span><span class="pp-stat-val">{{ profile.batting.dots }} / {{ profile.batting.ducks }}</span></div>{% endif %}
             {% if match_format == 'FC' %}<div class="pp-stat-row"><span>200s / 300s</span><span class="pp-stat-val">{{ profile.batting.double_centuries }} / {{ profile.batting.triple_centuries }}</span></div>{% endif %}
         </div>
         {% else %}
@@ -147,6 +146,10 @@
             <div class="pp-stat-row"><span>{{ 'Econ/100' if match_format == 'Hundred' else 'Economy' }}</span><span class="pp-stat-val">{{ profile.bowling.economy if profile.bowling.economy is not none else '-' }}</span></div>
             <div class="pp-stat-row"><span>Strike Rate</span><span class="pp-stat-val">{{ profile.bowling.strike_rate if profile.bowling.strike_rate is not none else '-' }}</span></div>
             <div class="pp-stat-row"><span>Best Figures</span><span class="pp-stat-val">{{ profile.bowling.best_figures }}</span></div>
+            {% if match_format == 'Hundred' %}
+            <div class="pp-stat-row"><span>Dots / Dot %</span><span class="pp-stat-val">{{ profile.bowling.dots }} / {{ profile.bowling.dot_percentage if profile.bowling.dot_percentage is not none else '-' }}</span></div>
+            <div class="pp-stat-row"><span>4WI / 5WI</span><span class="pp-stat-val">{{ profile.bowling.four_wicket_hauls }} / {{ profile.bowling.five_wicket_hauls }}</span></div>
+            {% endif %}
             {% if match_format == 'FC' %}
             <div class="pp-stat-row"><span>Best Match Figures</span><span class="pp-stat-val">{{ profile.bowling.best_match_figures }}</span></div>
             <div class="pp-stat-row"><span>5WI / 10WM</span><span class="pp-stat-val">{{ profile.bowling.five_wicket_hauls }} / {{ profile.bowling.ten_wicket_matches }}</span></div>
@@ -245,7 +248,7 @@
                         <th>Date</th><th>Venue</th><th>Format</th>
                         <th>Runs</th><th>Balls</th><th>Out</th>
                         <th>Wkts</th><th>Conc</th><th>{{ 'Balls' if match_format == 'Hundred' else 'Overs' }}</th>
-                        <th>Ct</th><th>RO</th><th>Result</th>
+                        <th title="Catches">Ct</th><th title="Run outs">RO</th><th title="Stumpings">St</th><th>Result</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -266,6 +269,7 @@
                         {% endif %}
                         <td>{{ m.catches }}</td>
                         <td>{{ m.run_outs }}</td>
+                        <td>{{ m.stumpings }}</td>
                         <td>{% if m.is_motm %}<span title="Man of the Match">🏆</span> {% endif %}{{ m.result[:40] if m.result else '-' }}</td>
                     </tr>
                     {% endfor %}

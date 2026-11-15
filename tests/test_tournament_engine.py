@@ -386,8 +386,15 @@ class TestKnockoutPhantomCascade:
         the tournament stuck forever: Round 2 fixtures never unlocked
         because the Phantom's permanent winner_team_id=None tripped the
         "any winner missing" guard on every subsequent check.
+
+        New draws no longer pair two byes (_seed_knockout_slots), so the
+        old layout is forced here: brackets drawn before that change still
+        contain Phantom Matches and must keep progressing.
         """
-        monkeypatch.setattr(random, "shuffle", lambda seq: None)
+        monkeypatch.setattr(
+            engine, "_seed_knockout_slots",
+            lambda team_ids, next_power: team_ids + [None] * (next_power - len(team_ids)),
+        )
 
         t = engine.create_tournament(
             name="6Team KO Phantom", user_id=regular_user.id,
@@ -620,7 +627,11 @@ class TestKnockoutPhantomCascade:
         code must leave this slot completely untouched (still 'Locked')
         until BOTH its feeders are genuinely decided.
         """
-        monkeypatch.setattr(random, "shuffle", lambda seq: None)
+        # Pin the draw: the assertions below read the bye off the last slot.
+        monkeypatch.setattr(
+            engine, "_seed_knockout_slots",
+            lambda team_ids, next_power: team_ids + [None] * (next_power - len(team_ids)),
+        )
 
         t = engine.create_tournament(
             name="7Team KO Mixed Bye", user_id=regular_user.id,

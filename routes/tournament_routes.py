@@ -169,11 +169,36 @@ def register_tournament_routes(
                 )
         return match_id
 
+    def _discard_in_flight_files(match_ids):
+        """Forget unfinished matches whose fixtures were just deleted.
+
+        Deleting a tournament removes the fixture rows, and with them the
+        only record that a match was still running on one. Left alone, that
+        match stays resumable by URL and finishes against a fixture id the
+        database is free to hand to the next tournament. Call after the
+        delete has committed: file removal cannot be rolled back.
+        """
+        for match_id in match_ids:
+            with MATCH_INSTANCES_LOCK:
+                MATCH_INSTANCES.pop(match_id, None)
+            json_path = os.path.join(
+                PROJECT_ROOT, "data", "matches", f"match_{match_id}.json"
+            )
+            try:
+                if os.path.isfile(json_path):
+                    os.remove(json_path)
+            except OSError as e:
+                log_exception(e)
+                app.logger.warning(
+                    f"Could not remove in-flight match file {json_path}: {e}"
+                )
+
     # ── Routes ────────────────────────────────────────────────────────────
 
     from database.models import Tour
     from routes.tour_routes import register_tour_routes
-    register_tour_routes(app, limiter, _cleanup_match_artifacts, _delete_match_json)
+    register_tour_routes(app, limiter, _cleanup_match_artifacts, _delete_match_json,
+                         _discard_in_flight_files)
 
     @app.route("/tournaments")
     @login_required
@@ -390,6 +415,7 @@ def register_tournament_routes(
                 MatchScorecard.is_super_over.isnot(True),
             )
             .group_by(MatchScorecard.player_id)
+            .having(sa_func.sum(MatchScorecard.runs) > 0)
             .order_by(sa_func.sum(MatchScorecard.runs).desc())
             .limit(5)
             .all()
@@ -408,6 +434,7 @@ def register_tournament_routes(
                 MatchScorecard.is_super_over.isnot(True),
             )
             .group_by(MatchScorecard.player_id)
+            .having(sa_func.sum(MatchScorecard.wickets) > 0)
             .order_by(
                 sa_func.sum(MatchScorecard.wickets).desc(),
                 sa_func.sum(MatchScorecard.runs_conceded).asc(),
@@ -538,6 +565,7 @@ def register_tournament_routes(
         try:
             tournament_matches = DBMatch.query.filter_by(tournament_id=tournament_id).all()
             match_ids = [m.id for m in tournament_matches]
+            in_flight = [f.active_match_id for f in t.fixtures if f.active_match_id]
 
             # Null tournament_fixtures.match_id before deleting the matches —
             # the FK has no ON DELETE cascade, so the match delete would
@@ -558,6 +586,7 @@ def register_tournament_routes(
             db.session.commit()
             for m in tournament_matches:
                 _delete_match_json(m)
+            _discard_in_flight_files(in_flight)
             flash("Tournament deleted successfully.", "success")
         except Exception as e:
             log_exception(e)
