@@ -41,6 +41,17 @@
 .pp-tbl .kc { font-weight: 700; color: var(--c1); }
 .result-w { color: #15803d; font-weight: 600; }
 .result-l { color: #b91c1c; font-weight: 600; }
+.pp-pship-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.5rem; margin-bottom: 1rem; }
+.pp-pship-stat { background: var(--bg-secondary); border-radius: 8px; padding: 0.5rem 0.6rem; text-align: center; }
+.pp-pship-num { font-size: 1.15rem; font-weight: 800; color: var(--c1); line-height: 1.2; }
+.pp-pship-label { font-size: 0.62rem; color: var(--fg-secondary); text-transform: uppercase; }
+.pp-pship-cols { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 1rem; }
+.pp-pship-cols > div { min-width: 0; }
+.pp-pship-sub { font-size: 0.7rem; font-weight: 600; color: var(--fg-secondary); text-transform: uppercase; margin-bottom: 0.4rem; }
+.pp-tbl a { color: var(--c1); text-decoration: none; }
+.pp-tbl a:hover { text-decoration: underline; }
+.pp-tbl td.pp-nowrap { white-space: nowrap; }
+@media (max-width: 760px) { .pp-pship-cols { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 640px) { .pp-stats-grid { grid-template-columns: 1fr 1fr; } }
 </style>
 
@@ -155,6 +166,73 @@
             <div class="pp-stat-row" style="flex:1"><span>Stumpings</span><span class="pp-stat-val">{{ profile.fielding.stumpings|default(0) }}</span></div>
         </div>
     </div>
+
+    <!-- Partnerships -->
+    {% if partnerships is not none %}
+    <div class="pp-section" id="pp-partnerships">
+        <div class="pp-section-title"><i class="fas fa-user-friends"></i> Partnerships</div>
+        {% if partnerships.total_partnerships %}
+        <div class="pp-pship-summary">
+            <div class="pp-pship-stat"><div class="pp-pship-num">{{ partnerships.total_partnerships }}</div><div class="pp-pship-label">Stands</div></div>
+            <div class="pp-pship-stat"><div class="pp-pship-num">{{ partnerships.total_runs }}</div><div class="pp-pship-label">Runs together</div></div>
+            <div class="pp-pship-stat" title="Runs per stand"><div class="pp-pship-num">{{ partnerships.average_partnership }}</div><div class="pp-pship-label">Average stand</div></div>
+            <div class="pp-pship-stat"><div class="pp-pship-num">{{ partnerships.best }}</div><div class="pp-pship-label">Best</div></div>
+            <div class="pp-pship-stat" title="Stands of 50 or more / 100 or more"><div class="pp-pship-num">{{ partnerships.milestones['50+'] }} / {{ partnerships.milestones['100+'] }}</div><div class="pp-pship-label">50+ / 100+</div></div>
+        </div>
+        <div class="pp-pship-cols">
+            <div>
+                <div class="pp-pship-sub">Best stands</div>
+                <div style="overflow-x:auto">
+                    <table class="pp-tbl" id="pp-best-stands">
+                        <thead>
+                            <tr>
+                                <th>Partner</th><th title="* = unbroken stand">Runs</th><th>Balls</th><th>Wkt</th>
+                                <th title="{{ profile.player }} / partner: runs (balls)">Share</th><th>Vs</th><th>Match</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in partnerships.best_partnerships[:5] %}
+                            <tr>
+                                <td><a href="/player/{{ s.partner_id }}?match_format={{ match_format }}">{{ s.partner }}</a></td>
+                                <td class="kc"{% if s.is_unbroken %} title="Unbroken stand"{% endif %}>{{ s.runs }}{{ '*' if s.is_unbroken }}</td>
+                                <td>{{ s.balls }}</td>
+                                <td>{{ ordinal(s.wicket) if s.wicket else '—' }}</td>
+                                <td class="pp-nowrap">{% if s.player_contribution is not none and s.partner_contribution is not none %}{{ s.player_contribution }}{% if s.player_balls is not none %} ({{ s.player_balls }}){% endif %} / {{ s.partner_contribution }}{% if s.partner_balls is not none %} ({{ s.partner_balls }}){% endif %}{% else %}—{% endif %}</td>
+                                <td>{{ s.opponent or '—' }}</td>
+                                <td class="pp-nowrap"><a href="/match/{{ s.match_id }}/scoreboard" title="Open scorecard">{{ s.date or 'Scorecard' }}</a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div>
+                <div class="pp-pship-sub">Most runs with</div>
+                <div style="overflow-x:auto">
+                    <table class="pp-tbl" id="pp-partners">
+                        <thead>
+                            <tr><th>Partner</th><th>Stands</th><th>Runs</th><th title="Runs per stand">Avg</th><th>Best</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for p in partnerships.partners[:5] %}
+                            <tr>
+                                <td><a href="/player/{{ p.id }}?match_format={{ match_format }}">{{ p.name }}</a></td>
+                                <td>{{ p.count }}</td>
+                                <td class="kc">{{ p.total_runs }}</td>
+                                <td>{{ p.avg_runs }}</td>
+                                <td>{{ p.best }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div style="text-align:center;padding:1rem;color:var(--fg-secondary)">No partnerships yet</div>
+        {% endif %}
+    </div>
+    {% endif %}
 
     <!-- Match Log -->
     <div class="pp-section">

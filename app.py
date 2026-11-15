@@ -2613,6 +2613,7 @@ def create_app():
         TournamentTeam=TournamentTeam,
         TournamentFixture=TournamentFixture,
         Tournament=Tournament,
+        limiter=limiter,
     )
 
     # --- Match & Archive Routes (Phase 4 extraction) ---

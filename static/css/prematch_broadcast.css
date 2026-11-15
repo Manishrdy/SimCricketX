@@ -1,0 +1,41 @@
+.overlay.prematch-overlay { z-index: 2100; padding: 24px; background: var(--overlay-bg); overflow-y: auto; }
+.prematch-shell { width: min(960px,100%); margin: auto; flex-shrink: 0; }
+.prematch-card { background: var(--card-bg); color: var(--fg); border: 1px solid var(--card-border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-lg); font-family: var(--font-sans); }
+.pm-topline,.pm-footer { display:flex; justify-content:space-between; gap:16px; padding:18px 30px; font-size:11px; letter-spacing:2px; font-weight:700; }
+.pm-topline { border-bottom:1px solid var(--card-border); color:var(--accent); }
+.pm-hero { position:relative; isolation:isolate; overflow:hidden; padding:38px 30px; background:linear-gradient(120deg,var(--accent-light),var(--bg-secondary) 65%); }
+.pm-eyebrow { font-size:10px; letter-spacing:2px; color:var(--fg-secondary); font-weight:600; margin:0 0 12px; }
+.pm-hero h2 { position:relative; max-width:85%; margin:0; font-size:clamp(28px,4vw,48px); font-weight:800; line-height:1.15; overflow-wrap:anywhere; color:var(--fg); }
+.pm-hero h2 span { color:var(--accent); font-size:.55em; font-weight:400; }
+.pm-venue { position:relative; color:var(--fg-secondary); margin:14px 0 0; font-size:15px; }
+.pm-ground { position:absolute; z-index:-1; right:-60px; top:10px; width:360px; height:230px; border:24px solid var(--accent-light); border-radius:50%; transform:rotate(-25deg); box-shadow:0 0 0 2px var(--card-border),0 0 0 22px var(--accent-light),0 0 0 45px var(--bg-secondary); }
+.pm-ground div { width:25px; height:80px; margin:50px auto; background:var(--accent-light); border:1px solid var(--accent); }
+.pm-conditions { display:grid; grid-template-columns:repeat(3,1fr); background:var(--bg-secondary); padding:22px 30px; gap:20px; }
+.pm-conditions span,.pm-toss>span { display:block; font-size:9px; letter-spacing:1.8px; color:var(--fg-secondary); margin-bottom:8px; }
+.pm-conditions strong { font-size:17px; font-weight:600; }
+.pm-toss { margin:24px 30px 0; border-left:3px solid var(--accent); padding:4px 18px; }
+.pm-toss strong { font-size:18px; color:var(--fg); }
+.pm-teams { display:grid; grid-template-columns:1fr 1fr; gap:30px; padding:26px 30px; }
+.pm-team header { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; }
+.pm-team h3 { margin:4px 0 0; font-size:23px; color:var(--fg); overflow-wrap:anywhere; }
+.pm-team .pm-eyebrow { font-size:9px; }
+.pm-order { color:var(--accent); border:1px solid var(--card-border); padding:6px 8px; border-radius:var(--radius-sm); font-size:10px; white-space:nowrap; }
+.pm-team ol { margin:0; padding:0; list-style:none; counter-reset:xi; }
+.pm-team li { counter-increment:xi; display:flex; gap:10px; align-items:baseline; border-top:1px solid var(--card-border); padding:7px 0; font-size:13px; }
+.pm-team li::before { content:counter(xi,decimal-leading-zero); color:var(--fg-secondary); font-size:10px; min-width:17px; }
+.pm-team li small { margin-left:auto; color:var(--fg-secondary); font-size:9px; text-align:right; }
+.pm-footer { background:var(--bg-secondary); color:var(--fg-secondary); font-size:9px; }
+.pm-controls { display:flex; justify-content:space-between; align-items:center; gap:20px; padding:18px 24px; background:var(--card-bg); border:1px solid var(--card-border); border-radius:var(--radius-md); margin-top:12px; }
+.pm-controls p { font-size:12px; color:var(--fg-secondary); margin:0; }
+.pm-controls button { flex-shrink:0; cursor:pointer; }
+.pm-controls button:focus-visible { outline:3px solid var(--border-focused); outline-offset:4px; }
+.pm-controls button:disabled { opacity:.65; cursor:wait; }
+@media(max-width:600px) { .prematch-overlay { padding:12px; } .pm-topline,.pm-footer { padding:14px 18px; font-size:8px; letter-spacing:1px; } .pm-hero { padding:28px 18px; } .pm-conditions { padding:18px; gap:10px; } .pm-conditions strong { font-size:13px; } .pm-conditions span { font-size:8px; letter-spacing:.5px; } .pm-toss { margin:20px 18px 0; } .pm-teams { grid-template-columns:1fr; padding:22px 18px; gap:24px; } .pm-controls { flex-direction:column; align-items:stretch; } .pm-hero h2 { max-width:100%; } }
+
+/* Reuse the match UI's theme tokens in both the dialog and its archived image. */
+.prematch-card { border-top:3px solid var(--accent); }
+.pm-topline, .pm-footer, .pm-eyebrow, .pm-conditions span, .pm-toss > span, .pm-order, .pm-team li::before { font-family:var(--font-mono); }
+.pm-order { background:var(--accent-light); }
+.pm-footer { border-top:1px solid var(--card-border); }
+.pm-accent { color:var(--accent); }
+@media(max-width:600px) { .overlay.prematch-overlay { padding:12px; } }

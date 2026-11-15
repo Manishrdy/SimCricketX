@@ -37,6 +37,7 @@ STATE_VERSION = 1
 GUIDE_PAGES = {
     "home": "home",
     "create_team": "team_create",
+    "edit_team": "team_create",
     "manage_teams": "manage_teams",
     "team_squad": "team_squad",
     "match_setup": "match_setup",

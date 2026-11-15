@@ -262,6 +262,7 @@ def test_archiver_rebuild_preserves_existing_scorecards_and_new_capture(monkeypa
     old_name = "TW_vs_TC_day_01_lunch_innings_1_scorecard.png"
     with match_archiver_module.zipfile.ZipFile(zip_path, "w") as existing:
         existing.writestr(old_name, b"old-card")
+        existing.writestr("TW_vs_TC_prematch_presentation.png", b"prematch-card")
         existing.writestr("commentary.txt", b"not an image")
         existing.writestr("../unsafe_scorecard.png", b"unsafe")
 
@@ -274,14 +275,14 @@ def test_archiver_rebuild_preserves_existing_scorecards_and_new_capture(monkeypa
     (user_dir / f"{match_id}_innings_4_end_scorecard.png").write_bytes(b"final-card")
     archiver._include_scorecard_images()
 
-    assert {path.name for path in archiver.created_files} == {old_name, final_name}
+    assert {path.name for path in archiver.created_files} == {old_name, final_name, "TW_vs_TC_prematch_presentation.png"}
     assert (archiver.archive_path / old_name).read_bytes() == b"old-card"
     assert (archiver.archive_path / final_name).read_bytes() == b"final-card"
     assert not (tmp_path / "unsafe_scorecard.png").exists()
 
     rebuilt_path = archiver._create_zip_archive()
     with match_archiver_module.zipfile.ZipFile(rebuilt_path) as rebuilt:
-        assert set(rebuilt.namelist()) == {old_name, final_name}
+        assert set(rebuilt.namelist()) == {old_name, final_name, "TW_vs_TC_prematch_presentation.png"}
 
 
 def test_fc_build_innings_plan_has_all_four_innings(app, regular_user, test_team, test_team_2):

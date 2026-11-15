@@ -1,0 +1,30 @@
+<div class="overlay prematch-overlay" id="prematch-overlay" role="dialog" aria-modal="true" aria-labelledby="prematch-title" data-focus-dialog data-viewport-dialog data-dialog-close="#prematch-close">
+    <div class="prematch-shell">
+        <article class="prematch-card" id="prematch-card">
+            <header class="pm-topline"><span>SCX / MATCHDAY</span><span>{{ match.match_format }} · {% if match.get('is_day_night') %}DAY / NIGHT{% else %}DAY MATCH{% endif %}</span></header>
+            <section class="pm-hero">
+                <div class="pm-ground" aria-hidden="true"><div></div></div>
+                <p class="pm-eyebrow">THE STAGE IS SET</p>
+                <h2 id="prematch-title">{{ match.team_home.split('_')[0] }} <span>vs</span> {{ match.team_away.split('_')[0] }}</h2>
+                <p class="pm-venue">{{ match.stadium or 'Match venue' }}</p>
+            </section>
+            {% set conditions = match.get('conditions_snapshot') or {} %}
+            <div class="pm-conditions">
+                <div><span>01 / FORECAST</span><strong>{{ weather_label or 'Not available' }}</strong></div>
+                <div><span>02 / SURFACE</span><strong>{{ match.pitch or 'Not available' }}</strong></div>
+                <div><span>03 / VENUE AVERAGE</span><strong>{% if conditions.get('average_temperature_c') is not none %}{{ conditions.average_temperature_c }}°C{% else %}—{% endif %}</strong></div>
+            </div>
+            <div class="pm-toss"><span>TOSS REPORT</span><strong id="pm-toss-result"></strong></div>
+            <div class="pm-teams">
+                {% for side, team in [('home', match.team_home), ('away', match.team_away)] %}
+                <section class="pm-team">
+                    <header><div><span class="pm-eyebrow">{{ side }} / PLAYING XI</span><h3>{{ team.split('_')[0] }}</h3></div><span class="pm-order" id="pm-order-{{ side }}"></span></header>
+                    <ol>{% for player in (match.get('playing_xi') or {}).get(side, []) %}<li><span>{{ player.name }}</span><small>{{ player.get('role', '') }}</small></li>{% endfor %}</ol>
+                </section>
+                {% endfor %}
+            </div>
+            <footer class="pm-footer"><span>SIMCRICKET<span class="pm-accent">X</span></span><span>PRE-MATCH / CONDITIONS & LINEUPS</span></footer>
+        </article>
+        <div class="pm-controls"><p id="pm-save-status" role="status">Your match presentation will be saved to the match archive.</p><button type="button" id="prematch-close" class="impact-btn primary" data-dialog-close>Close & start match <span aria-hidden="true">→</span></button></div>
+    </div>
+</div>

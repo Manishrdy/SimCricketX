@@ -510,6 +510,10 @@
 .content-head-title i { color: var(--c1); font-size: 0.8rem; }
 .content-body { padding: 0.75rem 1rem; flex: 1; overflow-y: auto; max-height: 360px; }
 
+/* Partnerships tab: Top stands / By wicket / Best pairs */
+.p-views { padding: 0.75rem 1rem 0; }
+.p-view[hidden] { display: none; }
+
 /* Partnership mini table */
 .p-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
 .p-table th {
@@ -1479,33 +1483,88 @@
 
             <!-- PARTNERSHIPS PANEL -->
             <div class="table-panel" id="partnerships">
-                <div class="table-controls">
-                    <input class="tbl-search" type="text" placeholder="Search batsmen…" oninput="filterPartnerships()">
-                    <span class="tbl-count" id="partnerships-count"></span>
-                    <div class="export-grp">
-                        <button class="btn-exp" title="Export all filtered rows" onclick="exportFiltered('partnerships','csv')"><i class="fas fa-file-csv"></i> CSV</button>
-                        <button class="btn-exp" title="Export all filtered rows" onclick="exportFiltered('partnerships','txt')"><i class="fas fa-file-alt"></i> TXT</button>
-                    </div>
-                </div>
-                <div class="tbl-wrap">
-                    <table class="stats-tbl" id="partnerships-table">
+                {% set rate_col = ('R/100', 'Runs per 100 balls') if match_format == 'Hundred' else ('RR', 'Runs per over') %}
+                {% set stand_cols = [('#', none), ('Batsman 1', none), ('Batsman 2', none), ('Team', none), ('Vs', 'Opponent'),
+                                     ('Runs', '* = unbroken stand'), ('Balls', none), rate_col,
+                                     ('4s', none), ('6s', none), ('Wicket', none)]
+                                  + ([('Inns', 'Innings of the match')] if match_format == 'FC' else [])
+                                  + [('Contribution', 'Runs (balls) by each batter'), ('Match', 'Open the scorecard')] %}
+                {% set pair_cols = [('#', none), ('Batsman 1', none), ('Batsman 2', none), ('Team', none),
+                                    ('Stands', 'Partnerships batted together'), ('Runs', none), ('Balls', none),
+                                    ('Avg', 'Runs per stand'), rate_col,
+                                    ('50+', 'Stands of 50 or more'), ('100+', 'Stands of 100 or more'), ('Best', 'Highest stand')] %}
+                {% macro p_head(table_id, cols) %}
                         <thead>
                             <tr>
-                                <th onclick="handleSort('partnerships-table',0)"># <span class="sa">⇕</span></th>
-                                <th onclick="handleSort('partnerships-table',1)">Batsman 1 <span class="sa">⇕</span></th>
-                                <th onclick="handleSort('partnerships-table',2)">Batsman 2 <span class="sa">⇕</span></th>
-                                <th onclick="handleSort('partnerships-table',3)">Runs <span class="sa">⇕</span></th>
-                                <th onclick="handleSort('partnerships-table',4)">Balls <span class="sa">⇕</span></th>
-                                <th onclick="handleSort('partnerships-table',5)">Wicket <span class="sa">⇕</span></th>
-                                <th>Contribution</th>
+                                {% for label, tip in cols %}
+                                <th onclick="handleSort('{{ table_id }}',{{ loop.index0 }})"{% if tip %} title="{{ tip }}"{% endif %}>{{ label }} <span class="sa">⇕</span></th>
+                                {% endfor %}
                             </tr>
                         </thead>
-                        <tbody id="partnerships-tbody">
-                        </tbody>
-                    </table>
+                {% endmacro %}
+                {% macro p_export(type) %}
+                    <div class="export-grp">
+                        <button class="btn-exp" title="Export all filtered rows" onclick="exportFiltered('{{ type }}','csv')"><i class="fas fa-file-csv"></i> CSV</button>
+                        <button class="btn-exp" title="Export all filtered rows" onclick="exportFiltered('{{ type }}','txt')"><i class="fas fa-file-alt"></i> TXT</button>
+                    </div>
+                {% endmacro %}
+
+                <div class="p-views" role="tablist" aria-label="Partnership views">
+                    <div class="pill-group">
+                        <button class="pill-btn active" role="tab" aria-selected="true" data-pview="top" onclick="showPartnershipView('top')">Top stands</button>
+                        <button class="pill-btn" role="tab" aria-selected="false" data-pview="wickets" onclick="showPartnershipView('wickets')">By wicket</button>
+                        <button class="pill-btn" role="tab" aria-selected="false" data-pview="pairs" onclick="showPartnershipView('pairs')">Best pairs</button>
+                    </div>
                 </div>
-                <div class="tbl-pagination" id="partnerships-pagination"></div>
-                <div class="no-data" id="partnerships-empty" style="display:none;"><i class="fas fa-user-friends"></i>No partnership data available</div>
+
+                <!-- Top stands -->
+                <div class="p-view" data-pview="top">
+                    <div class="table-controls">
+                        <input class="tbl-search" type="text" placeholder="Search batsmen or teams…" oninput="filterPartnerships('partnerships')">
+                        <span class="tbl-count" id="partnerships-count"></span>
+                        {{ p_export('partnerships') }}
+                    </div>
+                    <div class="tbl-wrap">
+                        <table class="stats-tbl" id="partnerships-table">
+                            {{ p_head('partnerships-table', stand_cols) }}
+                            <tbody id="partnerships-tbody"></tbody>
+                        </table>
+                    </div>
+                    <div class="tbl-pagination" id="partnerships-pagination"></div>
+                    <div class="no-data" id="partnerships-empty" style="display:none;"><i class="fas fa-user-friends"></i>No partnership data available</div>
+                </div>
+
+                <!-- Highest stand for each wicket -->
+                <div class="p-view" data-pview="wickets" hidden>
+                    <div class="table-controls">
+                        <span class="tbl-count">Highest stand for each wicket</span>
+                        {{ p_export('partnership-wickets') }}
+                    </div>
+                    <div class="tbl-wrap">
+                        <table class="stats-tbl" id="partnership-wickets-table">
+                            {{ p_head('partnership-wickets-table', stand_cols) }}
+                            <tbody id="partnership-wickets-tbody"></tbody>
+                        </table>
+                    </div>
+                    <div class="no-data" id="partnership-wickets-empty" style="display:none;"><i class="fas fa-user-friends"></i>No partnership data available</div>
+                </div>
+
+                <!-- Most productive pairs -->
+                <div class="p-view" data-pview="pairs" hidden>
+                    <div class="table-controls">
+                        <input class="tbl-search" type="text" placeholder="Search batsmen or teams…" oninput="filterPartnerships('partnership-pairs')">
+                        <span class="tbl-count" id="partnership-pairs-count"></span>
+                        {{ p_export('partnership-pairs') }}
+                    </div>
+                    <div class="tbl-wrap">
+                        <table class="stats-tbl" id="partnership-pairs-table">
+                            {{ p_head('partnership-pairs-table', pair_cols) }}
+                            <tbody id="partnership-pairs-tbody"></tbody>
+                        </table>
+                    </div>
+                    <div class="tbl-pagination" id="partnership-pairs-pagination"></div>
+                    <div class="no-data" id="partnership-pairs-empty" style="display:none;"><i class="fas fa-user-friends"></i>No partnership data available</div>
+                </div>
             </div>
 
         </div>
@@ -1689,7 +1748,7 @@ function applyPagination(type) {
         visible.slice(start, start + st.size).forEach(r => r.style.display = '');
     }
     // update count
-    const unit = type === 'bowling' ? 'bowlers' : 'players';
+    const unit = ({ bowling: 'bowlers', partnerships: 'partnerships', 'partnership-pairs': 'pairs' })[type] || 'players';
     const el = document.getElementById(type + '-count');
     if (el) el.textContent = total + ' ' + unit;
     // render footer: rows-per-page + range on the left, pager on the right
@@ -1848,7 +1907,7 @@ function loadPartnerships() {
                         ? '<div class="p-contrib">' + pt.batsman1_contribution + ' / ' + pt.batsman2_contribution + '</div>' : '';
                     h += '<tr><td><span class="rank-chip ' + (i===0?'gold':i===1?'silver':i===2?'bronze':'') + '">' + (i+1) + '</span></td>'
                        + '<td><div class="p-names">' + escHtml(b1) + ' &amp; ' + escHtml(b2) + '</div>' + contrib + '</td>'
-                       + '<td class="p-runs">' + pt.runs + '</td><td>' + pt.balls + '</td><td>' + formatOrdinal(pt.wicket) + '</td>';
+                       + '<td class="p-runs">' + pt.runs + (pt.is_unbroken ? '*' : '') + '</td><td>' + pt.balls + '</td><td>' + formatOrdinal(pt.wicket) + '</td>';
                     if (view === 'overall') h += '<td>' + (pt.tournament ? escHtml(pt.tournament) : '\u2014') + '</td>';
                     h += '</tr>';
                 });
@@ -1866,26 +1925,7 @@ function loadPartnerships() {
         }
         if (empty) empty.style.display = 'none';
         let html = '';
-        data.data.forEach((pt, i) => {
-            const contribBar = (pt.batsman1_contribution != null && pt.runs > 0)
-                ? (() => {
-                    const pct1 = Math.round((pt.batsman1_contribution / pt.runs) * 100);
-                    return `<div style="display:flex;gap:2px;height:6px;border-radius:3px;overflow:hidden;background:var(--bg-secondary)">`
-                         + `<div style="width:${pct1}%;background:var(--c1);border-radius:3px 0 0 3px" title="${pt.batsman1_contribution}"></div>`
-                         + `<div style="flex:1;background:#e879f9;border-radius:0 3px 3px 0" title="${pt.batsman2_contribution}"></div></div>`
-                         + `<div style="font-size:0.6rem;color:var(--fg-secondary)">${pt.batsman1_contribution} / ${pt.batsman2_contribution}</div>`;
-                  })()
-                : '-';
-            html += `<tr>`
-                  + `<td>${i + 1}</td>`
-                  + `<td>${escHtml(pt.batsman1)}</td>`
-                  + `<td>${escHtml(pt.batsman2)}</td>`
-                  + `<td class="kc">${pt.runs}</td>`
-                  + `<td>${pt.balls || '-'}</td>`
-                  + `<td>${formatOrdinal(pt.wicket)}</td>`
-                  + `<td>${contribBar}</td>`
-                  + `</tr>`;
-        });
+        data.data.forEach((pt, i) => { html += partnershipRowHtml(pt, i + 1); });
         tbody.innerHTML = html;
         const countEl = document.getElementById('partnerships-count');
         if (countEl) countEl.textContent = data.data.length + ' partnerships';
@@ -1899,21 +1939,124 @@ function loadPartnerships() {
     });
 }
 
-function filterPartnerships() {
+const P_DASH = '\u2014';
+const pOrDash = v => (v == null || v === '') ? P_DASH : v;
+const pRate = v => v != null ? v.toFixed(RESOLVED_FORMAT === 'Hundred' ? 1 : 2) : P_DASH;
+
+// One row of a stands table (Top stands and By wicket share the columns).
+function partnershipRowHtml(pt, rank) {
+    const share = (runs, balls) => runs + (balls != null ? ' (' + balls + ')' : '');
+    // Older saves stored no per-batter split: the API sends null there.
+    const hasSplit = pt.batsman1_contribution != null && pt.batsman2_contribution != null;
+    const contribBar = (hasSplit && pt.runs > 0)
+        ? (() => {
+            const pct1 = Math.round((pt.batsman1_contribution / pt.runs) * 100);
+            return `<div style="display:flex;gap:2px;height:6px;border-radius:3px;overflow:hidden;background:var(--bg-secondary)">`
+                 + `<div style="width:${pct1}%;background:var(--c1);border-radius:3px 0 0 3px" title="${pt.batsman1_contribution}"></div>`
+                 + `<div style="flex:1;background:#e879f9;border-radius:0 3px 3px 0" title="${pt.batsman2_contribution}"></div></div>`
+                 + `<div style="font-size:0.6rem;color:var(--fg-secondary)">${share(pt.batsman1_contribution, pt.batsman1_balls)} / ${share(pt.batsman2_contribution, pt.batsman2_balls)}</div>`;
+          })()
+        : P_DASH;
+    const matchTip = [pt.tournament, 'Open scorecard'].filter(Boolean).join(' \u00b7 ');
+    const matchCell = pt.match_id
+        ? `<a href="/match/${encodeURIComponent(pt.match_id)}/scoreboard" title="${escHtml(matchTip)}" style="color:var(--c1);text-decoration:none;white-space:nowrap">${escHtml(pt.date || 'Scorecard')}</a>`
+        : P_DASH;
+    return `<tr>`
+         + `<td>${rank}</td>`
+         + `<td>${escHtml(pt.batsman1)}</td>`
+         + `<td>${escHtml(pt.batsman2)}</td>`
+         + `<td>${escHtml(pOrDash(pt.team))}</td>`
+         + `<td>${escHtml(pOrDash(pt.opponent))}</td>`
+         + `<td class="kc"${pt.is_unbroken ? ' title="Unbroken stand"' : ''}>${pt.runs}${pt.is_unbroken ? '*' : ''}</td>`
+         + `<td>${pOrDash(pt.balls)}</td>`
+         + `<td>${pRate(pt.run_rate)}</td>`
+         + `<td>${pOrDash(pt.fours)}</td>`
+         + `<td>${pOrDash(pt.sixes)}</td>`
+         + `<td>${formatOrdinal(pt.wicket)}</td>`
+         + (RESOLVED_FORMAT === 'FC' ? `<td>${pOrDash(pt.innings)}</td>` : '')
+         + `<td>${contribBar}</td>`
+         + `<td>${matchCell}</td>`
+         + `</tr>`;
+}
+
+function partnershipPairRowHtml(pr, rank) {
+    return `<tr>`
+         + `<td>${rank}</td>`
+         + `<td>${escHtml(pr.batsman1)}</td>`
+         + `<td>${escHtml(pr.batsman2)}</td>`
+         + `<td>${escHtml(pOrDash(pr.team))}</td>`
+         + `<td>${pr.stands}</td>`
+         + `<td class="kc">${pr.runs}</td>`
+         + `<td>${pOrDash(pr.balls)}</td>`
+         + `<td>${pr.average != null ? pr.average.toFixed(2) : P_DASH}</td>`
+         + `<td>${pRate(pr.run_rate)}</td>`
+         + `<td>${pr.fifty_stands}</td>`
+         + `<td>${pr.hundred_stands}</td>`
+         + `<td>${pr.best}</td>`
+         + `</tr>`;
+}
+
+// By wicket and Best pairs load the first time they are opened.
+const P_VIEWS = {
+    wickets: { type: 'partnership-wickets', path: '/api/partnerships/by-wicket', row: pt => partnershipRowHtml(pt, formatOrdinal(pt.wicket)) },
+    pairs:   { type: 'partnership-pairs',   path: '/api/partnerships/pairs?limit=50', row: partnershipPairRowHtml, paged: true },
+};
+const pViewLoaded = {};
+
+function showPartnershipView(name) {
     const panel = document.getElementById('partnerships');
     if (!panel) return;
-    const search = (panel.querySelector('.tbl-search')?.value || '').toLowerCase();
-    const table = document.getElementById('partnerships-table');
+    panel.querySelectorAll('.p-views .pill-btn').forEach(b => {
+        const on = b.dataset.pview === name;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    panel.querySelectorAll('.p-view').forEach(v => { v.hidden = v.dataset.pview !== name; });
+    if (P_VIEWS[name] && !pViewLoaded[name]) loadPartnershipView(name);
+}
+
+function loadPartnershipView(name) {
+    const cfg = P_VIEWS[name];
+    const tbody = document.getElementById(cfg.type + '-tbody');
+    const empty = document.getElementById(cfg.type + '-empty');
+    if (!tbody) return;
+    const p = new URLSearchParams(window.location.search);
+    let url = cfg.path + (cfg.path.includes('?') ? '&' : '?') + 'match_format=' + encodeURIComponent(RESOLVED_FORMAT || 'T20');
+    if ((p.get('view') || 'overall') === 'tournament' && RESOLVED_TOURNAMENT) url += '&tournament_id=' + encodeURIComponent(RESOLVED_TOURNAMENT);
+    pViewLoaded[name] = true;
+    fetch(withListALength(url)).then(r => r.json()).then(data => {
+        const rows = (data.success && data.data) || [];
+        tbody.innerHTML = rows.map((item, i) => cfg.row(item, i + 1)).join('');
+        if (empty) {
+            empty.style.display = rows.length ? 'none' : '';
+            empty.innerHTML = '<i class="fas fa-user-friends"></i>No partnership data available';
+        }
+        if (cfg.paged) {
+            pgState[cfg.type] = { page: 1, size: (pgState[cfg.type] || {}).size ?? 25 };
+            applyPagination(cfg.type);
+        }
+    }).catch(() => {
+        pViewLoaded[name] = false;   // retry next time the view is opened
+        tbody.innerHTML = '';
+        if (empty) { empty.style.display = ''; empty.innerHTML = '<i class="fas fa-exclamation-circle"></i>Error loading partnerships'; }
+    });
+}
+
+// Search a partnerships table by batter, team or opponent. A cell that holds
+// a number (the pairs table has Stands where stands tables have Vs) never
+// matches a name search, so the same four columns work for both.
+function filterPartnerships(type) {
+    type = type || 'partnerships';
+    const table = document.getElementById(type + '-table');
     if (!table) return;
+    const search = (table.closest('.p-view')?.querySelector('.tbl-search')?.value || '').trim().toLowerCase();
     table.querySelectorAll('tbody tr').forEach(row => {
         const cells = row.querySelectorAll('td');
-        const b1 = (cells[1]?.textContent || '').toLowerCase();
-        const b2 = (cells[2]?.textContent || '').toLowerCase();
-        const show = !search || b1.includes(search) || b2.includes(search);
+        const show = !search || [1, 2, 3, 4].some(i => (cells[i]?.textContent || '').toLowerCase().includes(search));
         row.dataset.filtered = show ? '' : 'out';
     });
-    if (pgState['partnerships']) pgState['partnerships'].page = 1;
-    applyPagination('partnerships');
+    if (pgState[type]) pgState[type].page = 1;
+    applyPagination(type);
 }
 
 function formatOrdinal(n) {

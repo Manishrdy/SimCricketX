@@ -1382,238 +1382,378 @@ class StatsService:
     
     def get_player_partnership_stats(self, player_id, user_id, tournament_id=None, match_format=None, scheduled_overs=None):
         """
-        Get comprehensive partnership statistics for a specific player.
-        
-        Args:
-            player_id (int): Player ID
-            user_id (str): User ID
-            tournament_id (int, optional): Filter by tournament
-            
+        Partnership statistics for one player: their best stands, the partners
+        they bat with most, a per-wicket breakdown and milestone counts.
+
+        Shares the leaderboard's rules (see _partnership_scope): the match
+        owner decides visibility and zero-ball placeholder stands are ignored.
+
         Returns:
-            dict: Partnership statistics including best partnerships, frequent partners, etc.
+            dict: the statistics, or {'error': ...} when the player is missing
+            or belongs to someone else.
         """
         self._log(f"Fetching partnership stats for player {player_id}")
-        
+
         try:
             from database.models import MatchPartnership
-            
-            # Verify player belongs to user
-            player = Player.query.get(player_id)
+
+            player = db.session.get(Player, player_id)
             if not player:
                 return {'error': 'Player not found'}
-            
-            team = Team.query.get(player.team_id)
+
+            team = db.session.get(Team, player.team_id)
             if not team or team.user_id != user_id:
                 return {'error': 'Unauthorized'}
-            
-            # Query partnerships where this player is involved
+
             query = (
                 db.session.query(MatchPartnership, Match)
                 .join(Match, MatchPartnership.match_id == Match.id)
                 .filter(
-                    (MatchPartnership.batsman1_id == player_id) | 
+                    (MatchPartnership.batsman1_id == player_id) |
                     (MatchPartnership.batsman2_id == player_id)
                 )
             )
-            
-            if tournament_id:
-                query = query.filter(Match.tournament_id == tournament_id)
-            if match_format:
-                query = query.filter(Match.match_format == match_format)
+            partnerships = self._partnership_scope(
+                query, user_id, tournament_id, match_format, scheduled_overs).all()
 
-            partnerships = self._filter_length(query, scheduled_overs).all()
-            
-            if not partnerships:
-                return {
-                    'player_name': player.name,
-                    'total_partnerships': 0,
-                    'best_partnerships': [],
-                    'partners': [],
-                    'milestones': {'50+': 0, '100+': 0, '150+': 0}
-                }
-            
             return self._analyze_partnerships(player_id, player.name, partnerships)
-            
+
         except Exception as e:
             log_exception(e)
             self._log(f"Error fetching partnership stats: {e}", level='error')
-            return {'error': str(e)}
-    
+            return {'error': 'Could not load partnership statistics'}
+
     def _analyze_partnerships(self, player_id, player_name, partnerships):
         """
-        Analyze partnership data for insights.
-        
+        Turn a player's stands into the profile summary.
+
         Args:
-            player_id (int): Player ID
-            player_name (str): Player name
-            partnerships (list): List of (MatchPartnership, Match) tuples
-            
-        Returns:
-            dict: Analyzed partnership statistics
+            partnerships (list): (MatchPartnership, Match) tuples
+
+        Detail columns added in Nov 2026 are None on older rows; those rows
+        also stored 0/0 contributions, reported here as None.
         """
         stats = {
             'player_name': player_name,
-            'total_partnerships': len(partnerships),
+            'total_partnerships': 0,
             'best_partnerships': [],
-            'partners': {},
+            'partners': [],
             'by_position': {},
             'milestones': {'50+': 0, '100+': 0, '150+': 0, '200+': 0},
             'total_runs': 0,
-            'average_partnership': 0
+            'average_partnership': 0,
+            'best': 0,
         }
-        
-        total_runs = 0
-        
+        if not partnerships:
+            return stats
+
+        partner_ids = {
+            p.batsman2_id if p.batsman1_id == player_id else p.batsman1_id
+            for p, _ in partnerships
+        }
+        partner_rows = {
+            partner.id: partner
+            for partner in Player.query.filter(Player.id.in_(partner_ids)).all()
+        }
+
+        partners = {}
         for partnership, match in partnerships:
-            # Determine partner
             is_batsman1 = (partnership.batsman1_id == player_id)
             partner_id = partnership.batsman2_id if is_batsman1 else partnership.batsman1_id
-            
-            # Get partner info
-            partner = Player.query.get(partner_id)
+            partner = partner_rows.get(partner_id)
             if not partner:
                 continue
-            
-            partner_name = partner.name
-            player_contribution = (partnership.batsman1_contribution if is_batsman1 
-                                 else partnership.batsman2_contribution)
-            
-            # Track by partner
-            if partner_id not in stats['partners']:
-                stats['partners'][partner_id] = {
-                    'name': partner_name,
-                    'count': 0,
-                    'total_runs': 0,
-                    'best': 0,
-                    'avg_runs': 0
-                }
-            
-            stats['partners'][partner_id]['count'] += 1
-            stats['partners'][partner_id]['total_runs'] += partnership.runs
-            stats['partners'][partner_id]['best'] = max(
-                stats['partners'][partner_id]['best'], 
-                partnership.runs
-            )
-            
-            # Track by wicket position
-            wicket = partnership.wicket_number
-            if wicket not in stats['by_position']:
-                stats['by_position'][wicket] = {'count': 0, 'runs': 0}
-            stats['by_position'][wicket]['count'] += 1
-            stats['by_position'][wicket]['runs'] += partnership.runs
-            
-            # Track milestones
-            if partnership.runs >= 50:
-                stats['milestones']['50+'] += 1
-            if partnership.runs >= 100:
-                stats['milestones']['100+'] += 1
-            if partnership.runs >= 150:
-                stats['milestones']['150+'] += 1
-            if partnership.runs >= 200:
-                stats['milestones']['200+'] += 1
-            
-            total_runs += partnership.runs
-            
-            # Determine opponent
+
+            runs = partnership.runs or 0
+            balls = partnership.balls or 0
+            own = (partnership.batsman1_contribution, partnership.batsman1_balls)
+            other = (partnership.batsman2_contribution, partnership.batsman2_balls)
+            if not is_batsman1:
+                own, other = other, own
+            player_contribution, partner_contribution = own[0], other[0]
+            if partnership.fours is None and runs > 0 and not (player_contribution or 0) and not (partner_contribution or 0):
+                player_contribution = partner_contribution = None
+
+            entry = partners.setdefault(partner_id, {
+                'id': partner_id, 'name': partner.name,
+                'count': 0, 'total_runs': 0, 'best': 0, 'avg_runs': 0,
+            })
+            entry['count'] += 1
+            entry['total_runs'] += runs
+            entry['best'] = max(entry['best'], runs)
+
+            position = stats['by_position'].setdefault(partnership.wicket_number, {'count': 0, 'runs': 0})
+            position['count'] += 1
+            position['runs'] += runs
+
+            for label, floor in (('50+', 50), ('100+', 100), ('150+', 150), ('200+', 200)):
+                if runs >= floor:
+                    stats['milestones'][label] += 1
+
+            stats['total_partnerships'] += 1
+            stats['total_runs'] += runs
+
+            # A deleted opposing team leaves the helper's 'N/A' placeholder.
             opponent = self._get_opponent_name(match, partner.team_id)
-            
-            # Add to best partnerships list
+            if opponent == 'N/A':
+                opponent = None
+
             stats['best_partnerships'].append({
-                'partner': partner_name,
-                'runs': partnership.runs,
-                'balls': partnership.balls,
+                'partner': partner.name,
+                'partner_id': partner_id,
+                'runs': runs,
+                'balls': balls,
+                'run_rate': self._partnership_rate(runs, balls, match.match_format),
                 'player_contribution': player_contribution,
-                'partner_contribution': (partnership.batsman2_contribution if is_batsman1 
-                                        else partnership.batsman1_contribution),
-                'wicket': wicket,
+                'partner_contribution': partner_contribution,
+                'player_balls': own[1],
+                'partner_balls': other[1],
+                'fours': partnership.fours,
+                'sixes': partnership.sixes,
+                'is_unbroken': bool(partnership.is_unbroken),
+                'wicket': partnership.wicket_number,
+                'innings': partnership.innings_number,
                 'match_id': match.id,
                 'opponent': opponent,
-                'date': match.date.strftime('%Y-%m-%d') if match.date else 'N/A'
+                'date': match.date.strftime('%Y-%m-%d') if match.date else None,
             })
-        
-        # Calculate averages
-        for partner_stats in stats['partners'].values():
-            partner_stats['avg_runs'] = round(
-                partner_stats['total_runs'] / partner_stats['count'], 1
-            )
-        
-        # Sort best partnerships
-        stats['best_partnerships'].sort(key=lambda x: x['runs'], reverse=True)
-        
-        # Calculate overall averages
-        stats['total_runs'] = total_runs
-        stats['average_partnership'] = round(total_runs / len(partnerships), 1) if partnerships else 0
-        
-        # Convert partners dict to sorted list
-        stats['partners'] = sorted(
-            stats['partners'].values(), 
-            key=lambda x: x['total_runs'], 
-            reverse=True
-        )
-        
-        return stats
-    
-    def get_tournament_partnership_leaderboard(self, user_id, tournament_id, limit=10, match_format=None, scheduled_overs=None):
-        """
-        Get best partnerships in a tournament.
-        
-        Args:
-            user_id (str): User ID
-            tournament_id (int): Tournament ID
-            limit (int): Maximum number of entries
-            
-        Returns:
-            list: Top partnerships sorted by runs
-        """
-        self._log(f"Fetching tournament partnership leaderboard for tournament {tournament_id}")
-        
-        try:
-            from database.models import MatchPartnership
-            
-            # Query partnerships from tournament matches with both batsmen joined
-            Batsman2 = aliased(Player)
-            partnerships = (
-                db.session.query(MatchPartnership, Match, Player, Batsman2, Team)
-                .join(Match, MatchPartnership.match_id == Match.id)
-                .join(Player, MatchPartnership.batsman1_id == Player.id)
-                .join(Batsman2, MatchPartnership.batsman2_id == Batsman2.id)
-                .join(Team, Player.team_id == Team.id)
-                .filter(Match.tournament_id == tournament_id)
-                .filter(Team.user_id == user_id)
-            )
-            if match_format:
-                partnerships = partnerships.filter(Match.match_format == match_format)
-            partnerships = (
-                self._filter_length(partnerships, scheduled_overs)
-                .order_by(MatchPartnership.runs.desc())
-                .limit(limit)
-                .all()
-            )
 
-            leaderboard = []
-            for partnership, match, batsman1, batsman2, team in partnerships:
-                
-                opponent = self._get_opponent_name(match, team.id)
-                
-                leaderboard.append({
-                    'batsman1': batsman1.name,
-                    'batsman2': batsman2.name,
-                    'team': team.name,
-                    'runs': partnership.runs,
-                    'balls': partnership.balls,
-                    'batsman1_contribution': partnership.batsman1_contribution,
-                    'batsman2_contribution': partnership.batsman2_contribution,
-                    'wicket': partnership.wicket_number,
-                    'opponent': opponent,
-                    'match_id': match.id
-                })
-            
-            return leaderboard
-            
+        for entry in partners.values():
+            entry['avg_runs'] = round(entry['total_runs'] / entry['count'], 1)
+
+        stats['best_partnerships'].sort(key=lambda x: (-x['runs'], x['balls']))
+        stats['partners'] = sorted(partners.values(), key=lambda x: (-x['total_runs'], x['count']))
+        if stats['total_partnerships']:
+            stats['average_partnership'] = round(stats['total_runs'] / stats['total_partnerships'], 1)
+            stats['best'] = stats['best_partnerships'][0]['runs']
+
+        return stats
+
+    @staticmethod
+    def _partnership_rate(runs, balls, match_format):
+        """Scoring rate of a stand: runs per over, or per 100 balls in the
+        Hundred (which has no overs)."""
+        if not balls:
+            return None
+        if match_format == "Hundred":
+            return round(runs * 100 / balls, 1)
+        try:
+            from engine.format_config import get_any_format
+            balls_per_over = getattr(get_any_format(match_format), "balls_per_over", 6) or 6
+        except Exception:
+            balls_per_over = 6
+        return round(runs * balls_per_over / balls, 2)
+
+    def _partnership_scope(self, query, user_id, tournament_id, match_format, scheduled_overs):
+        """The filters every partnership view shares. ``query`` must already
+        join Match.
+
+        Ownership is always decided by the match's owner. Zero-ball stands are
+        left out: they are placeholders written by older saves (0-1 runs), not
+        partnerships anyone batted.
+        """
+        from database.models import MatchPartnership
+
+        query = query.filter(Match.user_id == user_id).filter(MatchPartnership.balls > 0)
+        if tournament_id:
+            query = query.filter(Match.tournament_id == tournament_id)
+        if match_format:
+            query = query.filter(Match.match_format == match_format)
+        return self._filter_length(query, scheduled_overs)
+
+    def _partnership_stands(self, user_id, tournament_id, match_format, scheduled_overs, limit, wicket_number=None):
+        """Individual stands, highest first (quickest first on a tie), as dicts.
+
+        Detail columns added in Nov 2026 (fours, sixes, batter balls) are None
+        on older rows. Those rows also stored 0/0 contributions, so the
+        contributions are returned as None there rather than as a false "0 / 0".
+        """
+        from database.models import MatchPartnership
+
+        Batsman1 = aliased(Player)
+        Batsman2 = aliased(Player)
+        query = (
+            db.session.query(MatchPartnership, Match, Batsman1, Batsman2, Team, Tournament.name)
+            .join(Match, MatchPartnership.match_id == Match.id)
+            .join(Batsman1, MatchPartnership.batsman1_id == Batsman1.id)
+            .join(Batsman2, MatchPartnership.batsman2_id == Batsman2.id)
+            .outerjoin(Team, Batsman1.team_id == Team.id)
+            .outerjoin(Tournament, Match.tournament_id == Tournament.id)
+        )
+        query = self._partnership_scope(query, user_id, tournament_id, match_format, scheduled_overs)
+        if wicket_number is not None:
+            query = query.filter(MatchPartnership.wicket_number == wicket_number)
+        rows = (
+            query
+            .order_by(MatchPartnership.runs.desc(), MatchPartnership.balls.asc(), MatchPartnership.id.asc())
+            .limit(limit)
+            .all()
+        )
+
+        stands = []
+        for p, match, batsman1, batsman2, team, tournament_name in rows:
+            runs = p.runs or 0
+            balls = p.balls or 0
+            c1, c2 = p.batsman1_contribution, p.batsman2_contribution
+            legacy_detail = p.fours is None
+            if legacy_detail and runs > 0 and not (c1 or 0) and not (c2 or 0):
+                c1 = c2 = None
+
+            # A deleted opposing team leaves the helper's 'N/A' placeholder.
+            opponent = self._get_opponent_name(match, team.id) if team is not None else None
+            if opponent == 'N/A':
+                opponent = None
+
+            stands.append({
+                'batsman1': batsman1.name,
+                'batsman2': batsman2.name,
+                'batsman1_id': batsman1.id,
+                'batsman2_id': batsman2.id,
+                'team': team.name if team is not None else None,
+                'opponent': opponent,
+                'runs': runs,
+                'balls': balls,
+                'run_rate': self._partnership_rate(runs, balls, match.match_format),
+                'fours': p.fours,
+                'sixes': p.sixes,
+                'batsman1_contribution': c1,
+                'batsman2_contribution': c2,
+                'batsman1_balls': p.batsman1_balls,
+                'batsman2_balls': p.batsman2_balls,
+                'wicket': p.wicket_number,
+                'innings': p.innings_number,
+                'is_unbroken': bool(p.is_unbroken),
+                'tournament': tournament_name,
+                'match_id': match.id,
+                'match_format': match.match_format,
+                'date': match.date.strftime('%Y-%m-%d') if match.date else None,
+            })
+        return stands
+
+    def get_partnership_leaderboard(self, user_id, tournament_id=None, limit=10, match_format=None, scheduled_overs=None):
+        """
+        Highest partnerships across a user's matches, or within one tournament.
+
+        The single source for both the overall and the tournament leaderboard,
+        so the two views can't drift apart.
+
+        Returns:
+            list[dict]: stands sorted by runs (quickest first on a tie)
+        """
+        self._log(
+            f"Fetching partnership leaderboard (tournament={tournament_id}, format={match_format})"
+        )
+        try:
+            return self._partnership_stands(user_id, tournament_id, match_format, scheduled_overs, limit)
         except Exception as e:
             log_exception(e)
             self._log(f"Error fetching partnership leaderboard: {e}", level='error')
             return []
+
+    def get_partnership_wicket_records(self, user_id, tournament_id=None, match_format=None, scheduled_overs=None):
+        """
+        The highest stand for each wicket (1st-10th), in wicket order.
+
+        An unbroken stand is numbered wickets + 1, the usual record-book
+        convention, so it counts toward the wicket it was batting for. Wickets
+        nobody has batted for yet are simply absent.
+
+        One small indexed query per wicket rather than a window function: the
+        production host's SQLite may predate window-function support.
+        """
+        self._log(
+            f"Fetching partnership wicket records (tournament={tournament_id}, format={match_format})"
+        )
+        try:
+            records = []
+            for wicket in range(1, 11):
+                records.extend(self._partnership_stands(
+                    user_id, tournament_id, match_format, scheduled_overs, 1, wicket_number=wicket))
+            return records
+        except Exception as e:
+            log_exception(e)
+            self._log(f"Error fetching partnership wicket records: {e}", level='error')
+            return []
+
+    def get_partnership_pairs(self, user_id, tournament_id=None, limit=10, match_format=None, scheduled_overs=None):
+        """
+        Most productive batting pairs: every stand two players shared, added up.
+
+        A pair is the same whichever of the two was recorded as batsman 1.
+        ``average`` is runs per stand (not per dismissal: older rows do not
+        say reliably whether a stand was broken).
+
+        Returns:
+            list[dict]: pairs sorted by total runs
+        """
+        self._log(f"Fetching partnership pairs (tournament={tournament_id}, format={match_format})")
+        try:
+            from database.models import MatchPartnership as MP
+
+            low = db.case((MP.batsman1_id < MP.batsman2_id, MP.batsman1_id), else_=MP.batsman2_id)
+            high = db.case((MP.batsman1_id < MP.batsman2_id, MP.batsman2_id), else_=MP.batsman1_id)
+            total_runs = func.sum(MP.runs)
+            query = (
+                db.session.query(
+                    low.label("low_id"), high.label("high_id"),
+                    func.count(MP.id), total_runs, func.sum(MP.balls), func.max(MP.runs),
+                    func.sum(db.case((MP.runs >= 50, 1), else_=0)),
+                    func.sum(db.case((MP.runs >= 100, 1), else_=0)),
+                )
+                .join(Match, MP.match_id == Match.id)
+            )
+            query = self._partnership_scope(query, user_id, tournament_id, match_format, scheduled_overs)
+            rows = (
+                query.group_by(low, high)
+                .order_by(total_runs.desc(), func.count(MP.id).asc(), low.asc(), high.asc())
+                .limit(limit)
+                .all()
+            )
+            if not rows:
+                return []
+
+            player_ids = {pid for row in rows for pid in row[:2]}
+            players = {
+                player.id: (player.name, team_name)
+                for player, team_name in (
+                    db.session.query(Player, Team.name)
+                    .outerjoin(Team, Player.team_id == Team.id)
+                    .filter(Player.id.in_(player_ids))
+                    .all()
+                )
+            }
+
+            pairs = []
+            for low_id, high_id, stands, runs, balls, best, fifties, hundreds in rows:
+                runs, balls = runs or 0, balls or 0
+                name1, team = players.get(low_id, ("Unknown", None))
+                name2, _ = players.get(high_id, ("Unknown", None))
+                pairs.append({
+                    'batsman1': name1,
+                    'batsman2': name2,
+                    'batsman1_id': low_id,
+                    'batsman2_id': high_id,
+                    'team': team,
+                    'stands': stands,
+                    'runs': runs,
+                    'balls': balls,
+                    'average': round(runs / stands, 2) if stands else None,
+                    'run_rate': self._partnership_rate(runs, balls, match_format),
+                    'fifty_stands': fifties or 0,
+                    'hundred_stands': hundreds or 0,
+                    'best': best or 0,
+                })
+            return pairs
+        except Exception as e:
+            log_exception(e)
+            self._log(f"Error fetching partnership pairs: {e}", level='error')
+            return []
+
+    def get_tournament_partnership_leaderboard(self, user_id, tournament_id, limit=10, match_format=None, scheduled_overs=None):
+        """Best partnerships in one tournament (see get_partnership_leaderboard)."""
+        return self.get_partnership_leaderboard(
+            user_id, tournament_id, limit, match_format=match_format, scheduled_overs=scheduled_overs,
+        )
 
     # ========================================================================
     # Head-to-Head Team Comparison
