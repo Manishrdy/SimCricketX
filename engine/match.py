@@ -285,7 +285,7 @@ class Match(CaptaincyMixin, HundredPresentation):
         # fc_weather_script below (engine/fc_weather.py).
         self.original_overs = self.overs
         match_data["scheduled_overs"] = None if self.is_fc else self.original_overs
-        if not self.is_fc:
+        if not self.is_fc and not (match_data.get("rain_affected") and match_data.get("overs")):
             match_data["overs"] = self.original_overs
         self.weather_forecast = match_data.get("weather_forecast", weather_engine.DEFAULT_FORECAST)
         if self.is_fc:
@@ -1992,6 +1992,34 @@ class Match(CaptaincyMixin, HundredPresentation):
                 "bowling_policy_version": self.hundred_policy_version,
                 "deliveries": self.hundred_deliveries}
 
+    def rain_nrr_metadata(self):
+        """Points-table NRR for a rain-affected T20/T10/List A match.
+
+        Standard playing conditions: once DLS has set a revised target, the
+        side batting first is credited with the par score (target - 1) off
+        the overs the chasing side was allotted — or, if rain ended the
+        chase, off the overs it had actually faced. The chasing side keeps
+        its real score, off its real overs, or off its *allotted* overs when
+        bowled out. Without this the points table charged a side dismissed
+        in a 12-over chase with the full scheduled quota.
+
+        Same shape as hundred_archive_metadata()["nrr"], in legal balls.
+        """
+        balls_per_over = self.balls_per_over
+        second = self.second_innings_bowling_stats or self.bowler_stats or {}
+        balls2 = sum(s.get("balls_bowled", 0) for s in second.values())
+        allotted2 = int(self.overs) * balls_per_over
+        terminated = any(e.get("outcome") == "chase_terminated" for e in self.rain_events_log)
+        runs1 = max(0, (self.target or 1) - 1)
+        balls1 = balls2 if terminated else allotted2
+        if self.wickets >= 10 and not terminated:
+            balls2 = allotted2
+        first_home = self.first_batting_team_name == self.data["team_home"].split("_")[0]
+        sides = {"home" if first_home else "away": {"runs": runs1, "balls": balls1},
+                 "away" if first_home else "home": {"runs": self.score, "balls": balls2}}
+        return {"nrr": sides, "rain_events": self.rain_events_log, "target": self.target,
+                "chase_overs": int(self.overs), "rain_method": "DLS"}
+
     def _create_match_archive(self):
         """Create complete match archive when match ends"""
         if getattr(self, "_archive_created", False):
@@ -2016,6 +2044,9 @@ class Match(CaptaincyMixin, HundredPresentation):
             # Create archiver and generate archive
             if self.is_hundred:
                 self.data["format_metadata"] = self.hundred_archive_metadata()
+            elif (self.rain_affected and not self.is_fc
+                    and self.match_status != "no_result" and self.target):
+                self.data["format_metadata"] = self.rain_nrr_metadata()
             if self.captaincy_enabled:
                 self.data['captaincy_events'] = copy.deepcopy(self.captaincy_events)
             archiver = MatchArchiver(self.match_data, self)
@@ -5003,6 +5034,7 @@ class Match(CaptaincyMixin, HundredPresentation):
                 self.hundred_innings_limits[2] = revised_overs * 5
         self.overs = revised_overs
         self.fmt.overs = revised_overs
+        self.data["overs"] = revised_overs
         if getattr(self.fmt, "strict_short_bowling", False):
             self.fmt.revise_short_innings(revised_overs)
         else:

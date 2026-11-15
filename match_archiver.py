@@ -40,6 +40,7 @@ from database.models import Match as DBMatch, MatchScorecard, Team as DBTeam, Pl
 from utils.exception_tracker import log_exception, log_data_anomaly
 from engine.cricket_math import balls_to_overs_str
 from engine.batting_activity import stats_have_batting_activity
+from engine.bowling_activity import bowling_activity_predicate
 from engine.format_catalog import squad_format, balls_per_over
 from engine import fc_weather
 
@@ -58,6 +59,44 @@ def _counts_career_not_out(card):
     return not card.is_out and (
         card.did_bat is True or (card.did_bat is None and (card.balls or 0) > 0)
     )
+
+
+def _career_card_filters(player_id, record_type, exclude_match_id=None):
+    """Rows that may set a career high-water mark on the Player row.
+
+    Super-over cards are not real innings/spells, and Hundred matches reuse
+    the T20 Player rows without contributing to their career aggregates.
+    """
+    filters = [
+        MatchScorecard.player_id == player_id,
+        MatchScorecard.record_type == record_type,
+        MatchScorecard.is_super_over.isnot(True),
+        sa_func.coalesce(DBMatch.match_format, "") != "Hundred",
+    ]
+    if exclude_match_id is not None:
+        filters.append(MatchScorecard.match_id != exclude_match_id)
+    return filters
+
+
+def _recompute_best_bowling(player, exclude_match_id=None):
+    """Set a player's career best bowling from their real spells.
+
+    Every member of the XI gets a bowling row, so unused bowlers' empty 0/0
+    rows are excluded; otherwise one would outrank a genuine 0/18. Recomputing
+    (rather than comparing against the stored figures) also avoids the 0/0
+    column default being mistaken for an unbeatable wicketless best.
+    """
+    best = db.session.query(
+        MatchScorecard.wickets, MatchScorecard.runs_conceded
+    ).join(DBMatch, MatchScorecard.match_id == DBMatch.id).filter(
+        *_career_card_filters(player.id, "bowling", exclude_match_id),
+        bowling_activity_predicate(MatchScorecard),
+    ).order_by(
+        sa_func.coalesce(MatchScorecard.wickets, 0).desc(),
+        sa_func.coalesce(MatchScorecard.runs_conceded, 0).asc(),
+    ).first()
+    player.best_bowling_wickets = (best.wickets or 0) if best else 0
+    player.best_bowling_runs = (best.runs_conceded or 0) if best else 0
 
 
 def reverse_player_aggregates(scorecards, logger=None):
@@ -129,32 +168,12 @@ def reverse_player_aggregates(scorecards, logger=None):
             # Super-over rows are excluded: they never set high-water marks.
             best_score = db.session.query(
                 sa_func.coalesce(sa_func.max(MatchScorecard.runs), 0)
-            ).filter(
-                MatchScorecard.player_id == player_id,
-                MatchScorecard.record_type == "batting",
-                MatchScorecard.match_id != match_id,
-                MatchScorecard.is_super_over.isnot(True),
+            ).join(DBMatch, MatchScorecard.match_id == DBMatch.id).filter(
+                *_career_card_filters(player_id, "batting", match_id)
             ).scalar()
             player.highest_score = best_score or 0
 
-            # Best bowling — single DB query
-            best_bowling = db.session.query(
-                MatchScorecard.wickets, MatchScorecard.runs_conceded
-            ).filter(
-                MatchScorecard.player_id == player_id,
-                MatchScorecard.record_type == "bowling",
-                MatchScorecard.match_id != match_id,
-                MatchScorecard.is_super_over.isnot(True),
-            ).order_by(
-                MatchScorecard.wickets.desc(),
-                MatchScorecard.runs_conceded.asc(),
-            ).first()
-            if best_bowling:
-                player.best_bowling_wickets = best_bowling.wickets or 0
-                player.best_bowling_runs = best_bowling.runs_conceded or 0
-            else:
-                player.best_bowling_wickets = 0
-                player.best_bowling_runs = 0
+            _recompute_best_bowling(player, exclude_match_id=match_id)
 
     if logger:
         logger.info(f"Reversed aggregate stats for {len(updated_players)} players")
@@ -191,7 +210,26 @@ class MatchArchiver:
             self.match_data.get("match_format", "T20"), self.match_data.get("scheduled_overs"))
         self.format_label = format_label(self.match_data.get("match_format", "T20"), self.match_data["scheduled_overs"])
         if self.match_data.get("match_format") != "FC":
-            self.match_data["overs"] = self.match_data["scheduled_overs"]
+            effective_overs = (
+                int(self.match.overs)
+                if getattr(self.match, "rain_affected", False) and getattr(self.match, "overs", None)
+                else self.match_data.get("overs")
+            )
+            if not effective_overs or effective_overs > self.match_data["scheduled_overs"]:
+                effective_overs = self.match_data["scheduled_overs"]
+            self.match_data["overs"] = int(effective_overs)
+
+        if not self.match_data.get("format_metadata"):
+            if getattr(self.match, "is_hundred", False) and hasattr(self.match, "hundred_archive_metadata"):
+                self.match_data["format_metadata"] = self.match.hundred_archive_metadata()
+            elif (
+                self.match_data.get("match_format") != "FC"
+                and getattr(self.match, "rain_affected", False)
+                and getattr(self.match, "match_status", None) != "no_result"
+                and getattr(self.match, "target", None)
+                and hasattr(self.match, "rain_nrr_metadata")
+            ):
+                self.match_data["format_metadata"] = self.match.rain_nrr_metadata()
         
         # Extract core identifiers
         self.match_id = self.match_data.get('match_id')
@@ -1167,6 +1205,7 @@ class MatchArchiver:
             db.session.flush()
             match_cards = MatchScorecard.query.filter_by(match_id=self.match_id).all()
             updated_players = set()
+            bowled_players = {}
             player_deltas = {}
             for card in match_cards:
                 if _match_format == "Hundred":
@@ -1211,17 +1250,19 @@ class MatchArchiver:
                         if card.wickets >= 5:
                             p.five_wicket_hauls += 1
 
-                        if card.wickets > p.best_bowling_wickets:
-                            p.best_bowling_wickets = card.wickets
-                            p.best_bowling_runs = card.runs_conceded
-                        elif card.wickets == p.best_bowling_wickets:
-                            if card.runs_conceded < p.best_bowling_runs:
-                                p.best_bowling_runs = card.runs_conceded
+                        bowled_players[p.id] = p
                     d["wickets"] += card.wickets or 0
 
                 # Fielding contributions live on any record_type — they can
                 # appear on batting/bowling/fielding-only cards.
                 d["catches"] += card.catches or 0
+
+            # Career best bowling is recomputed from the persisted spells
+            # (this match's rows are already flushed) rather than compared
+            # against the stored figures: the 0/0 default would otherwise beat
+            # every wicketless spell.
+            for p in bowled_players.values():
+                _recompute_best_bowling(p)
 
             # Save Partnerships (every real innings, not just the first two)
             for entry in innings_plan:

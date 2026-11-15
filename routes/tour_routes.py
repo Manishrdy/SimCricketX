@@ -10,7 +10,7 @@ from engine.tour_engine import (FORMATS, create_tour, ordered_series, reorder_se
                                tour_summary, series_result, fixture_block_reason, team_format_availability)
 
 
-def register_tour_routes(app, limiter, cleanup_match, delete_match_json):
+def register_tour_routes(app, limiter, cleanup_match, delete_match_json, discard_in_flight_files):
     def owned(tour_id):
         tour = db.session.get(Tour, tour_id)
         if not tour or tour.user_id != current_user.id:
@@ -113,6 +113,7 @@ def register_tour_routes(app, limiter, cleanup_match, delete_match_json):
         tour = owned(tour_id)
         try:
             matches = Match.query.filter(Match.tournament_id.in_([s.id for s in tour.series])).all()
+            in_flight = [f.active_match_id for s in tour.series for f in s.fixtures if f.active_match_id]
             for fixture in [f for s in tour.series for f in s.fixtures]:
                 fixture.match_id = None
                 fixture.match = None
@@ -124,6 +125,7 @@ def register_tour_routes(app, limiter, cleanup_match, delete_match_json):
             db.session.commit()
             for match in matches:
                 delete_match_json(match)
+            discard_in_flight_files(in_flight)
             flash('Tour deleted successfully.', 'success')
         except Exception:
             db.session.rollback()

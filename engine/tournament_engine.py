@@ -302,8 +302,12 @@ class TournamentEngine:
                     return existing
             raise
         except Exception as e:
-            log_exception(e)
+            # Roll back first: by now the tournament row has been flushed, so
+            # this transaction holds SQLite's writer lock, and log_exception
+            # writes on its own connection — it would wait on that lock until
+            # the busy timeout and lose the entry.
             db.session.rollback()
+            log_exception(e)
             logger.error(f"Failed to create tournament: {e}")
             raise
 
@@ -415,13 +419,8 @@ class TournamentEngine:
         # Round 2: slots 4-5 (matches 4, 5)
         # Round 3: slot 6 (match 6)
         
-        # Randomize teams and distribute byes
-        import random
-        padded_teams = team_ids[:]
-        num_byes = next_power - n
-        padded_teams += [None] * num_byes
-        random.shuffle(padded_teams)
-        
+        padded_teams = self._seed_knockout_slots(team_ids, next_power)
+
         bracket_position = 0
         current_round = 1
         num_matches_current_round = next_power // 2
@@ -515,6 +514,30 @@ class TournamentEngine:
             
         # After generating all fixtures, we might need to auto-advance byes
         self._advance_bye_winners(tournament_id)
+
+    def _seed_knockout_slots(self, team_ids: list, next_power: int) -> list:
+        """Random first-round draw: `next_power` slots, None marking a bye.
+
+        Slots 2i and 2i+1 form first-round match i. Each bye is given to a
+        different match, so a bye always sits opposite a real team. Shuffling
+        teams and byes together used to let two byes share a match: that made
+        a team-less "Phantom Match", took a bye away from a side that was owed
+        one (an extra first-round match), and handed some first-round winner
+        a walkover in the next round. There are always enough matches to go
+        round — byes = next_power - n is at most next_power/2 - 1.
+        """
+        import random
+        teams = team_ids[:]
+        random.shuffle(teams)
+        matches = next_power // 2
+        bye_matches = set(random.sample(range(matches), next_power - len(teams)))
+
+        slots = []
+        remaining = iter(teams)
+        for i in range(matches):
+            slots.append(next(remaining))
+            slots.append(None if i in bye_matches else next(remaining))
+        return slots
 
     def _get_knockout_round_name(self, total_teams: int, round_num: int) -> str:
         """Get the name of a knockout round based on remaining teams."""
@@ -1641,12 +1664,22 @@ class TournamentEngine:
             return f"{max_overs}.0"
         return actual
 
-    def _hundred_nrr_components(self, match):
+    def _metadata_nrr_components(self, match):
+        """NRR runs/overs the match itself recorded, else None.
+
+        The engine writes format_metadata["nrr"] whenever the scoreboard is
+        not what NRR should be computed from: always for the Hundred (5-ball
+        sets, all-out and rain adjustments) and for any rain-affected
+        T20/T10/List A match (DLS par score, allotted overs). Returning None
+        leaves the caller on the scoreboard totals with the all-out rule.
+        """
         metadata = getattr(match, "format_metadata", None) or {}
-        if match.match_format != "Hundred" or not metadata.get("nrr"):
+        if match.match_format == "FC" or not metadata.get("nrr"):
             return None
+        unit = 5 if match.match_format == "Hundred" else 6
         home, away = metadata["nrr"]["home"], metadata["nrr"]["away"]
-        return home["runs"], away["runs"], self.balls_to_overs(home["balls"], 5), self.balls_to_overs(away["balls"], 5)
+        return (home["runs"], away["runs"],
+                self.balls_to_overs(home["balls"], unit), self.balls_to_overs(away["balls"], unit))
 
     def _update_nrr_components(self, home_stats, away_stats, match):
         """Update Net Run Rate components for both teams."""
@@ -1660,10 +1693,9 @@ class TournamentEngine:
         away_overs = self._get_nrr_overs(
             match.away_team_overs, match.away_team_wickets, match
         )
-        if match.match_format == "Hundred":
-            contribution = self._hundred_nrr_components(match)
-            if contribution:
-                home_score, away_score, home_overs, away_overs = contribution
+        contribution = self._metadata_nrr_components(match)
+        if contribution:
+            home_score, away_score, home_overs, away_overs = contribution
 
 
         # Home Batting / Away Bowling
@@ -2095,10 +2127,9 @@ class TournamentEngine:
         away_overs = self._get_nrr_overs(
             match.away_team_overs, match.away_team_wickets, match
         )
-        if match.match_format == "Hundred":
-            contribution = self._hundred_nrr_components(match)
-            if contribution:
-                home_score, away_score, home_overs, away_overs = contribution
+        contribution = self._metadata_nrr_components(match)
+        if contribution:
+            home_score, away_score, home_overs, away_overs = contribution
 
 
         home_stats.runs_scored = max(0, (home_stats.runs_scored or 0) - home_score)

@@ -155,7 +155,8 @@ def test_fc_direct_aggregation_uses_all_innings_and_native_milestones(fc_statist
     assert batting["runs"] == 570
     assert batting["highest_score"] == 320
     assert batting["hundreds"] == 2
-    assert batting["double_centuries"] == 1
+    # 100s/200s/300s are cumulative: the 250 and the 320 are both doubles.
+    assert batting["double_centuries"] == 2
     assert batting["triple_centuries"] == 1
     assert batting["average"] == 285.0
 

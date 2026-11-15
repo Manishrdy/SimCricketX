@@ -171,6 +171,7 @@ class StatsAggregator:
             'run out': 'Run out',
             'caught':  'Caught',
             'bowled':  'Bowled',
+            'stumped': 'Stumped',
             'lbw':     'LBW',
             'not out': 'not out',
         }
@@ -193,8 +194,10 @@ class StatsAggregator:
         not_outs = self.batting_df[self.batting_df['Status'] == 'not out'].groupby(['Player Name', 'Team Name']).size().reset_index(name='NOs')
         hs = self.batting_df.groupby(['Player Name', 'Team Name'])['Runs'].max().reset_index(name='HS')
         fifties = self.batting_df[(self.batting_df['Runs'] >= 50) & (self.batting_df['Runs'] < 100)].groupby(['Player Name', 'Team Name']).size().reset_index(name='50s')  # A10: exclude hundreds
+        # 100s/200s/300s are cumulative, as on a conventional career card:
+        # a 250 is a hundred and a double, a 310 is all three.
         hundreds = self.batting_df[self.batting_df['Runs'] >= 100].groupby(['Player Name', 'Team Name']).size().reset_index(name='100s')
-        double_hundreds = self.batting_df[(self.batting_df['Runs'] >= 200) & (self.batting_df['Runs'] < 300)].groupby(['Player Name', 'Team Name']).size().reset_index(name='200s')
+        double_hundreds = self.batting_df[self.batting_df['Runs'] >= 200].groupby(['Player Name', 'Team Name']).size().reset_index(name='200s')
         triple_hundreds = self.batting_df[self.batting_df['Runs'] >= 300].groupby(['Player Name', 'Team Name']).size().reset_index(name='300s')
         ducks = self.batting_df[(self.batting_df['Runs'] == 0) & self.batting_df['Status'].notna() & (self.batting_df['Status'] != 'not out')].groupby(['Player Name', 'Team Name']).size().reset_index(name='Ducks')  # A11: exclude not-outs
 
@@ -243,11 +246,25 @@ class StatsAggregator:
                 .rename(columns={'Fielder Out': 'Player Name', 'Opposing Team': 'Team Name'})
             )
             player_stats = pd.merge(player_stats, run_outs, on=['Player Name', 'Team Name'], how='left')
+
+        stumped_df = self._attribute_opposing_team(
+            self.batting_df[self.batting_df['Status'] == 'Stumped'],
+            'Fielder Out',
+            discipline='batting',
+        )
+        if not stumped_df.empty:
+            stumpings = (
+                stumped_df.groupby(['Fielder Out', 'Opposing Team'])
+                .size()
+                .reset_index(name='Stumpings')
+                .rename(columns={'Fielder Out': 'Player Name', 'Opposing Team': 'Team Name'})
+            )
+            player_stats = pd.merge(player_stats, stumpings, on=['Player Name', 'Team Name'], how='left')
         
         player_stats.fillna(0, inplace=True)
         player_stats.rename(columns={'Player Name': 'Player', 'Team Name': 'Team', 'Fours': '4s', 'Sixes': '6s', 'Run out': 'RunOut'}, inplace=True)
         
-        ordered_cols = ['Player', 'Team', 'Matches', 'Innings', 'Runs', 'Balls', 'Strike Rate', 'Average', 'HS', 'NOs', '50s', '100s', '200s', '300s', '1s', '2s', '3s', '4s', '6s', 'Dots', 'Bowled', 'Caught', 'LBW', 'RunOut', 'Catches', 'RunOuts_Made']
+        ordered_cols = ['Player', 'Team', 'Matches', 'Innings', 'Runs', 'Balls', 'Strike Rate', 'Average', 'HS', 'NOs', '50s', '100s', '200s', '300s', '1s', '2s', '3s', '4s', '6s', 'Dots', 'Bowled', 'Caught', 'LBW', 'RunOut', 'Catches', 'RunOuts_Made', 'Stumpings']
         for col in ordered_cols:
             if col not in player_stats.columns:
                 player_stats[col] = 0
@@ -278,7 +295,7 @@ class StatsAggregator:
         best_df = best_idx.set_index(['Bowler Name', 'Team Name'])
         bowling_stats['Best'] = bowling_stats.set_index(['Bowler Name', 'Team Name']).index.map(best_df.apply(lambda row: f"{int(row['Wickets'])}/{int(row['Runs'])}", axis=1))
         
-        fours_df = self.bowling_df[self.bowling_df['Wickets'] >= 4].groupby(['Bowler Name', 'Team Name']).size().reset_index(name='4w')
+        fours_df = self.bowling_df[self.bowling_df['Wickets'] == 4].groupby(['Bowler Name', 'Team Name']).size().reset_index(name='4w')
         bowling_stats = pd.merge(bowling_stats, fours_df, on=['Bowler Name', 'Team Name'], how='left')
         five_df = self.bowling_df[self.bowling_df['Wickets'] >= 5].groupby(['Bowler Name', 'Team Name']).size().reset_index(name='5w')
         bowling_stats = pd.merge(bowling_stats, five_df, on=['Bowler Name', 'Team Name'], how='left')

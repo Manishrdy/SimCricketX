@@ -8,6 +8,15 @@ from engine.length_filter import parse_length_filter, length_predicate
 from utils.exception_tracker import log_exception
 from utils.partnership_format import ordinal
 
+# Squad role (normalised: lower-case, no hyphen/space) -> comparison label.
+_COMPARE_ROLE_LABELS = {
+    "batsman": "Batsman",
+    "batter": "Batsman",
+    "bowler": "Bowler",
+    "allrounder": "All-rounder",
+    "wicketkeeper": "Wicketkeeper",
+}
+
 
 def register_stats_routes(
     app,
@@ -111,8 +120,8 @@ def register_stats_routes(
                 "100s",
             ]
             bowling_headers = [
-                "Team",
                 "Player",
+                "Team",
                 "Matches",
                 "Innings",
                 "Overs",
@@ -335,8 +344,7 @@ def register_stats_routes(
                         DBPlayer.id,
                         DBPlayer.name,
                         DBTeam.name.label("team_name"),
-                        func.sum(db.case((MatchScorecard.record_type == "batting", 1), else_=0)).label("batting_count"),
-                        func.sum(db.case((MatchScorecard.record_type == "bowling", 1), else_=0)).label("bowling_count"),
+                        DBPlayer.role,
                     )
                     .join(MatchScorecard, DBPlayer.id == MatchScorecard.player_id)
                     .join(DBMatch, MatchScorecard.match_id == DBMatch.id)
@@ -346,24 +354,21 @@ def register_stats_routes(
                     .filter(length_predicate(DBMatch, _length_arg()))
                     .filter(MatchScorecard.is_super_over.isnot(True))
                     .filter(DBMatch.tournament_id == tournament_id if tournament_id else True)
-                    .group_by(DBPlayer.id, DBPlayer.name, DBTeam.name)
+                    .group_by(DBPlayer.id, DBPlayer.name, DBTeam.name, DBPlayer.role)
+                    .order_by(DBPlayer.name)
                     .all()
                 )
 
+                # The squad role is the source of truth. Scorecard row types
+                # cannot stand in for it: every member of the XI gets a batting
+                # row whether or not they batted, so anyone who ever bowled
+                # looked like an all-rounder.
                 available_players = []
-                for player_id, player_name, team_name, batting_count, bowling_count in players_with_stats:
-                    has_batting = (batting_count or 0) > 0
-                    has_bowling = (bowling_count or 0) > 0
-
-                    if has_batting and has_bowling:
-                        role = "All-Rounder"
-                    elif has_bowling:
-                        role = "Bowler"
-                    elif has_batting:
-                        role = "Batsman"
-                    else:
-                        role = "Unknown"
-
+                for player_id, player_name, team_name, squad_role in players_with_stats:
+                    role = _COMPARE_ROLE_LABELS.get(
+                        (squad_role or "").strip().lower().replace("-", "").replace(" ", ""),
+                        "Unknown",
+                    )
                     available_players.append(
                         {
                             "id": player_id,
