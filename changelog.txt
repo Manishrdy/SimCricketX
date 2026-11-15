@@ -7,6 +7,14 @@
 - Added two views to the Statistics partnerships tab: the highest stand for each wicket, and the most productive batting pairs with their stands, runs, average and 50+/100+ counts
 - Added a Partnerships section to the player profile: stands, runs together, average and best stand, the player's five best stands with scorecard links, and the partners they have scored most with
 - Added optional team logos: upload a PNG (up to 1 MB) when creating or editing a team, or add, change and remove it from Manage Teams; logos are shown on team cards and copied when a team is cloned
+- Fixed limited-overs chases carrying on for another ball when a run-out completed the winning run; the match now ends on that run and the dismissal does not stand
+- Fixed T20 and List A attacks with exactly five bowlers occasionally giving one bowler an over beyond the quota; bowling changes now keep the remaining overs finishable
+- Fixed the live scorecard dropping a bowler's final over (and a wicket maiden) when the innings ended on the last ball of that over
+- Fixed bowling dot balls and dot-ball percentage always showing 0 in Statistics for new matches
+- Fixed Super Overs in T20, T10 and List A ignoring the free hit after a no-ball
+- Fixed a last-wicket run-out on the winning run being recorded as a win "by 0 wickets"; it is now a one-wicket win
+- Fixed wides and no-balls bowled before an over's first legal ball being left out of that over's run total
+- Fixed a run-out at the non-striker's end resetting the surviving striker's form instead of the dismissed batter's
 
 [3.0.2] 2026-10-17
 - Made First-Class collapses fairer for incoming batters: they still face the usual difficult settling-in period and team collapse pressure, but no longer receive an extra penalty simply for arriving during a collapse, including against the new ball or on a worn pitch
