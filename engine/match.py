@@ -709,6 +709,7 @@ class Match(CaptaincyMixin, HundredPresentation):
         return {
             "runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0,
             "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0,
+            "dots": 0,
             "id": player.get("id") if player else None,
         }
 
@@ -1662,12 +1663,16 @@ class Match(CaptaincyMixin, HundredPresentation):
         if stats is None:
             return
 
+        # Form follows the striker's bat, not a partner's dismissal: a run-out
+        # at the other end resets the non-striker and scores this ball for
+        # the striker as the runs he completed (all formats). Keep the
+        # finalized event intact for other observers.
+        if outcome.get("batter_out") and outcome.get("dismissed_end") == "non_striker":
+            self.batsman_stats[self.current_non_striker["name"]]["form"] = 1.0
+            outcome = dict(outcome, batter_out=False)
+
         if self.is_fc and outcome.get("delivery"):
-            # Form follows the striker's bat, not penalty runs or a partner's
-            # dismissal. Keep the finalized event intact for other observers.
-            if outcome.get("batter_out") and outcome.get("dismissed_end") == "non_striker":
-                self.batsman_stats[self.current_non_striker["name"]]["form"] = 1.0
-                outcome = dict(outcome, batter_out=False)
+            # ... nor penalty runs.
             if outcome.get("is_extra"):
                 outcome = dict(outcome, is_extra=False, runs=outcome["delivery"]["bat_runs"])
 
@@ -3595,7 +3600,7 @@ class Match(CaptaincyMixin, HundredPresentation):
         self._save_partnership("Run Out")
 
         # 4. 50/50: either batter can be dismissed at run-out.
-        dismissed_end = random.choice(["striker", "non_striker"])
+        dismissed_end = outcome.get("dismissed_end") or random.choice(["striker", "non_striker"])
         if dismissed_end == "striker":
             dismissed_name = self.current_striker["name"]
         else:
@@ -4585,7 +4590,33 @@ class Match(CaptaincyMixin, HundredPresentation):
             selected = self._captain_pick_bowler()
             self._update_bowler_tracking(selected)
             return selected
-        return self._legacy_pick_bowler()
+        return self._completion_safe_bowler(self._legacy_pick_bowler())
+
+    def _completion_safe_bowler(self, selected):
+        """Veto a pick that leaves the innings impossible to finish legally.
+
+        The T20/List A pickers choose over by over with no look-ahead, so a
+        five-bowler attack could be steered into a corner — one bowler left
+        holding overs he can only bowl back to back — and the manager's
+        quota-relaxing fallback then gave somebody a fifth over. The check is
+        the one the AI captain already uses (_captain_eligible): after this
+        over, can the remaining overs still be shared out within quota with
+        nobody bowling twice running? If the pick fails it and a legal
+        alternative passes, take the best alternative. When nothing passes
+        (fewer than five bowlers, say) the original pick stands.
+        """
+        if self.is_fc or getattr(self.fmt, "strict_short_bowling", False):
+            return selected
+        safe = self._captain_eligible(manual=True)
+        if not safe or any(b["name"] == selected["name"] for b in safe):
+            return selected
+        replacement = min(safe, key=lambda b: (-b.get("bowling_rating", 0), b["name"]))
+        logger.info(
+            "Bowling plan: %s would leave over %d+ unfinishable within quota; using %s",
+            selected["name"], self.current_over + 2, replacement["name"],
+        )
+        self._update_bowler_tracking(replacement)
+        return replacement
 
     def _legacy_pick_bowler(self):
         """
@@ -8123,6 +8154,35 @@ class Match(CaptaincyMixin, HundredPresentation):
                 outcome.setdefault("dismissed_end", random.choice(["striker", "non_striker"]))
                 outcome["delivery"]["dismissed_end"] = outcome["dismissed_end"]
 
+        # A limited-overs run-out always credits the one completed run. When
+        # that run is the winning one the match is over before the throw
+        # matters, so the dismissal does not stand: resolve it as a single
+        # here, before commentary or any observer sees a wicket. Left as a
+        # run-out, the chase carried on for another delivery (the win check
+        # lives on the non-wicket path) and a last-wicket case read "won by
+        # 0 wicket(s)". FC does the same in fc_delivery.resolve_delivery.
+        if (not self.is_fc and self.innings == 2 and self.target is not None
+                and outcome.get("batter_out")
+                and outcome.get("wicket_type") == "Run Out"
+                and not outcome.get("is_extra")
+                and self.score + 1 >= self.target):
+            outcome["batter_out"] = False
+            outcome["wicket_type"] = None
+            outcome["type"] = "run"
+            outcome["runs"] = 1
+            outcome.pop("fielder_name", None)
+            outcome["description"] = (
+                "They scamper through — the winning run is completed before the throw comes in!"
+            )
+
+        # Decide which end is run out before any observer sees the wicket, as
+        # FC does above. Chosen later (inside _apply_run_out), the form update
+        # had no way to know and reset the striker even when it was the
+        # non-striker who was out.
+        if (not self.is_fc and outcome.get("batter_out")
+                and outcome.get("wicket_type") == "Run Out"):
+            outcome.setdefault("dismissed_end", random.choice(["striker", "non_striker"]))
+
         # 🎙️ COMMENTARY REVAMP INTEGRATION
         if hasattr(self, 'commentary_engine'):
             # Enrich outcome with context for the engine
@@ -8297,6 +8357,25 @@ class Match(CaptaincyMixin, HundredPresentation):
             if outcome["delivery"]["extras"].get("Wide") or outcome["delivery"]["extras"].get("No Ball"):
                 self.current_over_maiden_invalid = True
 
+        # Bowler dot balls: a legal delivery that costs the bowler nothing
+        # (byes and leg byes are not his runs). Tallied once here because the
+        # wicket and non-wicket paths below count the delivery separately.
+        # .get() tolerates stat rows restored from a pre-"dots" checkpoint.
+        if self.is_fc:
+            _bowler_dot = (outcome["delivery"]["legal"]
+                           and outcome["delivery"]["bowler_runs"] == 0)
+        else:
+            _byes = extra and outcome.get("extra_type") in ("Byes", "Leg Bye")
+            if extra and not _byes:
+                _bowler_dot = False          # wide / no-ball
+            elif wicket:
+                _bowler_dot = _byes or outcome.get("wicket_type") != "Run Out"
+            else:
+                _bowler_dot = _byes or runs == 0
+        if _bowler_dot:
+            _dot_row = self.bowler_stats[self.current_bowler["name"]]
+            _dot_row["dots"] = _dot_row.get("dots", 0) + 1
+
         # 🔧 WICKET TRACKING (after wicket is defined)
         # Trim + recompute every ball (not just wicket balls) so the collapse
         # window actually decays once wickets fall outside the last 12 balls,
@@ -8324,7 +8403,9 @@ class Match(CaptaincyMixin, HundredPresentation):
                 self.batter_streaks[_bd_striker] = {"boundaries": 0}
         # On dismissal, clear the dismissed batter's streak
         if wicket:
-            self.batter_streaks.pop(_bd_striker, None)
+            self.batter_streaks.pop(
+                _bd_non_striker if outcome.get("dismissed_end") == "non_striker" else _bd_striker,
+                None)
 
         # ── GSME: append this delivery to the rolling 18-ball history ──
         self._captain_record(outcome)
@@ -8344,8 +8425,10 @@ class Match(CaptaincyMixin, HundredPresentation):
 
         if not hasattr(self, 'current_over_runs'):
             self.current_over_runs = 0
-        if self.current_ball == 0 and not self.is_hundred:
-            self.current_over_runs = 0
+        # No reset on current_ball == 0 here: the end-of-over block and
+        # _reset_innings_state already zero the tally, and a wide or no-ball
+        # leaves current_ball at 0, so resetting again wiped any extras
+        # bowled before the over's first legal ball.
 
         commentary_line = f"{ball_number} {self.current_bowler['name']} to {self.current_striker['name']} - "
         pending_decision_for_response = None
@@ -8393,6 +8476,23 @@ class Match(CaptaincyMixin, HundredPresentation):
                     return self._fc_transition_to_next_innings(
                         commentary_prefix=final_wicket_commentary
                     )
+                # The tenth wicket fell on the last ball of the over. This
+                # path returns before the end-of-over block, so close the over
+                # here or the bowler's `overs` stays one short of
+                # `balls_bowled` (the live scorecard reads `overs`) and a
+                # wicket maiden is lost. The Hundred does its own version in
+                # _hundred_finalize_delivery.
+                if not self.is_hundred and self.current_ball == self.balls_per_over:
+                    _closing = self.bowler_stats[self.current_bowler["name"]]
+                    if not self.current_over_maiden_invalid:
+                        _closing["maidens"] += 1
+                    _closing["overs"] += 1
+                    self.bowler_manager.record_over_completion(
+                        self.current_bowler["name"], self.current_over_runs
+                    )
+                    self.bowler_prev_over_runs[self.current_bowler["name"]] = self.current_over_runs
+                    self.current_ball = 0
+                    self.current_over += 1
                 scorecard_data = self._generate_detailed_scorecard()
 
                 # Shared end-of-innings block (score/RR, dismissal line,
@@ -9676,7 +9776,11 @@ class Match(CaptaincyMixin, HundredPresentation):
         )
         # Enforce protection before history, commentary or scorekeeping sees
         # the outcome. Older Hundred checkpoints have no dedicated flag.
-        was_free_hit = self.is_hundred and getattr(self, "super_five_free_hit_active", False)
+        # Every format with the free-hit rule gets it in the tie-breaker too;
+        # it used to be Super Five only, so a T20 Super Over could lose one of
+        # its two wickets to the ball after a no-ball.
+        _so_free_hits = getattr(self.fmt, "free_hit_after_no_ball", True)
+        was_free_hit = _so_free_hits and getattr(self, "super_five_free_hit_active", False)
         if was_free_hit:
             outcome["free_hit"] = True
             if outcome.get("batter_out") and outcome.get("wicket_type") != "Run Out":
@@ -9853,7 +9957,7 @@ class Match(CaptaincyMixin, HundredPresentation):
         if is_so_legal:
             self.super_over_ball += 1
 
-        if self.is_hundred:
+        if _so_free_hits:
             if extra and extra_type == "No Ball":
                 self.super_five_free_hit_active = True
             elif is_so_legal:
@@ -9877,7 +9981,7 @@ class Match(CaptaincyMixin, HundredPresentation):
 
         return {
             "super_over_ball_complete": True,
-            **({"free_hit": was_free_hit} if self.is_hundred else {}),
+            "free_hit": was_free_hit,
             "wicket": wicket,
             "runs": runs,
             "commentary": commentary_line,
@@ -9897,7 +10001,7 @@ class Match(CaptaincyMixin, HundredPresentation):
             "bowler_wickets": self.super_over_bowler_wickets,
             "bowler_overs": f"0.{self.super_over_ball}",
             "ball_data": {
-                **({"free_hit": was_free_hit} if self.is_hundred else {}),
+                "free_hit": was_free_hit,
                 "runs": runs,
                 "batter_out": wicket,
                 "extra_type": extra_type if extra else None,
@@ -10292,6 +10396,7 @@ class Match(CaptaincyMixin, HundredPresentation):
                 # input) and the pitch wear frozen from the main match.
                 "ball_history": getattr(self, "super_over_ball_history", []),
                 "pitch_wear": getattr(self, "super_over_pitch_wear", 0.0),
+                "free_hit_active": getattr(self, "super_five_free_hit_active", False),
             },
         }
 
@@ -10402,6 +10507,7 @@ class Match(CaptaincyMixin, HundredPresentation):
         self.super_over_career_bowling = so.get("career_bowling") or {"home": {}, "away": {}}
         self.super_over_ball_history = so.get("ball_history") or []
         self.super_over_pitch_wear = so.get("pitch_wear", 0.0)
+        self.super_five_free_hit_active = bool(so.get("free_hit_active", False))
         if so.get("innings1_scorecard") is not None:
             self.super_over_innings1_scorecard = so["innings1_scorecard"]
 
