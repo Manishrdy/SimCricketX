@@ -7,6 +7,8 @@ import engine.match as module
 from engine.format_config import get_format
 from engine.hundred_bowler_manager import HundredBowlerManager
 from engine.hundred_snapshot import serialize, restore
+from engine.scenario_engine import HistoricalScenarioEngine, ScenarioEngine
+from engine.scenario_packs import get_scenario_pack
 from engine.dls import ResourceLedger, resources_remaining
 from tests.test_bowler_consecutive_guards import _build_match_data, _build_team
 
@@ -128,6 +130,62 @@ def test_random_resume():
     for _ in range(15):
         a,b=m.next_ball(),n.next_ball()
         assert (a.get('score'),a.get('wickets'),a.get('over'),a.get('ball'))==(b.get('score'),b.get('wickets'),b.get('over'),b.get('ball'))
+
+
+def _resume(match):
+    restored = make(**{k: match.data[k] for k in ("scenario_mode", "scenario_pack") if k in match.data})
+    restore(restored, json.loads(json.dumps(serialize(match))))
+    return restored
+
+
+def test_scenario_checkpoint_keeps_finale_progress(monkeypatch):
+    monkeypatch.setattr(module, 'calculate_outcome', dot)
+    match = make(scenario_mode='last_ball_six')
+    for _ in range(4):
+        assert not match.next_ball().get('error')
+    engine = match.scenario_engine
+    engine.active = False
+    engine.finale_script = [{"runs": 1, "is_wicket": False}, {"runs": 6, "is_wicket": False}]
+    engine.finale_ball_index = 1
+    engine._chase_context = (match.fmt.overs, 147)
+    engine._convergence_logged = True
+    engine._endgame_checked_overs = {15, 16}
+
+    restored = _resume(match)
+    resumed = restored.scenario_engine
+    assert isinstance(resumed, ScenarioEngine)
+    assert resumed.match is restored
+    assert resumed.active is False
+    assert resumed.finale_ball_index == 1
+    assert resumed.finale_script == engine.finale_script
+    assert resumed._chase_context == (match.fmt.overs, 147)
+    assert resumed._convergence_logged is True
+    assert resumed._endgame_checked_overs == {15, 16}
+    assert resumed.config["convergence_target"]["runs_needed_range"] == (20, 28)
+    assert not restored.next_ball().get('error')
+
+
+def test_historical_scenario_checkpoint(monkeypatch):
+    # Setup rejects a T20 story on a Hundred match. Attach the engine directly
+    # so the checkpoint still covers the other object stored on this attribute.
+    monkeypatch.setattr(module, 'calculate_outcome', dot)
+    pack = get_scenario_pack('ind_pak_t20wc_2022')
+    match = make()
+    match.scenario_mode = 'historical:ind_pak_t20wc_2022'
+    match.data['scenario_pack'] = pack
+    match.scenario_engine = HistoricalScenarioEngine(pack, match)
+    assert not match.next_ball().get('error')
+
+    restored = make()
+    restore(restored, json.loads(json.dumps(serialize(match))))
+    resumed = restored.scenario_engine
+    assert isinstance(resumed, HistoricalScenarioEngine)
+    assert resumed.match is restored
+    assert resumed.active is True
+    assert resumed.scenario_type == 'historical:ind_pak_t20wc_2022'
+    assert resumed.pack['id'] == pack['id']
+    assert resumed.pack is restored.data['scenario_pack']
+    assert not restored.next_ball().get('error')
 
 @pytest.mark.parametrize('pitch',['Green','Dry','Hard','Flat','Dead'])
 @pytest.mark.parametrize('night',[False,True])
