@@ -451,6 +451,34 @@ body .scx-nav.navbar {
     color: #ffffff;
 }
 
+.sb-team-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.sb-team-badge.has-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.92);
+    padding: 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+    overflow: hidden;
+}
+
+.sb-team-badge > img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.sb-team-badge.has-logo .sb-team-name {
+    display: none;
+}
+
 .sb-score {
     font-size: 2rem;
     font-weight: 900;
@@ -845,6 +873,7 @@ body .scx-nav.navbar {
     .sb-top { flex-wrap: wrap; gap: 0.5rem; }
     .sb-center-col { border: none; padding: 0 0.75rem; min-width: auto; }
     .sb-score { font-size: 1.5rem; }
+    .sb-team-badge.has-logo { width: 40px; height: 40px; border-radius: 8px; padding: 3px; }
     .sb-strip { gap: 0.4rem; font-size: 0.65rem; }
     .controls-bar { flex-wrap: wrap; }
 }

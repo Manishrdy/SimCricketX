@@ -5,7 +5,20 @@
             <section class="pm-hero">
                 <div class="pm-ground" aria-hidden="true"><div></div></div>
                 <p class="pm-eyebrow">THE STAGE IS SET</p>
-                <h2 id="prematch-title">{{ match.team_home.split('_')[0] }} <span>vs</span> {{ match.team_away.split('_')[0] }}</h2>
+                {% set home_code = match.team_home.split('_')[0] %}
+                {% set away_code = match.team_away.split('_')[0] %}
+                {% set logos = team_logos or {} %}
+                <h2 id="prematch-title" class="pm-hero-matchup">
+                    <span class="pm-hero-side{% if logos.get('home') %} has-logo{% endif %}" data-logo-slot>
+                        {%- if logos.get('home') %}<img src="{{ logos.home }}" alt="{{ home_code }}" width="144" height="144" decoding="async" data-logo-fallback>{% endif -%}
+                        <span class="pm-hero-code">{{ home_code }}</span>
+                    </span>
+                    <span class="pm-hero-vs">vs</span>
+                    <span class="pm-hero-side{% if logos.get('away') %} has-logo{% endif %}" data-logo-slot>
+                        {%- if logos.get('away') %}<img src="{{ logos.away }}" alt="{{ away_code }}" width="144" height="144" decoding="async" data-logo-fallback>{% endif -%}
+                        <span class="pm-hero-code">{{ away_code }}</span>
+                    </span>
+                </h2>
                 <p class="pm-venue">{{ match.stadium or 'Match venue' }}</p>
             </section>
             {% set conditions = match.get('conditions_snapshot') or {} %}

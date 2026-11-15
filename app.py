@@ -2579,6 +2579,10 @@ def create_app():
                     "venue_mode": t.venue_mode,
                     "pitch_preference": t.pitch_preference,
                     "team_color": t.team_color,
+                    # None when the team has no logo; the page then shows
+                    # the short-code badge instead.
+                    "logo_url": (url_for("team_logo", team_id=t.id, v=t.logo_version)
+                                 if t.logo_version else None),
                     "created_by_email": t.user_id,
                     # Populated by the frontend from profile_squads[format].
                     "players": [],

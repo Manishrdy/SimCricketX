@@ -256,12 +256,65 @@ function getMatchFormat() {
 // innings don't strictly alternate batting side — a follow-on means the
 // same side bats twice in a row (innings 2 -> 3), so a naive toggle would
 // show the wrong team name in the score banner after that transition.
+function getBattingSide(strikerName) {
+    const homeXI = matchData?.playing_xi?.home || [];
+    if (strikerName && homeXI.some(p => p.name === strikerName)) return 'home';
+    return 'away';
+}
+
 function getBattingTeamShortName(strikerName) {
     const homeTeam = matchData.team_home.split('_')[0];
     const awayTeam = matchData.team_away.split('_')[0];
-    const homeXI = matchData.playing_xi?.home || [];
-    if (strikerName && homeXI.some(p => p.name === strikerName)) return homeTeam;
-    return awayTeam;
+    return getBattingSide(strikerName) === 'home' ? homeTeam : awayTeam;
+}
+
+function resolveMatchSide(shortCode, sideHint) {
+    if (sideHint === 'home' || sideHint === 'away') return sideHint;
+    const homeCode = (matchData?.team_home || '').split('_')[0];
+    const awayCode = (matchData?.team_away || '').split('_')[0];
+    if (shortCode && shortCode === homeCode) return 'home';
+    if (shortCode && shortCode === awayCode) return 'away';
+    return null;
+}
+
+/**
+ * Update the score banner's batting team slot: keep #sb-bat-name populated
+ * (used as short-code fallback and read by updateWinProbBanner), and display
+ * the batting team's logo when available.
+ */
+function setScoreBannerBattingTeam(shortCode, sideHint) {
+    const batNameEl = document.getElementById('sb-bat-name');
+    if (batNameEl && shortCode) {
+        batNameEl.textContent = shortCode;
+    }
+    const badge = document.getElementById('sb-bat-badge');
+    if (!badge) return;
+
+    const side = resolveMatchSide(shortCode, sideHint);
+    const logos = (typeof window.teamLogos === 'object' && window.teamLogos) ? window.teamLogos : {};
+    const logoUrl = side ? (logos[side] || null) : null;
+
+    const existingImg = badge.querySelector('img');
+    if (logoUrl) {
+        if (existingImg && existingImg.getAttribute('src') === logoUrl) {
+            badge.classList.add('has-logo');
+            return;
+        }
+        if (existingImg) existingImg.remove();
+        const img = document.createElement('img');
+        img.alt = '';
+        img.width = 48;
+        img.height = 48;
+        img.decoding = 'async';
+        img.dataset.logoFallback = '';
+        img.src = logoUrl;
+        badge.classList.add('has-logo');
+        badge.prepend(img);
+        if (window.scxLogoFallback) window.scxLogoFallback.watch(img);
+    } else {
+        if (existingImg) existingImg.remove();
+        badge.classList.remove('has-logo');
+    }
 }
 
 function isImpactPlayerEnabled() {
@@ -1009,11 +1062,9 @@ function applyTossResult(d) {
     logTossCommentary(d);
     const homeTeam = matchData.team_home.split('_')[0];
     const awayTeam = matchData.team_away.split('_')[0];
-    const batFirst = (d.toss_winner === homeTeam && d.toss_decision === 'Bat') ||
-                     (d.toss_winner === awayTeam && d.toss_decision === 'Bowl')
-                     ? homeTeam : awayTeam;
-    const batNameEl = document.getElementById('sb-bat-name');
-    if (batNameEl) batNameEl.textContent = batFirst;
+    const homeBatsFirst = (d.toss_winner === homeTeam && d.toss_decision === 'Bat') ||
+                          (d.toss_winner === awayTeam && d.toss_decision === 'Bowl');
+    setScoreBannerBattingTeam(homeBatsFirst ? homeTeam : awayTeam, homeBatsFirst ? 'home' : 'away');
     showPrematchPresentation(d);
 }
 
@@ -1046,14 +1097,12 @@ function spinTossAndStartMatch() {
             resultEl.textContent = `${d.toss_winner} chose to ${d.toss_decision}`;
             logTossCommentary(d);
 
-            // Set batting team name in banner based on toss result
+            // Set batting team name/logo in banner based on toss result
             const homeTeam = matchData.team_home.split('_')[0];
             const awayTeam = matchData.team_away.split('_')[0];
-            const batFirst = (d.toss_winner === homeTeam && d.toss_decision === 'Bat') ||
-                             (d.toss_winner === awayTeam && d.toss_decision === 'Bowl')
-                             ? homeTeam : awayTeam;
-            const batNameEl = document.getElementById('sb-bat-name');
-            if (batNameEl) batNameEl.textContent = batFirst;
+            const homeBatsFirst = (d.toss_winner === homeTeam && d.toss_decision === 'Bat') ||
+                                  (d.toss_winner === awayTeam && d.toss_decision === 'Bowl');
+            setScoreBannerBattingTeam(homeBatsFirst ? homeTeam : awayTeam, homeBatsFirst ? 'home' : 'away');
 
             showPrematchPresentation(d);
         })
@@ -1939,15 +1988,12 @@ async function _processBallResult(data) {
             resetMatchAnimationForNewInnings();
         }
 
-        // Swap batting team name in banner for the new innings. Derived from
+        // Swap batting team name/logo in banner for the new innings. Derived from
         // who's actually at the crease (data.striker, already updated to the
         // new innings' opener by the time this response is built) rather
         // than blindly toggling — an FC follow-on means the same side bats
         // two innings in a row, which a toggle would get wrong.
-        const batNameEl = document.getElementById('sb-bat-name');
-        if (batNameEl) {
-            batNameEl.textContent = getBattingTeamShortName(data.striker);
-        }
+        setScoreBannerBattingTeam(getBattingTeamShortName(data.striker), getBattingSide(data.striker));
         // Reset score display
         // Reset banner displays for 2nd innings
         const sbScoreEl = document.getElementById('sb-score');
@@ -3210,9 +3256,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const deliveries = IS_HUNDRED_MATCH ? state.hundred_deliveries : state.deliveries;
             const restoredHistory = restoreDeliveryHistory(deliveries, state);
 
-            // Set batting team name in banner
-            const batNameEl = document.getElementById('sb-bat-name');
-            if (batNameEl && state.batting_team_name) batNameEl.textContent = state.batting_team_name;
+            // Set batting team name/logo in banner
+            if (state.batting_team_name) {
+                const homeCode = (matchData?.team_home || '').split('_')[0];
+                const awayCode = (matchData?.team_away || '').split('_')[0];
+                const resumeSide = (homeCode === awayCode && state.striker?.name)
+                    ? getBattingSide(state.striker.name)
+                    : null;
+                setScoreBannerBattingTeam(state.batting_team_name, resumeSide);
+            }
 
             // Needs the batting name above: the meter labels the chasing side from it.
             updateWinProbBanner({
