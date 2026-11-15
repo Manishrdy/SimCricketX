@@ -333,3 +333,8 @@ def test_every_guide_page_has_a_main_tour():
     js = TOURS_JS.read_text(encoding="utf-8")
     pages_with_main = set(re.findall(r"page: '([a-z_]+)',\s*main: true", js))
     assert set(gs.GUIDE_PAGES.values()) == pages_with_main
+
+
+def test_edit_team_uses_shared_team_editor_guide():
+    # Both routes render team_create.html and must expose the navbar replay icon.
+    assert gs.GUIDE_PAGES["edit_team"] == gs.GUIDE_PAGES["create_team"] == "team_create"

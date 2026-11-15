@@ -2,14 +2,17 @@
 
 import json
 import re
+import time
 from datetime import datetime
 
-from flask import flash, redirect, render_template, request, url_for, jsonify
+from flask import Response, flash, redirect, render_template, request, url_for, jsonify
 from flask_login import current_user, login_required
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from utils.exception_tracker import log_exception
 from utils.squad_rules import validate_squad_composition
+from utils.team_logo import LogoError, MAX_UPLOAD_BYTES as LOGO_MAX_UPLOAD_BYTES, normalize_logo
+from database.models import TeamLogo
 
 from engine.captaincy import parse_config, preset_name
 from engine.format_catalog import SQUAD_FORMATS
@@ -33,8 +36,17 @@ def register_team_routes(
     TournamentTeam=None,
     TournamentFixture=None,
     Tournament=None,
+    limiter=None,
 ):
     app.jinja_env.globals.update(captaincy_preset=preset_name, captaincy_parse=parse_config)
+
+    def _logo_limit(rule):
+        if limiter is None:
+            return lambda fn: fn
+        return limiter.limit(
+            rule, methods=["POST", "DELETE"],
+            key_func=lambda: f"user:{getattr(current_user, 'id', None) or request.remote_addr}",
+        )
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -46,6 +58,68 @@ def register_team_routes(
         so /teams/manage keeps saying "Created ..." for untouched teams.
         """
         team.updated_at = datetime.utcnow()
+
+    # ── Team logo ─────────────────────────────────────────────────────────────
+
+    def _read_logo_upload():
+        """Bytes of the uploaded "logo" file, or None when no file was chosen."""
+        upload = request.files.get("logo")
+        if upload is None or not upload.filename:
+            return None
+        # One byte past the limit is enough for normalize_logo to reject it.
+        return upload.stream.read(LOGO_MAX_UPLOAD_BYTES + 1)
+
+    def _set_team_logo(team, png, sha256):
+        """Store a normalised logo on the team. Caller commits."""
+        now = datetime.utcnow()
+        row = db.session.get(TeamLogo, team.id)
+        if row is None:
+            row = TeamLogo(team_id=team.id)
+            db.session.add(row)
+        row.png = png
+        row.byte_size = len(png)
+        row.sha256 = sha256
+        row.updated_at = now
+        # The logo URL is cached as immutable, so a version must never be
+        # reused — not even after remove + re-add, which a simple counter
+        # restarting from NULL would do.
+        version = int(time.time() * 1000)
+        if team.logo_version and version <= team.logo_version:
+            version = team.logo_version + 1
+        team.logo_version = version
+
+    def _clear_team_logo(team):
+        """Remove the team's logo if it has one. Caller commits."""
+        TeamLogo.query.filter_by(team_id=team.id).delete(synchronize_session=False)
+        db.session.expire(team, ["logo"])
+        team.logo_version = None
+
+    def _apply_logo_from_form(team):
+        """Apply the logo part of the create/edit form. Caller commits.
+
+        Returns a user-facing warning when the logo was rejected, else None.
+        A bad logo never blocks saving the team: a file input cannot be
+        re-filled after a failed submit, so the rest of the form is saved and
+        the user is told to add the logo again.
+        """
+        data = _read_logo_upload()
+        if data is not None:
+            try:
+                png, sha256 = normalize_logo(data)
+            except LogoError as exc:
+                return str(exc)
+            _set_team_logo(team, png, sha256)
+        elif request.form.get("logo_remove") == "1" and team.logo_version:
+            _clear_team_logo(team)
+        return None
+
+    def _flash_logo_warning(warning):
+        if warning:
+            flash(
+                f"The team was saved, but the logo was not: {warning} "
+                "You can add it from Manage Teams.",
+                "warning",
+            )
 
     def _extract_player_list(raw_list):
         """
@@ -609,7 +683,9 @@ def register_team_routes(
                         db.session.rollback()
                         return render_template("team_create.html", error=save_err)
 
+                    logo_warning = _apply_logo_from_form(new_team)
                     db.session.commit()
+                    _flash_logo_warning(logo_warning)
 
                     app.logger.info(
                         f"Team '{new_team.name}' (ID: {new_team.id}) created as "
@@ -638,7 +714,9 @@ def register_team_routes(
 
                 profile = DBTeamProfile(team_id=new_team.id, format_type="T20")
                 db.session.add(profile)
+                logo_warning = _apply_logo_from_form(new_team)
                 db.session.commit()
+                _flash_logo_warning(logo_warning)
 
                 app.logger.info(
                     f"Team '{new_team.name}' (ID: {new_team.id}) created as "
@@ -1123,6 +1201,77 @@ def register_team_routes(
             offending=offending,
         )
 
+    @app.route("/team/<int:team_id>/logo.png")
+    @login_required
+    def team_logo(team_id):
+        """Serve a team's logo to any logged-in user.
+
+        The URL always carries ?v=<logo_version>, and a version is never
+        reused, so the response can be cached as immutable.
+        """
+        row = db.session.get(TeamLogo, team_id)
+        if row is None:
+            return Response(status=404)
+        etag = f'"{row.sha256}"'
+        headers = {
+            "ETag": etag,
+            "Cache-Control": "private, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+        }
+        if etag in request.if_none_match or row.sha256 in request.if_none_match:
+            return Response(status=304, headers=headers)
+        return Response(row.png, mimetype="image/png", headers=headers)
+
+    def _owned_team_or_404(team_id):
+        return DBTeam.query.filter_by(id=team_id, user_id=current_user.id).first()
+
+    @app.route("/team/<int:team_id>/logo", methods=["POST"])
+    @login_required
+    @_logo_limit("20 per minute; 100 per hour")
+    def upload_team_logo(team_id):
+        team = _owned_team_or_404(team_id)
+        if not team:
+            return jsonify({"error": "Team not found."}), 404
+        data = _read_logo_upload()
+        if data is None:
+            return jsonify({"error": "Choose a PNG file to upload."}), 400
+        try:
+            png, sha256 = normalize_logo(data)
+        except LogoError as exc:
+            return jsonify({"error": str(exc)}), exc.status
+        try:
+            _set_team_logo(team, png, sha256)
+            _touch_team(team)
+            db.session.commit()
+        except Exception as e:
+            log_exception(e)
+            db.session.rollback()
+            app.logger.error(f"Error saving logo for team {team_id}: {e}", exc_info=True)
+            return jsonify({"error": "The logo could not be saved. Please try again."}), 500
+        return jsonify({
+            "logo_version": team.logo_version,
+            "url": url_for("team_logo", team_id=team.id, v=team.logo_version),
+        })
+
+    @app.route("/team/<int:team_id>/logo", methods=["DELETE"])
+    @login_required
+    @_logo_limit("20 per minute; 100 per hour")
+    def delete_team_logo(team_id):
+        team = _owned_team_or_404(team_id)
+        if not team:
+            return jsonify({"error": "Team not found."}), 404
+        try:
+            if team.logo_version:
+                _clear_team_logo(team)
+                _touch_team(team)
+                db.session.commit()
+        except Exception as e:
+            log_exception(e)
+            db.session.rollback()
+            app.logger.error(f"Error removing logo for team {team_id}: {e}", exc_info=True)
+            return jsonify({"error": "The logo could not be removed. Please try again."}), 500
+        return jsonify({"logo_version": None})
+
     @app.route("/teams/manage")
     @login_required
     def manage_teams():
@@ -1160,6 +1309,7 @@ def register_team_routes(
                     "stadium_id": t.stadium_id,
                     "pitch_preference": t.pitch_preference,
                     "team_color": t.team_color,
+                    "logo_version": t.logo_version,
                     "captain": primary["captain"] if primary else "—",
                     "profiles": profiles_info,
                     "is_draft": getattr(t, "is_draft", False),
@@ -1385,8 +1535,10 @@ def register_team_routes(
                         if DBPlayer.query.filter_by(profile_id=prof.id).count() == 0:
                             db.session.delete(prof)
 
+                    logo_warning = _apply_logo_from_form(team)
                     _touch_team(team)
                     db.session.commit()
+                    _flash_logo_warning(logo_warning)
                     status_msg = "Draft" if is_draft else "Active"
                     app.logger.info(
                         f"Team '{team.short_code}' (ID: {team.id}) updated as "
@@ -1464,6 +1616,11 @@ def register_team_routes(
             )
             db.session.add(new_team)
             db.session.flush()
+
+            if source.logo_version:
+                source_logo = db.session.get(TeamLogo, source.id)
+                if source_logo is not None:
+                    _set_team_logo(new_team, source_logo.png, source_logo.sha256)
 
             for prof in source.profiles:
                 new_prof = DBTeamProfile(
@@ -1544,6 +1701,7 @@ def register_team_routes(
             "home_ground": team.home_ground,
             "pitch_preference": team.pitch_preference,
             "team_color": team.team_color,
+            "logo_version": team.logo_version,
             "created_by_email": team.user_id,
             "profiles": profiles_dict,
         }

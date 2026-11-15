@@ -295,7 +295,8 @@ class MatchArchiver:
                         member.is_dir()
                         or member.filename != safe_name
                         or member_name.suffix.lower() not in allowed_suffixes
-                        or "scorecard" not in member_name.stem.lower()
+                        or ("scorecard" not in member_name.stem.lower()
+                            and not member_name.stem.lower().endswith("_prematch_presentation"))
                         or member.file_size > self.MAX_FILE_SIZE
                     ):
                         continue

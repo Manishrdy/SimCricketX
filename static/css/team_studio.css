@@ -1,0 +1,72 @@
+/* Shared presentation for the team and squad editors. */
+.sb-page, .tc-page { max-width: 1320px; padding-top: 28px; }
+.sb-hero, .tc-hero {
+    position: relative; overflow: hidden; padding: 36px;
+    border: 1px solid #345d56; border-radius: 22px;
+    background: radial-gradient(ellipse at 95% 0%, #2c655a 0%, transparent 55%), #102f2b;
+    color: #f3f6ed; box-shadow: 0 18px 45px #102f2b18;
+    margin-bottom: 24px;
+}
+.sb-hero::after, .tc-hero::after {
+    content: ''; position: absolute; width: 320px; height: 320px;
+    right: -100px; top: -160px; border: 1px solid #c7dcbd26;
+    border-radius: 50%; box-shadow: 0 0 0 36px #c7dcbd08, 0 0 0 72px #c7dcbd06;
+    pointer-events: none;
+}
+.sb-hero > *, .tc-hero > * { position: relative; z-index: 1; }
+.studio-eyebrow, .tc-hero .tc-eyebrow { display: block; color: #c6dba9; text-transform: uppercase; letter-spacing: .18em; font-size: .65rem; font-weight: 700; margin-bottom: 10px; }
+.sb-team-name, .tc-hero h1 { color: #f3f6ed; font-size: clamp(1.8rem, 3.3vw, 3rem); line-height: 1.12; letter-spacing: -.045em; margin: 0; }
+.sb-team-meta, .tc-hero p { color: #bdd0c9; margin-top: 12px; }
+.sb-team-badge { width: 68px; height: 76px; border-radius: 18px 18px 30px 30px; background: #d3dfae; color: #173d33; border: 0; font-size: 1.4rem; margin-right: 8px; }
+.sb-hero .sb-btn { min-height: 44px; border-radius: 8px; }
+.sb-hero .sb-btn-primary { background: #d3dfae; color: #173d33; border-color: #d3dfae; }
+.sb-hero .sb-btn-ghost { background: #ffffff09; color: #edf3e9; border-color: #ffffff30; }
+.sb-subtitle { max-width: 850px; font-size: .85rem; margin-bottom: 22px; }
+.sb-tabs { border: 0; border-radius: 0; background: transparent; gap: 6px; flex-wrap: wrap; }
+.sb-tab { border-radius: 7px; padding: 10px 18px; }
+.sb-composition { padding: 18px 22px; border-radius: 12px; box-shadow: none; gap: 14px; }
+.sb-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.sb-panel, .tc-panel, .tc-identity, .tc-leadership { border-radius: 16px; box-shadow: 0 8px 28px var(--shadow); overflow: hidden; }
+.sb-panel-header, .tc-panel-head { padding: 22px; background: var(--bg-secondary); }
+.sb-panel-title, .tc-panel-title { font-size: 1.05rem; letter-spacing: -.025em; }
+.sb-panel-title i { display: none; }
+.sb-panel-body { padding: 18px 22px 22px; }
+.sb-search, .tc-input, .tc-select { min-height: 44px; }
+.sb-chip { padding: 7px 12px; border-radius: 6px; }
+.sb-slider-wrap { display: block; }
+.sb-list, .sb-squad-list { display: block; height: 460px; min-height: 0; max-height: none; overflow-y: auto; overflow-x: hidden; scroll-snap-type: none; padding: 0; scrollbar-width: thin; scrollbar-gutter: stable; overscroll-behavior-y: contain; }
+.sb-list .sb-player, .sb-squad-list .sb-player { display: flex; align-items: center; width: 100%; min-width: 0; max-width: none; min-height: 64px; padding: 12px 8px; margin: 0; gap: 12px; border: 0; border-bottom: 1px solid var(--card-border); border-radius: 0; background: transparent; }
+.sb-player:hover { transform: none; background: var(--accent-light); }
+.sb-player-avatar { display: none; }
+.sb-player-head { margin: 0; gap: 6px 12px; }
+.sb-player-name { font-size: .88rem; font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
+.sb-player-ratings { display: none; }
+.sb-role-pill { font-size: .62rem; background: transparent; padding: 0; }
+.sb-add-btn, .sb-remove-btn { flex-shrink: 0; width: 34px; height: 34px; border-radius: 8px; }
+.sb-squad-panel { border-color: var(--card-border); }
+.sb-squad-panel .sb-panel-header { border-top: 3px solid var(--accent); padding-top: 19px; }
+.sb-designations { border-top: 1px solid var(--card-border); padding-top: 20px; margin-top: 18px; }
+.sb-empty { padding: 60px 20px; }
+.tc-identity { padding: 28px; border: 1px solid var(--card-border); margin-bottom: 28px; }
+.tc-workspace-heading { padding-top: 14px; }
+.tc-list { padding: 0 16px; scrollbar-gutter: stable; overscroll-behavior-y: contain; }
+.tc-player { padding: 14px 4px; min-height: 58px; margin: 0; border: 0; border-bottom: 1px solid var(--card-border); border-radius: 0; background: transparent; }
+.tc-player-top { gap: 8px; }
+.tc-player-actions button { min-height: 32px; min-width: 32px; border-radius: 7px; }
+.tc-fc-ratings { opacity: .8; }
+.sb-page :focus-visible, .tc-page :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 900px) { .sb-grid { grid-template-columns: 1fr; } }
+@media (max-width: 600px) {
+    .sb-page, .tc-page { padding: 16px 12px 32px; }
+    .sb-hero, .tc-hero { padding: 24px 20px; border-radius: 16px; }
+    .sb-team-badge { display: none; }
+    .sb-hero-actions { width: 100%; margin-top: 14px; }
+    .sb-hero-actions .sb-btn { flex: 1; justify-content: center; }
+    .sb-panel-header, .tc-panel-head { padding: 18px 16px; }
+    .sb-panel-body { padding: 16px; }
+    .sb-list, .sb-squad-list { height: 360px; }
+    .sb-composition { padding: 16px; gap: 10px; }
+    .sb-tab { padding: 9px 12px; }
+    .tc-identity { padding: 20px 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .sb-page *, .tc-page * { scroll-behavior: auto !important; transition: none !important; } }

@@ -398,6 +398,108 @@
             margin-top: 0.3rem;
         }
 
+        .team-logo {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            object-fit: contain;
+            flex-shrink: 0;
+            background: var(--bg-raised);
+            border: 2px solid var(--border-light);
+        }
+
+        /* The page's img reset would otherwise beat the hidden attribute. */
+        .team-logo[hidden],
+        .team-color-dot[hidden],
+        .logo-modal .btn[hidden] {
+            display: none;
+        }
+
+        .action-btn.logo:hover {
+            color: var(--brand-primary);
+            border-color: var(--brand-primary);
+            background: var(--bg-body);
+        }
+
+        .logo-preview {
+            width: 128px;
+            height: 128px;
+            margin: 0 auto 1rem;
+            border-radius: 16px;
+            border: 1px dashed var(--border-light);
+            background: var(--bg-body);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            color: var(--text-muted);
+            font-size: 2.25rem;
+        }
+
+        .logo-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .logo-hint {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            margin-bottom: 1rem;
+        }
+
+        .logo-error {
+            color: var(--danger);
+            font-size: 0.88rem;
+            min-height: 1.3em;
+            margin-bottom: 0.75rem;
+        }
+
+        .logo-pick-row {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .logo-modal .btn {
+            min-height: 44px;
+            white-space: nowrap;
+        }
+
+        .logo-modal .modal-actions {
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 480px) {
+            .logo-modal .modal-content {
+                padding: 1.5rem 1.25rem;
+            }
+        }
+
+        .logo-modal .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-accent {
+            background: var(--brand-primary);
+            color: var(--bg-body);
+        }
+
+        .btn-accent:hover:not(:disabled) {
+            filter: brightness(1.08);
+        }
+
+        .logo-file {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
         .team-name {
             font-size: 1.25rem;
             font-weight: 700;
@@ -769,10 +871,12 @@
         <div class="teams-grid teams-section">
             {% if teams %}
             {% for t in teams %}
-            <div class="glass-card" data-code="{{ t.short_code }}">
+            <div class="glass-card" data-code="{{ t.short_code }}" data-team-id="{{ t.id }}">
                 <div class="card-header">
                     <div class="team-badge">
-                        <div class="team-color-dot" data-bg="{{ t.team_color }}"></div>
+                        <img class="team-logo" data-team-logo data-ring="{{ t.team_color }}" alt="" width="40" height="40" loading="lazy"
+                            {% if t.logo_version %}src="{{ url_for('team_logo', team_id=t.id, v=t.logo_version) }}"{% else %}hidden{% endif %}>
+                        <div class="team-color-dot" data-bg="{{ t.team_color }}" {% if t.logo_version %}hidden{% endif %}></div>
                         <div class="team-name" title="{{ t.team_name }}">{{ t.team_name }}</div>
                     </div>
                     <div class="team-code">{{ t.short_code }}</div>
@@ -838,6 +942,10 @@
                         {% endif %}
                     </div>
                     <div class="card-actions">
+                        <button class="action-btn logo" type="button" data-logo-open data-team-name="{{ t.team_name }}"
+                            title="Team logo" aria-label="Logo for {{ t.team_name }}">
+                            <i class="fa-solid fa-image"></i>
+                        </button>
                         <button class="action-btn edit" onclick="editTeam('{{ t.short_code }}')" title="Edit Team" aria-label="Edit {{ t.team_name }}">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
@@ -889,6 +997,167 @@
             </form>
         </div>
     </div>
+
+    <div class="modal logo-modal" id="logoModal" data-focus-dialog data-viewport-dialog data-dialog-open-class="active" data-dialog-close="[data-logo-close]" aria-label="Team logo">
+        <div class="modal-content">
+            <h2 class="modal-title" id="logo-title">Team logo</h2>
+            <p class="logo-hint" id="logo-hint"></p>
+            <div class="logo-preview" id="logo-preview" aria-hidden="true"></div>
+            <input type="file" class="logo-file" id="logo-file" accept="image/png" tabindex="-1" aria-hidden="true">
+            <div class="logo-pick-row">
+                <button type="button" class="btn btn-ghost" id="logo-choose" data-dialog-initial>Choose PNG</button>
+                <button type="button" class="btn btn-ghost" id="logo-remove" hidden>Remove logo</button>
+            </div>
+            <div class="logo-error" id="logo-error" role="alert"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-ghost" data-logo-close>Close</button>
+                <button type="button" class="btn btn-accent" id="logo-save" disabled>Save logo</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/team_logo_picker.js') }}"></script>
+    <script>
+        (function () {
+            const CSRF = {{ csrf_token() | tojson }};
+            const modal = document.getElementById('logoModal');
+            const preview = document.getElementById('logo-preview');
+            const fileInput = document.getElementById('logo-file');
+            const chooseBtn = document.getElementById('logo-choose');
+            const removeBtn = document.getElementById('logo-remove');
+            const saveBtn = document.getElementById('logo-save');
+            const errorEl = document.getElementById('logo-error');
+            let card = null, picked = null, pickedUrl = null, busy = false;
+
+            document.getElementById('logo-hint').textContent = window.scxTeamLogo.HINT;
+            document.querySelectorAll('[data-team-logo]').forEach(img => {
+                img.style.borderColor = img.getAttribute('data-ring') || '';
+            });
+
+            const cardLogo = () => card.querySelector('[data-team-logo]');
+            const hasLogo = () => !cardLogo().hidden;
+
+            function showPreview(url) {
+                preview.textContent = '';
+                if (url) {
+                    const img = document.createElement('img');
+                    img.src = url;
+                    img.alt = '';
+                    preview.appendChild(img);
+                } else {
+                    const icon = document.createElement('i');
+                    icon.className = 'fa-solid fa-image';
+                    preview.appendChild(icon);
+                }
+            }
+
+            function clearPicked() {
+                if (pickedUrl) URL.revokeObjectURL(pickedUrl);
+                picked = pickedUrl = null;
+                fileInput.value = '';
+            }
+
+            function refresh() {
+                showPreview(pickedUrl || (hasLogo() ? cardLogo().src : null));
+                chooseBtn.textContent = hasLogo() || picked ? 'Choose another PNG' : 'Choose PNG';
+                removeBtn.hidden = !hasLogo();
+                saveBtn.disabled = busy || !picked;
+                chooseBtn.disabled = removeBtn.disabled = busy;
+            }
+
+            function setCardLogo(url) {
+                const img = cardLogo();
+                const dot = card.querySelector('.team-color-dot');
+                if (url) img.src = url; else img.removeAttribute('src');
+                img.hidden = !url;
+                dot.hidden = !!url;
+            }
+
+            function open(button) {
+                card = button.closest('.glass-card');
+                document.getElementById('logo-title').textContent = 'Logo for ' + button.getAttribute('data-team-name');
+                errorEl.textContent = '';
+                clearPicked();
+                refresh();
+                modal.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+
+            function close() {
+                if (busy) return;
+                modal.classList.remove('active');
+                document.body.style.overflow = '';
+                clearPicked();
+            }
+
+            async function send(method, body) {
+                busy = true;
+                errorEl.textContent = '';
+                refresh();
+                try {
+                    const res = await fetch('/team/' + card.getAttribute('data-team-id') + '/logo', {
+                        method, body, headers: { 'X-CSRFToken': CSRF }, credentials: 'same-origin',
+                    });
+                    let data = {};
+                    try { data = await res.json(); } catch (err) { /* non-JSON error page */ }
+                    if (!res.ok) throw new Error(data.error || (res.status === 429
+                        ? 'Too many logo changes. Wait a minute and try again.'
+                        : 'The logo could not be saved. Please try again.'));
+                    return data;
+                } finally {
+                    busy = false;
+                }
+            }
+
+            document.querySelectorAll('[data-logo-open]').forEach(btn => {
+                btn.addEventListener('click', () => open(btn));
+            });
+            modal.querySelector('[data-logo-close]').addEventListener('click', close);
+            modal.addEventListener('click', e => { if (e.target === modal) close(); });
+            chooseBtn.addEventListener('click', () => fileInput.click());
+
+            fileInput.addEventListener('change', async () => {
+                const file = fileInput.files[0];
+                if (!file) return;
+                const result = await window.scxTeamLogo.check(file);
+                clearPicked();
+                if (result.ok) {
+                    picked = file;
+                    pickedUrl = result.url;
+                    errorEl.textContent = '';
+                } else {
+                    errorEl.textContent = result.error;
+                }
+                refresh();
+            });
+
+            saveBtn.addEventListener('click', async () => {
+                if (!picked || busy) return;
+                const body = new FormData();
+                body.append('logo', picked, picked.name);
+                try {
+                    const data = await send('POST', body);
+                    setCardLogo(data.url);
+                    close();
+                } catch (err) {
+                    errorEl.textContent = err.message;
+                    refresh();
+                }
+            });
+
+            removeBtn.addEventListener('click', async () => {
+                if (busy) return;
+                try {
+                    await send('DELETE');
+                    setCardLogo(null);
+                    clearPicked();
+                } catch (err) {
+                    errorEl.textContent = err.message;
+                }
+                refresh();
+            });
+        })();
+    </script>
 
     <script>
         const shouldClearTeamDraft = new URLSearchParams(window.location.search).get('clear_team_draft') === '1';

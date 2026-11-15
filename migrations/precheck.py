@@ -214,6 +214,8 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # match_partnerships: 4s/6s, batter balls, unbroken flag and fall-of-wicket
     # columns; repairs legacy duplicate / misnumbered unbroken stands.
     ("add_partnership_detail", _loader("migrations.add_partnership_detail")),
+    # team_logos table + teams.logo_version (NULL = no logo, else cache-buster).
+    ("add_team_logos", _loader("migrations.add_team_logos")),
 ]
 
 

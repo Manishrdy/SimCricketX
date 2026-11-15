@@ -2043,3 +2043,40 @@ body .scx-nav.navbar {
 .toss-calls[hidden], .toss-verdict[hidden] { display: none; }
 .toss-picks { margin-top: 0.2rem; }
 .toss-picks .toss-call-btn.picked::after { content: "Pitch suggests"; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+
+/* ===== Pre-match: fill the page =====
+   Before the toss the sidebar and the log are nearly empty, which left a
+   big blank band under both. While the Spin Coin button is still available,
+   stretch the sidebar and the commentary window down to the footer. As soon
+   as the toss starts (button disabled/hidden) the normal styling returns. */
+@media (min-width: 769px) {
+    .match-layout:has(#spin-toss:not([hidden]):not(:disabled)) {
+        align-items: stretch;
+    }
+
+    .match-layout:has(#spin-toss:not([hidden]):not(:disabled)) .info-card {
+        align-self: stretch;
+        position: relative;
+        top: auto;
+        max-height: none;
+    }
+
+    .match-layout:has(#spin-toss:not([hidden]):not(:disabled)) .main-panel {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .match-layout:has(#spin-toss:not([hidden]):not(:disabled)) .live-view-stack {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .match-layout:has(#spin-toss:not([hidden]):not(:disabled)) .pane-commentary.is-active {
+        flex: 1 1 auto;
+    }
+
+    .match-layout:has(#spin-toss:not([hidden]):not(:disabled)) .pane-commentary.is-active .commentary-box {
+        flex: 1 1 auto;
+    }
+}

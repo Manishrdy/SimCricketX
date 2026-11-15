@@ -29,9 +29,11 @@ async function restore(overrides = {}, format = 'Hundred') {
     const context = {document: {getElementById: id => elements.get(id), createElement,
         addEventListener: (event, callback) => { onReady = callback; }, querySelector: () => null},
         window: {resumeMode: true, location: {pathname: '/match/test'}},
-        matchData: {match_id: 'test', overs: 20}, simulationMode: 'manual',
+        matchData: {match_id: 'test', overs: 20, toss_winner: 'HOME', toss_decision: 'Bat'}, simulationMode: 'manual',
         IS_HUNDRED_MATCH: format === 'Hundred', BALLS_PER_SET: format === 'Hundred' ? 5 : 6,
         LIVE_RATE_UNIT: format === 'Hundred' ? 1 : 6, getMatchFormat: () => format,
+        restoreDeliveryHistory: () => false, updateWinProbBanner() {},
+        showPrematchPresentation: toss => resumed.push({presentation: toss.toss_winner}),
         appendLog() {}, console: {error(message, error) { throw error; }},
         scheduleNextBall: delay => resumed.push(delay),
         showDecisionModal: decision => resumed.push(decision),
@@ -153,4 +155,10 @@ test('reload restores a pending manual selection before play advances', async ()
     const decision = {decision_type: 'next_bowler'};
     const {resumed} = await restore({pending_selection: decision}, 'T20');
     assert.deepEqual(resumed, [decision]);
+});
+
+ test('refresh after toss before first ball holds at the presentation', async () => {
+    const {resumed} = await restore({score:0, wickets:0, current_over:0, current_ball:0, legal_balls:0});
+    assert.equal(resumed.length, 1);
+    assert.equal(resumed[0].presentation, 'HOME');
 });

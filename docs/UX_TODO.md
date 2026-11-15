@@ -122,3 +122,22 @@ Validation: 70 admin/profile regression tests passed using shared QA identities,
 Redesigned `/my-profile` with a forest-green pavilion header, gold edit action, private-profile badge, numbered section headings, coordinated statistic and content cards, themed team tiles, clearer account rows and responsive spacing. Uses existing application fonts and surface colors in a dedicated profile stylesheet. Preserves profile data, privacy checks and account/export/team/session destinations; zero-activity chart bars now accurately have zero height.
 
 Validation: both existing directory/profile regression tests passed using shared QA identities in isolated databases. Rendered the shared QA member from a temporary database copy and visually inspected light/dark themes, desktop account/security sections and the 390px phone header/statistics. Browser measurements found no horizontal overflow at 390px and 1280px. Diff whitespace checks passed.
+
+## Pre-match broadcast presentation — November 14, 2026
+
+Added a navy-and-gold match presentation after automatic or manual tosses for all formats. Includes venue, public weather forecast, pitch, venue-average temperature when available, both playing XIs, toss outcome and batting/bowling order. Close starts simulation after the bounded image capture/upload finishes; capture failure is reported without trapping play. Refresh before the first delivery restores the presentation. The PNG uses the existing authorized image-upload pipeline and is retained when the completed match ZIP is rebuilt.
+
+Validation: 13 presentation/resume JavaScript tests and 14 archive tests passed; template rendered for T10, T20, ListA, Hundred and FC with both XIs; syntax and diff whitespace checks passed. Updated stale resume-test mocks for existing history/win-probability functions. Browser visual inspection remains pending: the browser security policy blocked the local preview file. Existing unrelated workspace changes were preserved.
+
+Theme refinement: replaced the presentation's standalone navy/gold palette with the application's shared surface, text, teal accent, border, shadow and radius tokens. Uses Space Grotesk and IBM Plex Mono, the existing primary match button and themed controls surface. PNG capture now retains the active light/dark theme without a fixed navy background. Three presentation behavior tests, JavaScript syntax and whitespace checks passed; browser visual verification remains pending.
+
+
+## Team studio presentation — November 14, 2026
+
+Redesigned Manage Squad and Create/Edit Team with a shared forest-green studio header, refined panels, responsive spacing and compact player rows. Manage Squad replaces the horizontal carousel with a keyboard-focusable vertical pool and matching scrollable squad list; lazy pagination now follows the vertical scroll position. Retains role filtering, add/remove, leadership, readiness, drafts and publishing without backend changes.
+
+Validation: nine focused JavaScript readiness, draft recovery, team validation and stadium selection checks passed. Both Jinja templates parsed successfully, the squad inline script passed Node syntax checking, and diff whitespace checks passed. Browser visual verification remains pending.
+
+Squad editor guide: expanded the existing shared `team_squad` tour to seven steps covering formats, searching/adding players, squad removal, leadership, captaincy, readiness and draft/publish behavior. Opens through the existing navbar question-mark icon and uses the same guide styling, navigation and replay behavior as other pages. Removed the separate header button and custom guide implementation. No backend or save behavior changes. Validation: shared tour selector and main-tour coverage checks plus JavaScript syntax and diff whitespace checks passed. Browser visual verification remains pending.
+
+Edit Team navbar correction: registered `edit_team` with the shared team-editor guide so `/team/<code>/edit` renders the existing navbar replay icon and tour assets. Updated the tour heading and stadium wording for Create/Edit parity. Three focused registry/selector/main-tour checks, JavaScript syntax and diff whitespace checks passed.

@@ -232,12 +232,12 @@
         id: 'team_create',
         page: 'team_create',
         main: true,
-        kicker: ctx => journeyKicker(ctx) || 'Create a team',
+        kicker: ctx => journeyKicker(ctx) || 'Team editor',
         steps: [
             {
                 target: '.tc-identity',
                 title: ctx => ctx.stage('team2') ? 'Your opponent: team identity' : 'Team identity',
-                body: `<p>Give the team a <strong>name</strong>, a short <strong>code</strong> (like MUM), a <strong>home ground</strong>, the pitch that ground favours, and a colour.</p>`,
+                body: `<p>Give the team a <strong>name</strong>, a short <strong>code</strong> (like MUM), and a colour. Choose a <strong>home stadium</strong> from your stadiums; use Browse stadiums to create or adopt one.</p>`,
             },
             {
                 target: '.tc-tabs',
@@ -330,26 +330,41 @@
         kicker: 'Squad builder',
         steps: [
             {
-                target: '.sb-composition',
-                title: 'Squad balance',
-                body: ctx => `<p>A live count of your squad by role. A playable squad has ${squadRule(ctx)}.</p>`,
+                target: '.sb-tabs-wrap',
+                title: 'Choose your format',
+                body: `<p>Each format has its own squad. The highlighted tab is the format you are editing. Selecting another tab opens that format’s squad page.</p>`,
             },
             {
                 target: '#poolPanel',
-                title: 'Player pool',
-                body: `<p>Search, filter by role, and add players to the squad.</p>`,
+                title: 'Find your players',
+                body: `<p>Search by name or filter by role: <strong>WK</strong> for wicketkeepers, <strong>Bat</strong> for batters, <strong>AR</strong> for all-rounders and <strong>Bowl</strong> for bowlers. <strong>Bowl / AR</strong> shows both bowling options.</p><p>Scroll down the list to load more players, then select <strong>+</strong> to add one.</p>`,
                 placement: 'right',
             },
             {
-                target: '#squadPanel',
-                title: 'Your squad',
-                body: `<p>Players you've picked for this format. Reorder or remove them here.</p>`,
+                target: '#squadList',
+                title: 'Shape your squad',
+                body: `<p>Your selected players appear in this scrollable list. Select <strong>×</strong> beside a player to remove them from this squad. Selected players are marked <strong>Added</strong> in the pool.</p>`,
                 placement: 'left',
             },
             {
+                target: '.sb-designations',
+                title: 'Choose your leaders',
+                body: `<p>Use the <strong>Captain</strong> and <strong>Wicketkeeper</strong> menus to assign players from your squad. Both assignments are required before publishing.</p>`,
+            },
+            {
+                target: '#captaincy-controls',
+                title: 'Set the captain’s approach',
+                body: `<p>Choose a captaincy style and adjust your captain’s decision-making settings for this format.</p>`,
+            },
+            {
+                target: '#validationBox',
+                title: 'Check squad readiness',
+                body: ctx => `<p>A playable squad has ${squadRule(ctx)}.</p><p>This live checklist shows anything missing. Bowlers and all-rounders both count as bowling options. Use the suggested actions to complete your squad.</p>`,
+            },
+            {
                 target: '.sb-hero-actions',
-                title: 'Draft or publish',
-                body: `<p><strong>Save Draft</strong> keeps your progress without making the team playable. <strong>Publish Team</strong> checks the squad rules and makes it available for matches.</p>`,
+                title: 'Save your work',
+                body: `<p><strong>Save Draft</strong> keeps unfinished work in this browser; it does not publish it. When you return, use <strong>Restore Draft</strong> if offered.</p><p>Once the squad is ready, <strong>Publish Team</strong> checks the rules and saves it to the server for matches.</p>`,
             },
         ],
     });

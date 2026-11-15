@@ -243,6 +243,27 @@
 }
 .tc-color-wrap span { font-size: 0.85rem; color: var(--fg-secondary); }
 
+.tc-logo-row { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+.tc-logo-preview {
+    width: 64px; height: 64px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px dashed var(--tc-panel-border); border-radius: 10px;
+    background: var(--tc-input-bg); color: var(--fg-secondary);
+    font-size: 1.3rem; overflow: hidden;
+}
+.tc-logo-preview img { width: 100%; height: 100%; object-fit: contain; }
+.tc-logo-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.tc-logo-btn {
+    min-height: 44px; padding: 0.5rem 0.9rem;
+    font: inherit; font-size: 0.85rem; font-weight: 600;
+    color: var(--fg); background: var(--tc-input-bg);
+    border: 1px solid var(--tc-panel-border); border-radius: 8px; cursor: pointer;
+}
+.tc-logo-btn[hidden] { display: none; }
+.tc-logo-btn:hover { border-color: var(--tc-accent); }
+.tc-logo-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.tc-logo-error { font-size: 0.8rem; color: var(--danger, #dc2626); }
+
 /* ── Builder Split ── */
 .tc-builder {
     margin-top: 1rem;
@@ -963,6 +984,7 @@
 .tc-stadium-summary { padding: 14px 16px; border-radius: 10px; background: var(--tc-panel); color: var(--fg); font-size: 14px; line-height: 1.6; }
 @media (max-width: 600px) { .tc-stadium-card { padding: 16px; } .tc-stadium-heading .tc-btn { width: 100%; } }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/team_studio.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -1014,8 +1036,9 @@
   {% if request.method == 'POST' %}
   <script id="tc-submitted-data" type="application/json">{{ request.form.to_dict() | tojson }}</script>
   {% endif %}
-  <form id="tc-form" method="POST" action="{% if edit %}{{ url_for('edit_team', short_code=team.short_code) }}{% else %}{{ url_for('create_team') }}{% endif %}" autocomplete="off">
+  <form id="tc-form" method="POST" action="{% if edit %}{{ url_for('edit_team', short_code=team.short_code) }}{% else %}{{ url_for('create_team') }}{% endif %}" autocomplete="off" enctype="multipart/form-data">
     {% if edit %}<input type="hidden" name="action" value="publish">{% endif %}
+    <input type="hidden" name="logo_remove" id="tc-logo-remove-flag" value="">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="profiles_payload" id="tc-profiles-payload">
     <input type="hidden" name="active_format" id="tc-active-format">
@@ -1042,6 +1065,20 @@
             <span>Pick brand color</span>
             <input id="tc-color" type="color" name="team_color" value="#4f46e5" required>
           </label>
+        </div>
+        <div class="tc-field" id="tc-logo-field"
+             data-current="{% if edit and team.logo_version %}{{ url_for('team_logo', team_id=team.id, v=team.logo_version) }}{% endif %}">
+          <label for="tc-logo-choose">Team Logo <span style="text-transform:none;letter-spacing:0;font-weight:500">(optional)</span></label>
+          <div class="tc-logo-row">
+            <div class="tc-logo-preview" id="tc-logo-preview" aria-hidden="true"></div>
+            <div class="tc-logo-actions">
+              <button type="button" class="tc-logo-btn" id="tc-logo-choose" aria-describedby="tc-logo-hint">Choose PNG</button>
+              <button type="button" class="tc-logo-btn" id="tc-logo-remove" hidden>Remove</button>
+            </div>
+            <input type="file" class="tc-logo-file" id="tc-logo-file" name="logo" accept="image/png" tabindex="-1" aria-hidden="true">
+          </div>
+          <span class="tc-logo-error" id="tc-logo-error" role="alert"></span>
+          <span class="tc-hint" id="tc-logo-hint"></span>
         </div>
         {% set legacy_venue = edit and team.venue_mode == 'legacy' %}
         <div class="tc-stadium-card" style="grid-column:1/-1">
@@ -1199,6 +1236,79 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/team_logo_picker.js') }}"></script>
+<script>
+// Team logo picker. The file travels with the form itself (multipart), so a
+// reload or a failed submit simply drops the selection — it is never part of
+// the autosaved draft.
+(function () {
+  const field = document.getElementById('tc-logo-field');
+  const preview = document.getElementById('tc-logo-preview');
+  const fileInput = document.getElementById('tc-logo-file');
+  const chooseBtn = document.getElementById('tc-logo-choose');
+  const removeBtn = document.getElementById('tc-logo-remove');
+  const removeFlag = document.getElementById('tc-logo-remove-flag');
+  const errorEl = document.getElementById('tc-logo-error');
+  let current = field.getAttribute('data-current') || '';
+  let pickedUrl = null;
+
+  document.getElementById('tc-logo-hint').textContent = window.scxTeamLogo.HINT;
+
+  function render() {
+    const url = pickedUrl || current;
+    preview.textContent = '';
+    if (url) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = '';
+      preview.appendChild(img);
+    } else {
+      const icon = document.createElement('i');
+      icon.className = 'fa-solid fa-image';
+      preview.appendChild(icon);
+    }
+    chooseBtn.textContent = url ? 'Change PNG' : 'Choose PNG';
+    removeBtn.hidden = !url;
+  }
+
+  function dropPicked() {
+    if (pickedUrl) URL.revokeObjectURL(pickedUrl);
+    pickedUrl = null;
+    fileInput.value = '';
+  }
+
+  chooseBtn.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const result = await window.scxTeamLogo.check(file);
+    if (result.ok) {
+      if (pickedUrl) URL.revokeObjectURL(pickedUrl);
+      pickedUrl = result.url;
+      removeFlag.value = '';
+      errorEl.textContent = '';
+    } else {
+      dropPicked();
+      errorEl.textContent = result.error;
+    }
+    render();
+  });
+
+  removeBtn.addEventListener('click', () => {
+    if (pickedUrl) {
+      dropPicked();              // back to whatever is saved
+    } else {
+      current = '';              // drop the saved logo on save
+      removeFlag.value = '1';
+    }
+    errorEl.textContent = '';
+    render();
+  });
+
+  render();
+})();
+</script>
 <script src="{{ url_for('static', filename='js/player_touch_drag.js') }}"></script>
 <script src="{{ url_for('static', filename='js/squad_readiness.js') }}"></script>
 <script>

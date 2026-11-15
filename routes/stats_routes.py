@@ -6,6 +6,7 @@ from markupsafe import escape
 from engine.stats_service import SUPPORTED_STATS_FORMATS
 from engine.length_filter import parse_length_filter, length_predicate
 from utils.exception_tracker import log_exception
+from utils.partnership_format import ordinal
 
 
 def register_stats_routes(
@@ -38,7 +39,8 @@ def register_stats_routes(
         if request.endpoint in {
             "statistics", "export_statistics", "compare_players_page", "api_bowling_figures",
             "api_compare_players", "api_player_partnerships", "api_tournament_partnerships",
-            "api_overall_partnerships", "head_to_head_page", "api_head_to_head",
+            "api_overall_partnerships", "api_partnership_wicket_records",
+            "api_partnership_pairs", "head_to_head_page", "api_head_to_head",
             "player_profile_page", "team_stats_page", "export_statistics_pdf",
         } and "scheduled_overs" in request.args:
             _length_arg()
@@ -515,55 +517,60 @@ def register_stats_routes(
             if limit < 1 or limit > 50:
                 return jsonify({"error": "Limit must be between 1 and 50"}), 400
 
-            batsman_1 = aliased(DBPlayer, name="batsman1")
-            batsman_2 = aliased(DBPlayer, name="batsman2")
-
-            partnerships_q = (
-                db.session.query(
-                    MatchPartnership,
-                    batsman_1.name.label("batsman1_name"),
-                    batsman_2.name.label("batsman2_name"),
-                    Tournament.name.label("tournament_name"),
-                )
-                .join(DBMatch, MatchPartnership.match_id == DBMatch.id)
-                .join(batsman_1, MatchPartnership.batsman1_id == batsman_1.id)
-                .join(batsman_2, MatchPartnership.batsman2_id == batsman_2.id)
-                .outerjoin(Tournament, DBMatch.tournament_id == Tournament.id)
-                .filter(DBMatch.user_id == current_user.id)
+            stats_service = StatsService(app.logger, scheduled_overs=_length_arg())
+            result = stats_service.get_partnership_leaderboard(
+                current_user.id,
+                None,
+                limit,
+                match_format=match_format,
             )
-            if match_format:
-                partnerships_q = partnerships_q.filter(DBMatch.match_format == match_format, length_predicate(DBMatch, _length_arg()))
-            partnerships = (
-                partnerships_q
-                .order_by(MatchPartnership.runs.desc())
-                .limit(limit)
-                .all()
-            )
-
-            app.logger.info(
-                f"[Partnerships] Found {len(partnerships)} overall partnership rows (limit={limit}) for user {current_user.id}"
-            )
-
-            result = []
-            for p, b1_name, b2_name, tourn_name in partnerships:
-                result.append(
-                    {
-                        "batsman1": b1_name,
-                        "batsman2": b2_name,
-                        "runs": p.runs,
-                        "balls": p.balls,
-                        "wicket": p.wicket_number,
-                        "batsman1_contribution": p.batsman1_contribution,
-                        "batsman2_contribution": p.batsman2_contribution,
-                        "tournament": tourn_name,
-                        "match_id": p.match_id,
-                    }
-                )
 
             return jsonify({"success": True, "data": result, "count": len(result)})
         except Exception as e:
             log_exception(e)
             app.logger.error(f"Error fetching overall partnerships: {e}", exc_info=True)
+            return jsonify({"error": "An internal error occurred"}), 500
+
+    def _partnership_view(fetch):
+        """Shared body of the per-wicket and pairs endpoints: overall by
+        default, one tournament when ``tournament_id`` is given."""
+        tournament_id = request.args.get("tournament_id", type=int)
+        match_format = _tournament_format(tournament_id, _stats_format_arg())
+        stats_service = StatsService(app.logger, scheduled_overs=_length_arg())
+        data = fetch(stats_service, tournament_id, match_format)
+        return jsonify({"success": True, "data": data, "count": len(data)})
+
+    @app.route("/api/partnerships/by-wicket")
+    @login_required
+    @limiter.limit("30 per minute")
+    def api_partnership_wicket_records():
+        """Highest partnership for each wicket, overall or for one tournament."""
+        try:
+            return _partnership_view(
+                lambda service, tournament_id, match_format: service.get_partnership_wicket_records(
+                    current_user.id, tournament_id, match_format=match_format)
+            )
+        except Exception as e:
+            log_exception(e)
+            app.logger.error(f"Error fetching partnership wicket records: {e}", exc_info=True)
+            return jsonify({"error": "An internal error occurred"}), 500
+
+    @app.route("/api/partnerships/pairs")
+    @login_required
+    @limiter.limit("30 per minute")
+    def api_partnership_pairs():
+        """Most productive batting pairs, overall or for one tournament."""
+        try:
+            limit = request.args.get("limit", 10, type=int)
+            if limit < 1 or limit > 50:
+                return jsonify({"error": "Limit must be between 1 and 50"}), 400
+            return _partnership_view(
+                lambda service, tournament_id, match_format: service.get_partnership_pairs(
+                    current_user.id, tournament_id, limit, match_format=match_format)
+            )
+        except Exception as e:
+            log_exception(e)
+            app.logger.error(f"Error fetching partnership pairs: {e}", exc_info=True)
             return jsonify({"error": "An internal error occurred"}), 500
 
     # ===== Head-to-Head =====
@@ -628,7 +635,16 @@ def register_stats_routes(
                 args = request.args.to_dict()
                 args["match_format"] = match_format
                 return redirect(url_for("player_profile_page", player_id=target_id, **args))
-            return render_template("player_profile.html", profile=profile, match_format=match_format)
+            # Same format and length scope as the rest of the profile. A
+            # failure here must not take the whole page down.
+            partnerships = stats_service.get_player_partnership_stats(
+                player_id, current_user.id, None, match_format)
+            if "error" in partnerships:
+                partnerships = None
+            return render_template(
+                "player_profile.html", profile=profile, match_format=match_format,
+                partnerships=partnerships, ordinal=ordinal,
+            )
         except Exception as e:
             log_exception(e)
             app.logger.error(f"Error loading player profile: {e}", exc_info=True)

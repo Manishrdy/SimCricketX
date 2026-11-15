@@ -214,6 +214,11 @@ document.addEventListener('DOMContentLoaded', () => {
         spinBtn.onclick = () => (simulationMode === 'manual' ? showTossPopup() : spinTossAndStartMatch());
     }
 
+    if (!window.resumeMode && matchData.toss_winner && matchData.toss_decision) {
+        if (spinBtn) spinBtn.hidden = true;
+        showPrematchPresentation(matchData);
+    }
+
     // Reset Swap Buttons
     const homeReset = document.getElementById('home-reset-btn');
     if (homeReset) homeReset.addEventListener('click', () => resetTeamSwap('home'));
@@ -1009,7 +1014,7 @@ function applyTossResult(d) {
                      ? homeTeam : awayTeam;
     const batNameEl = document.getElementById('sb-bat-name');
     if (batNameEl) batNameEl.textContent = batFirst;
-    setTimeout(startMatch, IS_FC_MATCH ? 0 : 1000);
+    showPrematchPresentation(d);
 }
 
 function spinTossAndStartMatch() {
@@ -1050,7 +1055,7 @@ function spinTossAndStartMatch() {
             const batNameEl = document.getElementById('sb-bat-name');
             if (batNameEl) batNameEl.textContent = batFirst;
 
-            setTimeout(startMatch, IS_FC_MATCH ? 0 : 1000);
+            showPrematchPresentation(d);
         })
         .catch(err => {
             appendLog(`[ERROR] Toss failed: ${err}`, 'error');
@@ -2061,7 +2066,7 @@ async function _processBallResult(data) {
 
 function startMatch() {
     simTimerId = null;
-    if (matchOver || ballInFlight || recoveryRunning || recoveryBlocked || scorecardIsVisible()) return;
+    if ((typeof prematchPresentationOpen !== 'undefined' && prematchPresentationOpen) || matchOver || ballInFlight || recoveryRunning || recoveryBlocked || scorecardIsVisible()) return;
     ballInFlight = true;
     if (!deliveryToken) {
         recoverDelivery();
@@ -3270,6 +3275,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             currentInningsNumber = state.innings;
 
+            if (state.innings === 1 && state.current_over === 0 && state.current_ball === 0
+                && state.score === 0 && state.wickets === 0 && matchData.toss_winner && matchData.toss_decision) {
+                showPrematchPresentation(matchData);
+                return;
+            }
             const pendingCard = state.pending_card?.payload;
             if (pendingCard?.innings_end) {
                 // Commentary was already replayed above.

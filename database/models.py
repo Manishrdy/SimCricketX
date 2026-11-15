@@ -200,6 +200,9 @@ class Team(db.Model):
     is_draft = db.Column(db.Boolean, default=False)
     is_placeholder = db.Column(db.Boolean, default=False)  # True for BYE/TBD teams
     season_id = db.Column(db.Integer, db.ForeignKey('seasons.id', ondelete='CASCADE'), nullable=True, index=True)
+    # NULL = no logo. Bumped on every logo change and used as the ?v= cache
+    # buster, so lists can tell a logo exists without touching team_logos.
+    logo_version = db.Column(db.Integer)
 
     # Unique constraint: one short_code per user
     __table_args__ = (
@@ -210,10 +213,30 @@ class Team(db.Model):
     profiles = relationship('TeamProfile', back_populates='team', cascade='all, delete-orphan')
     # Read-only convenience accessor — cascade is managed through profiles
     players = relationship('Player', viewonly=True)
+    # Lazy on purpose: the blob must never ride along with a team query.
+    logo = relationship('TeamLogo', uselist=False, back_populates='team',
+                        cascade='all, delete-orphan', passive_deletes=True)
 
     # Matches where this team played
     home_matches = relationship('Match', foreign_keys='Match.home_team_id', backref='home_team')
     away_matches = relationship('Match', foreign_keys='Match.away_team_id', backref='away_team')
+
+
+class TeamLogo(db.Model):
+    """One optional logo per team (shared by every format profile).
+
+    ``png`` is always the output of utils.team_logo.normalize_logo: a 256x256
+    PNG. Lives in its own table so the blob is only read by the logo route.
+    """
+    __tablename__ = 'team_logos'
+
+    team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='CASCADE'), primary_key=True)
+    png = db.Column(db.LargeBinary, nullable=False)
+    byte_size = db.Column(db.Integer, nullable=False)
+    sha256 = db.Column(db.String(64), nullable=False)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    team = relationship('Team', back_populates='logo')
 
 
 from engine.captaincy import default_config as default_captaincy_config

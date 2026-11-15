@@ -709,6 +709,7 @@
 }
 .sb-pool-sentinel { width: 1px; height: 1px; }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/team_studio.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -721,7 +722,7 @@
         <div class="sb-hero-left">
             <div class="sb-team-badge">{{ team.name[:2].upper() }}</div>
             <div>
-                <div class="sb-team-name">{{ team.name }}</div>
+                <span class="studio-eyebrow">Team studio / {{ fmt }}</span><h1 class="sb-team-name">{{ team.name }}</h1>
                 <div class="sb-team-meta">
                     <span class="sb-status-dot {{ 'draft' if team.is_draft else '' }}"></span>
                     {{ 'Draft' if team.is_draft else 'Published' }} &middot; Squad Builder
@@ -798,20 +799,14 @@
                     <button class="sb-chip" data-role="Bowling options">Bowl / AR</button>
                 </div>
                 <div class="sb-pool-help">
-                    <i class="fas fa-arrows-left-right"></i> Slide to browse players
+                    <i class="fas fa-arrow-down"></i> Scroll to explore · Select + to add a player
                 </div>
                 <div class="sb-slider-wrap">
-                    <button class="sb-slider-btn" id="poolPrevBtn" type="button" aria-label="Previous players">
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                    <div class="sb-list" id="poolList">
+                    <div class="sb-list" id="poolList" tabindex="0" aria-label="Player pool">
                         <div class="sb-pool-loading" id="poolSpinner">
                             <i class="fas fa-circle-notch fa-spin"></i> Loading players...
                         </div>
                     </div>
-                    <button class="sb-slider-btn" id="poolNextBtn" type="button" aria-label="Next players">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
                 </div>
                 <div class="sb-pool-sentinel" id="poolSentinel"></div>
             </div>
@@ -828,7 +823,7 @@
                     <i class="fas fa-arrow-left"></i> Drop player here or double-click from pool
                 </div>
 
-                <div class="sb-squad-list" id="squadList">
+                <div class="sb-squad-list" id="squadList" tabindex="0" aria-label="Your squad">
                     <div class="sb-empty" id="squadEmpty">
                         <div class="sb-empty-icon"><i class="fas fa-user-plus"></i></div>
                         Drag or double-click players from the pool to build your squad.
@@ -923,7 +918,7 @@
         fetchPool(true);
         setupDragDrop();
         setupSearchAndChips();
-        setupPoolSlider();
+
         setupInfiniteScroll();
         updateValidation();
     })();
@@ -982,7 +977,7 @@
             pool.hasMore = true;
             listEl.innerHTML =
                 '<div class="sb-pool-loading" id="poolSpinner"><i class="fas fa-circle-notch fa-spin"></i> Loading...</div>';
-            listEl.scrollLeft = 0;
+            listEl.scrollTop = 0;
         }
         pool.loading = true;
 
@@ -1018,7 +1013,7 @@
 
                 var total = data.total;
                 document.getElementById('poolCount').textContent = total ? total + ' players' : '';
-                updatePoolSliderControls();
+
             })
             .catch(function (err) {
                 if (err && err.name === 'AbortError') return;   // superseded
@@ -1027,7 +1022,7 @@
                 if (poolInFlight === controller) poolInFlight = null;
                 var spinner = document.getElementById('poolSpinner');
                 if (spinner) spinner.textContent = 'Failed to load. Refresh to retry.';
-                updatePoolSliderControls();
+
             });
     }
 
@@ -1227,7 +1222,7 @@
                 break;
             }
         }
-        updatePoolSliderControls();
+
     }
 
     // ── Drag-and-drop ──────────────────────────────────────────────────────
@@ -1278,50 +1273,12 @@
         });
     }
 
-    // ── Pool slider + infinite load ───────────────────────────────────────
-    function setupPoolSlider() {
-        var list = document.getElementById('poolList');
-        var prev = document.getElementById('poolPrevBtn');
-        var next = document.getElementById('poolNextBtn');
-        if (!list || !prev || !next) return;
-
-        function slide(dir) {
-            var stride = Math.max(220, Math.floor(list.clientWidth * 0.72));
-            list.scrollBy({ left: dir * stride, behavior: 'smooth' });
-        }
-
-        prev.addEventListener('click', function () { slide(-1); });
-        next.addEventListener('click', function () { slide(1); });
-
-        list.addEventListener('scroll', function () {
-            updatePoolSliderControls();
-        }, { passive: true });
-
-        list.addEventListener('wheel', function (e) {
-            if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
-            e.preventDefault();
-            list.scrollLeft += e.deltaY;
-        }, { passive: false });
-
-        window.addEventListener('resize', updatePoolSliderControls);
-        updatePoolSliderControls();
-    }
-
-    function updatePoolSliderControls() {
-        var list = document.getElementById('poolList');
-        var prev = document.getElementById('poolPrevBtn');
-        var next = document.getElementById('poolNextBtn');
-        if (!list || !prev || !next) return;
-        var maxLeft = Math.max(0, list.scrollWidth - list.clientWidth);
-        prev.disabled = list.scrollLeft <= 2;
-        next.disabled = list.scrollLeft >= (maxLeft - 2);
-    }
-
+    // ── Vertical pool infinite load ───────────────────────────────────────
     function setupInfiniteScroll() {
         var list = document.getElementById('poolList');
         if (!list) return;
         list.addEventListener('scroll', function () {
-            var nearEnd = (list.scrollLeft + list.clientWidth) >= (list.scrollWidth - 280);
+            var nearEnd = (list.scrollTop + list.clientHeight) >= (list.scrollHeight - 280);
             if (nearEnd && !pool.loading && pool.hasMore) {
                 fetchPool(false);
             }
