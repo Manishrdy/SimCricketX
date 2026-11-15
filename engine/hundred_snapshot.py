@@ -7,9 +7,14 @@ from engine.hundred_bowler_manager import HundredBowlerManager
 from engine.dls import ResourceLedger
 from engine.pressure_engine import PressureEngine
 from engine.commentary_engine import CommentaryEngine
+from engine.scenario_engine import HistoricalScenarioEngine, ScenarioEngine
 
 _TYPES = {c.__name__: c for c in (FormatConfig, Phase, HundredBowlerManager,
-                                ResourceLedger, PressureEngine, CommentaryEngine)}
+                                ResourceLedger, PressureEngine, CommentaryEngine,
+                                ScenarioEngine, HistoricalScenarioEngine)}
+# These engines point back at the live match. The checkpoint already owns that
+# match, so the pointer is left out of the graph and rebound on restore.
+_REBIND_MATCH = {ScenarioEngine.__name__, HistoricalScenarioEngine.__name__}
 
 
 def serialize(match):
@@ -36,7 +41,10 @@ def serialize(match):
         elif isinstance(value, random.Random):
             node.update(kind="Random", state=encode(value.getstate()))
         elif type(value).__name__ in _TYPES:
-            node.update(kind=type(value).__name__, attrs=encode(vars(value)))
+            attrs = vars(value)
+            if type(value).__name__ in _REBIND_MATCH:
+                attrs = {k: v for k, v in attrs.items() if k != "match"}
+            node.update(kind=type(value).__name__, attrs=encode(attrs))
         else:
             raise ValueError(f"Unsupported checkpoint value: {type(value).__name__}")
         return {"ref": index}
@@ -90,6 +98,8 @@ def restore(match, snapshot):
     if state.get("is_hundred") is not True:
         raise ValueError("Checkpoint is not a Hundred match")
     vars(match).update(state)
+    if getattr(match, "scenario_engine", None) is not None:
+        match.scenario_engine.match = match
     match.hundred_policy_version = state.get('hundred_policy_version', 1)
     match.hundred_presentation_version = 2
     match.hundred_delivery_sequence = state.get('hundred_delivery_sequence', 0)
