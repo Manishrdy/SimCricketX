@@ -196,8 +196,9 @@ def test_fc_profile_team_and_h2h_keep_complete_match_shape(fc_statistics_data):
 
     team = service.get_team_stats(data["user"].id, data["home"].id, "FC")
     assert team["summary"]["drawn"] == 1
-    assert team["summary"]["avg_scored"] == 530.0
-    assert team["summary"]["avg_conceded"] == 530.0
+    # Averages are per innings: 350 + 180 over two innings, not a 530 match total.
+    assert team["summary"]["avg_scored"] == 265.0
+    assert team["summary"]["avg_conceded"] == 265.0
     assert team["recent"][0]["result"] == "D"
     assert team["recent"][0]["score"] == "350/10 & 180/5"
 
@@ -210,8 +211,9 @@ def test_fc_profile_team_and_h2h_keep_complete_match_shape(fc_statistics_data):
     assert h2h["matches"][0]["away_score"] == "300/10 & 230/8"
 
     insights = service.get_insights(data["user"].id, match_format="FC")
-    assert insights["conditions"]["venues"][0]["avg_runs"] == 1060.0
-    assert insights["conditions"]["venues"][0]["avg_wkts"] == 33.0
+    # Conditions Lens is per innings too: 1060 runs and 33 wickets over four innings.
+    assert insights["conditions"]["venues"][0]["avg_runs"] == 265.0
+    assert insights["conditions"]["venues"][0]["avg_wkts"] == 8.2
     batter_form = next(
         row for row in insights["form"]["batting"]
         if row["player"] == data["player"].name
