@@ -204,9 +204,14 @@ def test_password_policy_and_user_email_reference_updates(app_env):
         db.session.add(FailedLoginAttempt(email=old_email, ip_address="203.0.113.10", user_agent="pytest"))
         db.session.commit()
 
-        success, _ = update_user_email(old_email, new_email, admin_email="audit-admin@example.com")
-        assert success
-        assert db.session.get(User, new_email) is not None
-        assert ActiveSession.query.filter_by(user_id=new_email).count() >= 1
-        assert BlockedIP.query.filter_by(blocked_by=new_email).count() >= 1
-        assert FailedLoginAttempt.query.filter_by(email=new_email).count() >= 1
+        # The immediate email writer is retired: changes go through the
+        # verified Identity -> Email changes flow, so this must refuse and
+        # leave every reference on the old address.
+        success, message = update_user_email(old_email, new_email, admin_email="audit-admin@example.com")
+        assert not success
+        assert "Email changes" in message
+        assert db.session.get(User, new_email) is None
+        assert db.session.get(User, old_email) is not None
+        assert ActiveSession.query.filter_by(user_id=old_email).count() == 1
+        assert BlockedIP.query.filter_by(blocked_by=old_email).count() == 1
+        assert FailedLoginAttempt.query.filter_by(email=old_email).count() == 1
