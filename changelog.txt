@@ -40,6 +40,7 @@
 - Added The Hundred to the Head-to-Head format selector
 - Fixed career catch milestones counting catches taken in Hundred matches towards a player's T20 career
 - Fixed a player's stored career best bowling staying at 0/0 after a wicketless spell, and being reset to 0/0 by a match they did not bowl in when another match was re-simulated or deleted
+- Sped up My Matches: the saved-archive list now checks ownership for the whole folder in a fixed number of database queries instead of two or three per file for every user's exports
 
 [3.0.2] 2026-10-17
 - Made First-Class collapses fairer for incoming batters: they still face the usual difficult settling-in period and team collapse pressure, but no longer receive an extra penalty simply for arriving during a collapse, including against the new ball or on a worn pitch

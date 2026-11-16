@@ -23,7 +23,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import joinedload
 from utils import support_prompt
 from utils.partnership_format import fall_of_wickets, fow_text, ordinal
-from utils.match_ownership import owns_match_snapshot, owns_archive
+from utils.match_ownership import owns_match_snapshot, owns_archive, owned_archives
 from utils.exception_tracker import log_exception
 from werkzeug.utils import secure_filename
 
@@ -2471,23 +2471,33 @@ def register_match_routes(
                 now = time.time()
                 max_age = ARCHIVE_MAX_AGE_SECS
 
+                # Stat first, then resolve ownership for the whole folder in one
+                # batch. The folder holds every user's exports, so a per-file
+                # owns_archive() here costs queries in proportion to site-wide
+                # activity on each page load.
+                candidates = {}
                 for fn in os.listdir(files_dir):
-                    # Only consider ".zip" and filenames containing "_<username>_"
                     if not fn.lower().endswith(".zip"):
                         continue
-                    if not owns_archive(os.path.join(files_dir, fn), username):
-                        continue
-
                     full_path = os.path.join(files_dir, fn)
-                    if not os.path.isfile(full_path):
-                        app.logger.debug(f"Skipping '{fn}' (not a regular file)")
+                    try:
+                        if not os.path.isfile(full_path):
+                            continue
+                        mtime = os.path.getmtime(full_path)
+                    except OSError:
+                        continue  # removed between listdir and stat
+                    if now - mtime > max_age:
                         continue
+                    candidates[fn] = (full_path, mtime)
 
-                    age = now - os.path.getmtime(full_path)
-                    if age > max_age:
-                        app.logger.info(f"Skipping old archive '{fn}' (age {age//3600}h > 7d)")
+                owned = owned_archives(
+                    [full_path for full_path, _ in candidates.values()], username
+                )
+
+                for fn, (full_path, mtime) in candidates.items():
+                    if fn not in owned:
                         continue
-                    created_at = datetime.fromtimestamp(os.path.getmtime(full_path))
+                    created_at = datetime.fromtimestamp(mtime)
                     expires_at = created_at + timedelta(days=ARCHIVE_MAX_AGE_DAYS)
 
                     # Build URLs for download & delete
