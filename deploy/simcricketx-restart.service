@@ -1,0 +1,7 @@
+[Unit]
+Description=Nightly restart of SimCricketX to reclaim memory
+Requires=simcricketx.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl restart simcricketx.service
