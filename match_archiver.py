@@ -19,6 +19,8 @@ Version: 1.0.0 (Production)
 """
 
 import os
+import gc
+import ctypes
 import json
 import csv
 import shutil
@@ -51,6 +53,19 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 class MatchArchiverError(Exception):
     """Custom exception for MatchArchiver-specific errors"""
     pass
+
+
+try:
+    _libc = ctypes.CDLL("libc.so.6")
+except OSError:
+    _libc = None
+
+
+def _release_memory():
+    """Force Python to collect cycles and return freed pages to the OS."""
+    gc.collect()
+    if _libc is not None:
+        _libc.malloc_trim(0)
 
 
 def _counts_career_not_out(card):
@@ -460,13 +475,22 @@ class MatchArchiver:
 
             archive_size = os.path.getsize(zip_path)
             self.logger.info(f"Archive creation completed successfully: {zip_path} ({archive_size:,} bytes)")
-            
+
+            # Break cycles: clear the large engine objects so Python's reference
+            # counter can free them immediately without waiting for the cyclic GC.
+            self.match = None
+            self.match_data = None
+            _release_memory()
+
             return True
-            
+
         except Exception as e:
             log_exception(e)
             self.logger.error(f"Archive creation failed: {e}", exc_info=True)
             self._cleanup_on_error()
+            self.match = None
+            self.match_data = None
+            _release_memory()
             return False
 
 
