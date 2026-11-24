@@ -219,14 +219,13 @@ def execute(engine, fixture_id, user_id, token):
     return receipt, True
 
 
-def cleanup(receipt, project_root, instances, instances_lock):
+def cleanup(receipt, project_root, match_store):
     """Idempotent post-commit cleanup. Failures stay in the durable retry queue."""
     matches = VoidedFixtureMatch.query.filter_by(replay_id=receipt.id).all()
     directory = (Path(project_root) / 'data' / 'matches').resolve()
     errors = []
     for match in matches:
-        with instances_lock:
-            instances.pop(match.match_id, None)
+        match_store.invalidate(match.match_id)
         paths = {directory / f'match_{match.match_id}.json'}
         if match.json_path and match.json_path != 'autosaved':
             stored = Path(match.json_path)

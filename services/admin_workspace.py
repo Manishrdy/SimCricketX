@@ -11,7 +11,7 @@ from database.models import (User, Team, Player, Match, Tournament,
                              ActiveSession)
 
 BACKUP_INTERVAL_SECONDS = 24 * 3600
-MATCH_CLEANUP_INTERVAL_SECONDS = 6 * 3600
+MATCH_CLEANUP_INTERVAL_SECONDS = 4 * 3600
 BACKUP_RETENTION_DAYS = 7
 STALE_SESSION_DAYS = 7
 
@@ -92,7 +92,7 @@ def latest_backup(root):
     return _safe(read)
 
 
-def system_overview(root, psutil, match_instances, match_lock):
+def system_overview(root, psutil, match_store):
     data = dict(updated_at=datetime.utcnow(), backup=latest_backup(root))
     def directory_size():
         total = 0
@@ -106,8 +106,7 @@ def system_overview(root, psutil, match_instances, match_lock):
         return round(total / 1024**2, 2)
     data['data_mb'] = _safe(directory_size)
     data['log_mb'] = _safe(lambda: round((Path(root) / 'logs' / 'execution.log').stat().st_size / 1024**2, 2))
-    with match_lock:
-        data['matches'] = len(match_instances)
+    data['matches'] = match_store.metrics()['total']
     process = _safe(lambda: psutil.Process()) if psutil else None
     data['memory_mb'] = _safe(lambda: round(process.memory_info().rss / 1024**2, 1)) if process else None
     data['cpu'] = _safe(lambda: process.cpu_percent(interval=0.1)) if process else None

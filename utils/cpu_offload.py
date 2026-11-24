@@ -2,7 +2,7 @@
 
 Production serves this app from a single gunicorn worker
 (``gunicorn.conf.py``: ``workers = 1``, geventwebsocket worker class) because
-match state lives in the in-process ``MATCH_INSTANCES`` dict. gevent is
+match state lives in the in-process ``MatchStore``. gevent is
 cooperative, so a greenlet that runs a long stretch of straight computation
 never yields — and for its whole duration the worker serves nobody. It does
 not answer other requests, and, more damagingly, it does not run Socket.IO's
@@ -28,7 +28,7 @@ Outside gevent (tests, benchmark scripts, ``scripts/bench_fc.py``) there is no
 hub, and the callable simply runs inline.
 
 The callable **must be pure CPU over plain data**: no Flask request context, no
-``db.session``, no ``MATCH_INSTANCES`` mutation. It runs on a real OS thread,
+``db.session``, no match-store mutation. It runs on a real OS thread,
 where none of those are safe to touch.
 
 It must also avoid every gevent-patched primitive — ``threading.Event``,

@@ -58,8 +58,7 @@ def register_admin_routes(
     TournamentFixture,
     MatchPartnership,
     PROJECT_ROOT,
-    MATCH_INSTANCES,
-    MATCH_INSTANCES_LOCK,
+    MATCH_STORE,
     text,
     get_whitelist_mode,
 ):
@@ -200,9 +199,8 @@ def register_admin_routes(
             stats['active_users_7d'] = db.session.query(DBUser).filter(DBUser.last_login >= seven_days_ago).count()
 
             # Active match instances
-            with MATCH_INSTANCES_LOCK:
-                stats['active_matches'] = len(MATCH_INSTANCES)
-                stats['live_matches'] = stats['active_matches']
+            stats['active_matches'] = MATCH_STORE.metrics()['total']
+            stats['live_matches'] = stats['active_matches']
 
             # Active sessions count
             stats['active_sessions'] = ActiveSession.query.count()
@@ -489,7 +487,7 @@ def register_admin_routes(
         if tab not in {'overview', 'database', 'tasks'}:
             tab = 'overview'
         loaders = {
-            'overview': lambda: workspace.system_overview(PROJECT_ROOT, psutil, MATCH_INSTANCES, MATCH_INSTANCES_LOCK),
+            'overview': lambda: workspace.system_overview(PROJECT_ROOT, psutil, MATCH_STORE),
             'database': workspace.database_metrics,
             'tasks': lambda: workspace.system_tasks(PROJECT_ROOT, get_backup_status, get_cleanup_status),
         }
@@ -1500,8 +1498,7 @@ def register_admin_routes(
                     total_tournaments = Tournament.query.count()
                     active_sessions  = ActiveSession.query.count()
 
-                    with MATCH_INSTANCES_LOCK:
-                        live_matches = len(MATCH_INSTANCES)
+                    live_matches = MATCH_STORE.metrics()["total"]
 
                     cutoff_7d = datetime.utcnow() - timedelta(days=7)
                     active_users_7d = (

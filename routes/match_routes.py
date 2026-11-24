@@ -13,6 +13,8 @@ import zipfile
 from datetime import datetime, timedelta
 
 from services.match_delivery import MatchDelivery, DeliveryConflict
+from services.match_store import MatchInvalidated
+from services.match_access import match_operation, protect_registered_routes
 
 from engine.format_config import get_any_format as _get_any_format, resolve_scheduled_overs, format_label as cricket_format_label
 from engine.toss_commentary import build_toss_commentary
@@ -46,8 +48,7 @@ def register_match_routes(
     ARCHIVE_MAX_AGE_SECS,
     cleanup_temp_scorecard_images,
     PROJECT_ROOT,
-    MATCH_INSTANCES,
-    MATCH_INSTANCES_LOCK,
+    MATCH_STORE,
     _get_match_file_lock,
     _load_match_file_for_user,
     load_config,
@@ -59,6 +60,11 @@ def register_match_routes(
     _is_valid_match_id,
     reverse_player_aggregates,
 ):
+    previous_endpoints = set(app.view_functions)
+
+    def _cached(match_id):
+        return MATCH_STORE.current_scope().get(match_id)
+
     app.jinja_env.globals["cricket_format_label"] = cricket_format_label
     from engine.format_catalog import SUPPORTED_FORMATS, squad_format
     MATCH_SETUP_FORMATS = set(SUPPORTED_FORMATS)
@@ -174,9 +180,9 @@ def register_match_routes(
             else:
                 make_match_interesting = bool(interesting_raw)
 
-            # If interesting mode is enabled, pick one dramatic scenario at random.
+            # New interesting matches use open-result steering across both innings.
             if make_match_interesting:
-                scenario_mode = random.choice(scenario_options)
+                scenario_mode = "adaptive_v1"
             else:
                 # Backward-compatible path for older clients that still post scenario_mode directly.
                 scenario_mode = data.get("scenario_mode")
@@ -822,8 +828,7 @@ def register_match_routes(
     @login_required
     def match_detail(match_id):
         # Check live in-memory state first — handles resume and completed-but-not-archived cases
-        with MATCH_INSTANCES_LOCK:
-            live_match = MATCH_INSTANCES.get(match_id)
+        live_match = _cached(match_id)
 
         if live_match and owns_match_snapshot(live_match.data, current_user.id, match_id):
             if live_match.data.get("current_state") == "completed":
@@ -874,8 +879,7 @@ def register_match_routes(
     @login_required
     def match_live_state(match_id):
         """Return a snapshot of the current in-memory match state for resume detection."""
-        with MATCH_INSTANCES_LOCK:
-            match = MATCH_INSTANCES.get(match_id)
+        match = _cached(match_id)
 
         wants_delivery = request.args.get("delivery") == "1"
 
@@ -1285,11 +1289,10 @@ def register_match_routes(
             return True
         if match_data.get("super_over_snapshot"):
             return True
-        with MATCH_INSTANCES_LOCK:
-            inst = MATCH_INSTANCES.get(match_id)
-            if inst is None:
-                return False
-            return bool(inst.innings > 1 or inst.current_over > 0 or inst.current_ball > 0)
+        inst = _cached(match_id)
+        if inst is None:
+            return False
+        return bool(inst.innings > 1 or inst.current_over > 0 or inst.current_ball > 0)
 
     @app.route("/match/<match_id>/spin-toss", methods=["POST"])
     @login_required
@@ -1405,9 +1408,9 @@ def register_match_routes(
             # toss-advantage flags. Drop the instance rather than patching it:
             # the next request rebuilds it from the JSON we just wrote via
             # Match.__init__, the one path that derives all of it consistently.
-            with MATCH_INSTANCES_LOCK:
-                if MATCH_INSTANCES.pop(match_id, None) is not None:
-                    app.logger.info(f"[MatchToss] Discarded stale instance for {match_id} after toss")
+            if _cached(match_id) is not None:
+                MATCH_STORE.current_scope().discard(match_id)
+                app.logger.info(f"[MatchToss] Discarded stale instance for {match_id} after toss")
 
         # Build toss commentary (outside lock — no file/instance access needed)
         full_commentary = f"{home_captain} spins the coin and {away_captain} calls for {toss_choice}.<br>" \
@@ -1482,17 +1485,16 @@ def register_match_routes(
                 # Mark that swaps have occurred
                 match_data["impact_players_swapped"] = True
 
-                # Update in-memory instance under MATCH_INSTANCES_LOCK
-                with MATCH_INSTANCES_LOCK:
-                    if match_id in MATCH_INSTANCES:
-                        app.logger.info(f"[ImpactSwap] Found active match instance for {match_id}. Updating state.")
-                        match_instance = MATCH_INSTANCES[match_id]
-                        match_instance.home_xi = match_data["playing_xi"]["home"]
-                        match_instance.away_xi = match_data["playing_xi"]["away"]
-                        match_instance.data = match_data
-                        app.logger.info(f"[ImpactSwap] Instance updated. Home XI now has {len(match_instance.home_xi)} players.")
-                    else:
-                        app.logger.warning(f"[ImpactSwap] No active match instance found for {match_id}.")
+                # Update in-memory instance within the match operation scope
+                if _cached(match_id) is not None:
+                    app.logger.info(f"[ImpactSwap] Found active match instance for {match_id}. Updating state.")
+                    match_instance = _cached(match_id)
+                    match_instance.home_xi = match_data["playing_xi"]["home"]
+                    match_instance.away_xi = match_data["playing_xi"]["away"]
+                    match_instance.data = match_data
+                    app.logger.info(f"[ImpactSwap] Instance updated. Home XI now has {len(match_instance.home_xi)} players.")
+                else:
+                    app.logger.warning(f"[ImpactSwap] No active match instance found for {match_id}.")
 
                 # Save the updated data back to the JSON file
                 with open(match_path, "w", encoding="utf-8") as f:
@@ -1520,14 +1522,14 @@ def register_match_routes(
         Update match instance with final reordered lineups and resync stats dictionaries.
         """
         try:
-            if match_id not in MATCH_INSTANCES:
+            if _cached(match_id) is None:
                 _match_data, _match_path, err = _load_match_file_for_user(match_id)
                 if err:
                     return err if err else (jsonify({"error": "Match not found"}), 404)
                 app.logger.info(f"[FinalLineups] Match instance {match_id} not yet in memory. No action needed.")
                 return jsonify({"success": True, "message": "Lineups will be loaded from updated file."}), 200
 
-            match_instance = MATCH_INSTANCES[match_id]
+            match_instance = _cached(match_id)
             if not owns_match_snapshot(match_instance.data, current_user.id, match_id):
                 return jsonify({"error": "Unauthorized"}), 403
             lineup_data = request.get_json() or {}
@@ -1737,7 +1739,7 @@ def register_match_routes(
             "payload": outcome,
         }
 
-    def _get_or_restore_match_instance(match_id):
+    def _restore_match_instance(match_id):
         """Fetch the in-memory match instance; if absent, rebuild it from the
         match JSON — restoring a persisted super-over or FC snapshot when
         present, so a restart/eviction mid-match resumes instead of stranding
@@ -1746,67 +1748,94 @@ def register_match_routes(
         from utils.fixture_replay import is_voided
         if is_voided(match_id):
             return None, (jsonify(error="This match was removed by a fixture replay. Return to the tournament."), 410)
-        with MATCH_INSTANCES_LOCK:
-            match = MATCH_INSTANCES.get(match_id)
-            if match is not None:
-                _restore_hundred_knockout_context(match)
-                match.last_accessed = time.time()
-                return match, None
+        match_data, _path, err = _load_match_file_for_user(match_id)
+        if not match_data:
+            return None, (err if err else (jsonify({"error": "Match not found"}), 404))
+        if match_data.get("current_state") == "completed" or db.session.get(DBMatch, match_id):
+            return None, (jsonify(error="Match is completed. Open its scoreboard or archive."), 409)
+        if match_data.get("tournament_id"):
+            fixture = db.session.get(TournamentFixture, match_data.get("fixture_id")) if match_data.get("fixture_id") else None
+            if (fixture is None or fixture.tournament_id != match_data["tournament_id"]
+                    or fixture.tournament.user_id != current_user.id
+                    or (fixture.active_match_id and fixture.active_match_id != match_id)):
+                return None, (jsonify(error="This tournament match is no longer available."), 410)
+        if 'rain_probability' not in match_data:
+            match_data['rain_probability'] = load_config().get('rain_probability', 0.0)
 
-            match_data, _path, err = _load_match_file_for_user(match_id)
-            if not match_data:
-                return None, (err if err else (jsonify({"error": "Match not found"}), 404))
-            if 'rain_probability' not in match_data:
-                match_data['rain_probability'] = load_config().get('rain_probability', 0.0)
+        match = Match(match_data)
+        if match.is_hundred and match_data.get("hundred_snapshot"):
+            from engine.hundred_snapshot import restore
+            try:
+                restore(match, match_data["hundred_snapshot"])
+            except (ValueError, KeyError, TypeError) as exc:
+                app.logger.exception("Hundred checkpoint restore failed")
+                return None, (jsonify(error="Hundred state could not be restored"), 500)
+        _restore_hundred_knockout_context(match)
+        snap = match_data.get("super_over_snapshot")
+        if snap:
+            try:
+                match.restore_super_over_snapshot(snap)
+                app.logger.info(
+                    f"[SuperOver] Restored super-over state for {match_id} "
+                    f"(phase={match.super_over_phase}, round={match.super_over_round})"
+                )
+            except Exception as e:
+                # Do NOT fall through to a fresh instance: that would
+                # silently restart the tied match — the exact failure mode
+                # this snapshot exists to prevent.
+                log_exception(e)
+                app.logger.error(
+                    f"[SuperOver] Snapshot restore failed for {match_id}: {e}", exc_info=True
+                )
+                return None, (jsonify({"error": "Super over state could not be restored"}), 500)
 
-            match = Match(match_data)
-            if match.is_hundred and match_data.get("hundred_snapshot"):
-                from engine.hundred_snapshot import restore
-                try:
-                    restore(match, match_data["hundred_snapshot"])
-                except (ValueError, KeyError, TypeError) as exc:
-                    app.logger.exception("Hundred checkpoint restore failed")
-                    return None, (jsonify(error="Hundred state could not be restored"), 500)
-            _restore_hundred_knockout_context(match)
-            snap = match_data.get("super_over_snapshot")
-            if snap:
-                try:
-                    match.restore_super_over_snapshot(snap)
-                    app.logger.info(
-                        f"[SuperOver] Restored super-over state for {match_id} "
-                        f"(phase={match.super_over_phase}, round={match.super_over_round})"
-                    )
-                except Exception as e:
-                    # Do NOT fall through to a fresh instance: that would
-                    # silently restart the tied match — the exact failure mode
-                    # this snapshot exists to prevent.
-                    log_exception(e)
-                    app.logger.error(
-                        f"[SuperOver] Snapshot restore failed for {match_id}: {e}", exc_info=True
-                    )
-                    return None, (jsonify({"error": "Super over state could not be restored"}), 500)
+        fc_snap = match_data.get("fc_snapshot")
+        if match.is_fc and fc_snap:
+            try:
+                match.restore_fc_snapshot(fc_snap)
+                app.logger.info(
+                    f"[FC] Restored match state for {match_id} "
+                    f"(fc_innings={match.fc_innings}, day={match.fc_day})"
+                )
+            except Exception as e:
+                # Same discipline as the super-over branch above: never
+                # fall through to a fresh (fc_innings=1) instance.
+                log_exception(e)
+                app.logger.error(
+                    f"[FC] Snapshot restore failed for {match_id}: {e}", exc_info=True
+                )
+                return None, (jsonify({"error": "FC match state could not be restored"}), 500)
 
-            fc_snap = match_data.get("fc_snapshot")
-            if match.is_fc and fc_snap:
-                try:
-                    match.restore_fc_snapshot(fc_snap)
-                    app.logger.info(
-                        f"[FC] Restored match state for {match_id} "
-                        f"(fc_innings={match.fc_innings}, day={match.fc_day})"
-                    )
-                except Exception as e:
-                    # Same discipline as the super-over branch above: never
-                    # fall through to a fresh (fc_innings=1) instance.
-                    log_exception(e)
-                    app.logger.error(
-                        f"[FC] Snapshot restore failed for {match_id}: {e}", exc_info=True
-                    )
-                    return None, (jsonify({"error": "FC match state could not be restored"}), 500)
+        match.last_accessed = time.time()
+        return match, None
 
-            match.last_accessed = time.time()
-            MATCH_INSTANCES[match_id] = match
-            return match, None
+    class _RestoreFailure(Exception):
+        def __init__(self, response):
+            self.response = response
 
+    def _get_or_restore_match_instance(match_id):
+        from utils.fixture_replay import is_voided
+        if is_voided(match_id):
+            return None, (jsonify(error="This match was removed by a fixture replay."), 410)
+        def load():
+            match, error = _restore_match_instance(match_id)
+            if error is not None:
+                raise _RestoreFailure(error)
+            return match
+        try:
+            match = MATCH_STORE.current_scope().get(match_id, loader=load)
+        except _RestoreFailure as exc:
+            return None, exc.response
+        except MatchInvalidated:
+            return None, (jsonify(error="This match was removed. Return to the tournament."), 410)
+        if not owns_match_snapshot(match.data, current_user.id, match_id):
+            return None, (jsonify(error="Unauthorized"), 403)
+        _restore_hundred_knockout_context(match)
+        MATCH_STORE.touch(MATCH_STORE.current_scope().leases[match_id])
+        match.last_accessed = time.time()  # legacy display only; policy uses monotonic time
+        return match, None
+
+    @match_operation
     def _match_is_live(match_id):
         """Whether `match_id` is an in-flight match that can still be resumed.
 
@@ -1820,8 +1849,7 @@ def register_match_routes(
         from utils.fixture_replay import is_voided
         if is_voided(match_id):
             return False
-        with MATCH_INSTANCES_LOCK:
-            instance = MATCH_INSTANCES.get(match_id)
+        instance = _cached(match_id)
         if instance is not None:
             return instance.data.get("current_state") != "completed"
         path = os.path.join(PROJECT_ROOT, "data", "matches", f"match_{match_id}.json")
@@ -1845,20 +1873,28 @@ def register_match_routes(
         by the regular next-ball path and the super-over path — both end
         matches mid-request. No-op when the match is already finalized, so
         repeated calls cannot double-count."""
+        lease = MATCH_STORE.current_scope().leases[match_id]
+        MATCH_STORE.mark_completed(lease)
         if match.data.get("current_state") == "completed":
             return
-        increment_matches_simulated()
+        if not getattr(match, "_lifecycle_counted", False):
+            increment_matches_simulated()
+            match._lifecycle_counted = True
         if match.data.get("tournament_id"):
             _handle_tournament_match_completion(match, match_id, outcome, app.logger)
+            saved = (match.data.get("current_state") == "completed"
+                     and db.session.get(DBMatch, match_id) is not None)
         else:
-            _persist_non_tournament_match_completion(match, match_id, outcome, app.logger)
+            saved = _persist_non_tournament_match_completion(match, match_id, outcome, app.logger)
+        MATCH_STORE.mark_result(lease, "succeeded" if saved else "failed",
+                               error=None if saved else "Result persistence did not complete; instance retained")
 
     def _delivery_for(match):
-        with MATCH_INSTANCES_LOCK:
-            if not hasattr(match, "_delivery_guard"):
-                match._delivery_guard = MatchDelivery()
-            return match._delivery_guard
+        if not hasattr(match, "_delivery_guard"):
+            match._delivery_guard = MatchDelivery()
+        return match._delivery_guard
 
+    @match_operation
     def _advance_one_ball(match_id, user_id, delivery_token=None):
         match, err = _get_or_restore_match_instance(match_id)
         if err:
@@ -2032,19 +2068,18 @@ def register_match_routes(
         card_id is accepted and ignored rather than treated as an error.
         """
         card_id = (request.get_json(silent=True) or {}).get("card_id")
-        with MATCH_INSTANCES_LOCK:
-            match = MATCH_INSTANCES.get(match_id)
-            if match is None:
-                # Nothing in memory means nothing is owed.
-                return jsonify({"acked": False, "reason": "not_in_memory"})
-            if not owns_match_snapshot(match.data, current_user.id, match_id):
-                return jsonify({"error": "Unauthorized"}), 403
-            pending = getattr(match, "pending_interval_card", None)
-            if pending and pending.get("card_id") == card_id:
-                match.pending_interval_card = None
-                acked = True
-            else:
-                acked = False
+        match = _cached(match_id)
+        if match is None:
+            # Nothing in memory means nothing is owed.
+            return jsonify({"acked": False, "reason": "not_in_memory"})
+        if not owns_match_snapshot(match.data, current_user.id, match_id):
+            return jsonify({"error": "Unauthorized"}), 403
+        pending = getattr(match, "pending_interval_card", None)
+        if pending and pending.get("card_id") == card_id:
+            match.pending_interval_card = None
+            acked = True
+        else:
+            acked = False
         if acked and match.is_fc:
             # Persist the cleared state, or a restart would re-offer a card
             # the user has already seen.
@@ -2078,17 +2113,16 @@ def register_match_routes(
             with open(match_path, "w", encoding="utf-8") as f:
                 json.dump(match_data, f, indent=2)
 
-        with MATCH_INSTANCES_LOCK:
-            if match_id in MATCH_INSTANCES:
-                match = MATCH_INSTANCES[match_id]
-                if not owns_match_snapshot(match.data, current_user.id, match_id):
-                    return jsonify({"error": "Unauthorized"}), 403
-                match.simulation_mode = mode
-                match.data["simulation_mode"] = mode
-                if match.is_hundred:
-                    if mode == "auto":
-                        match.timeout_active = False
-                    _persist_hundred_snapshot(match, match_id)
+        if _cached(match_id) is not None:
+            match = _cached(match_id)
+            if not owns_match_snapshot(match.data, current_user.id, match_id):
+                return jsonify({"error": "Unauthorized"}), 403
+            match.simulation_mode = mode
+            match.data["simulation_mode"] = mode
+            if match.is_hundred:
+                if mode == "auto":
+                    match.timeout_active = False
+                _persist_hundred_snapshot(match, match_id)
 
         return jsonify({"success": True, "mode": mode}), 200
 
@@ -2215,8 +2249,8 @@ def register_match_routes(
                 return jsonify({"error": "No commentary provided"}), 400
 
             # Store commentary for the match instance
-            if match_id in MATCH_INSTANCES:
-                match_instance = MATCH_INSTANCES[match_id]
+            if _cached(match_id) is not None:
+                match_instance = _cached(match_id)
                 if not owns_match_snapshot(match_instance.data, current_user.id, match_id):
                     return jsonify({"error": "Unauthorized"}), 403
 
@@ -2228,11 +2262,12 @@ def register_match_routes(
 
                 # Replace the backend commentary with frontend commentary
                 match_instance.frontend_commentary_captured = frontend_commentary
+                MATCH_STORE.begin_archive(MATCH_STORE.current_scope().leases[match_id])
 
                 app.logger.info(f"[Commentary] Captured {len(frontend_commentary)} items for match {match_id}")
                 return jsonify({"message": "Commentary captured successfully"}), 200
             else:
-                app.logger.warning(f"[Commentary] Match instance {match_id} not found in MATCH_INSTANCES")
+                app.logger.warning(f"[Commentary] Match instance {match_id} not found in the match store")
                 return jsonify({"error": "Match instance not found"}), 404
 
         except Exception as e:
@@ -2292,8 +2327,7 @@ def register_match_routes(
             match_meta = load_match_metadata(match_id)
             if not match_meta:
                 # JSON cleaned up after archiving — try in-memory instance
-                with MATCH_INSTANCES_LOCK:
-                    inst = MATCH_INSTANCES.get(match_id)
+                inst = _cached(match_id)
                 if inst and owns_match_snapshot(inst.data, current_user.id, match_id):
                     match_meta = inst.data
                     app.logger.info(f"[DownloadArchive] Using in-memory match data for '{match_id}'")
@@ -2307,11 +2341,11 @@ def register_match_routes(
                 return jsonify({"error": "Unauthorized"}), 403
 
             # ??? C) Retrieve or rehydrate match instance ?????????????????????????
-            match_instance = MATCH_INSTANCES.get(match_id)
+            match_instance = _cached(match_id)
             if not match_instance:
-                app.logger.info(f"[DownloadArchive] Match instance not in memory; recreating minimal Match for '{match_id}'")
-                from engine.match import Match
-                match_instance = Match(match_meta)
+                return jsonify(error="Completed match state is unavailable. Download an existing archive from My Matches."), 409
+            archive_lease = MATCH_STORE.current_scope().leases[match_id]
+            archive_revision = MATCH_STORE.begin_archive(archive_lease)
 
             # ??? D) Locate original JSON file on disk ???????????????????????????
             from match_archiver import find_original_json_file
@@ -2361,13 +2395,17 @@ def register_match_routes(
                     commentary_raw_html=commentary_raw_html
                 )
                 if not success:
+                    MATCH_STORE.mark_archive(archive_lease, archive_revision, "failed",
+                                             error="Archive generation failed")
                     app.logger.error(f"[DownloadArchive] MatchArchiver reported failure for '{match_id}'")
                     return jsonify({"error": "Failed to create archive"}), 500
             except ValueError as ve:
+                MATCH_STORE.mark_archive(archive_lease, archive_revision, "failed", error=str(ve))
                 log_exception(ve)
                 app.logger.error(f"[DownloadArchive] Validation error during archiving: {ve}", exc_info=True)
                 return jsonify({"error": "Invalid archive data provided"}), 400
             except Exception as arch_err:
+                MATCH_STORE.mark_archive(archive_lease, archive_revision, "failed", error=str(arch_err))
                 log_exception(arch_err)
                 app.logger.error(f"[DownloadArchive] Failed to create archive for match '{match_id}': {arch_err}", exc_info=True)
                 return jsonify({"error": "Failed to create archive"}), 500
@@ -2383,6 +2421,7 @@ def register_match_routes(
             # ??? G) Compute and confirm ZIP path on disk ?????????????????????????
             zip_path = os.path.join(PROJECT_ROOT, "data", zip_name)
             if not os.path.isfile(zip_path):
+                MATCH_STORE.mark_archive(archive_lease, archive_revision, "failed", error="Archive ZIP missing")
                 app.logger.error(f"[DownloadArchive] ZIP file missing after creation: '{zip_path}'")
                 return jsonify({"error": "Archive ZIP file not found"}), 500
 
@@ -2735,6 +2774,7 @@ def register_match_routes(
                 return jsonify({'error': 'No matches selected'}), 400
                 
             deleted_count = 0
+            deleted_ids = []
             
             for match_id in match_ids:
                 try:
@@ -2769,12 +2809,9 @@ def register_match_routes(
                     MatchPartnership.query.filter_by(match_id=match_id).delete()
                     MatchScorecard.query.filter_by(match_id=match_id).delete()
                     
-                    # 4. Remove from in-memory cache if present
-                    with MATCH_INSTANCES_LOCK:
-                        MATCH_INSTANCES.pop(match_id, None)
-
-                    # 5. Delete the match record
+                    # 4. Delete the match record; invalidate only after commit.
                     db.session.delete(match)
+                    deleted_ids.append(match_id)
                     deleted_count += 1
                     
                     # 6. Try to delete the JSON file if it exists
@@ -2813,6 +2850,8 @@ def register_match_routes(
                     continue
             
             db.session.commit()
+            for deleted_id in deleted_ids:
+                MATCH_STORE.invalidate(deleted_id)
             app.logger.info(f"Bulk delete completed. Deleted {deleted_count} matches.")
             return jsonify({'success': True, 'deleted_count': deleted_count}), 200
             
@@ -2903,9 +2942,8 @@ def register_match_routes(
             if err:
                 # JSON may be cleaned up after archiving — check in-memory or DB
                 authorized = False
-                with MATCH_INSTANCES_LOCK:
-                    if match_id in MATCH_INSTANCES:
-                        authorized = owns_match_snapshot(MATCH_INSTANCES[match_id].data, current_user.id, match_id)
+                if _cached(match_id) is not None:
+                    authorized = owns_match_snapshot(_cached(match_id).data, current_user.id, match_id)
                 if not authorized:
                     db_match = DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first()
                     authorized = db_match is not None
@@ -2954,6 +2992,9 @@ def register_match_routes(
 
                         ext = 'png' if img.content_type == 'image/png' else ('jpg' if img.content_type == 'image/jpeg' else 'webp')
                         img_path = temp_dir / f"{safe_match_id}_{label}.{ext}"
+                        lease = MATCH_STORE.current_scope().leases.get(match_id)
+                        if lease is not None and not saved_files:
+                            MATCH_STORE.begin_archive(lease)
                         img.save(img_path)
                         saved_files.append(str(img_path))
 
@@ -2966,6 +3007,8 @@ def register_match_routes(
             log_exception(e)
             app.logger.error(f"Error saving scorecard images: {e}", exc_info=True)
             return jsonify({"error": "An error occurred while saving images"}), 500
+
+    protect_registered_routes(app, previous_endpoints)
 
     # Handed to app.py so the WebSocket next_ball handler runs this module's
     # implementation instead of keeping its own copy. The two diverged once

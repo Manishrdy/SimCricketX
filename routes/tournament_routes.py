@@ -46,11 +46,12 @@ def register_tournament_routes(
     MatchPartnership,
     TournamentFixture,
     reverse_player_aggregates,
-    MATCH_INSTANCES,
-    MATCH_INSTANCES_LOCK,
+    MATCH_STORE,
     PROJECT_ROOT,
     match_is_live,
 ):
+    from services.match_access import protect_registered_routes
+    previous_endpoints = set(app.view_functions)
     # ── Shared helper ─────────────────────────────────────────────────────
 
     def _cleanup_match_artifacts(
@@ -86,12 +87,11 @@ def register_tournament_routes(
         if delete_json:
             _delete_match_json(match)
 
-        # 4. Purge from in-memory cache
-        with MATCH_INSTANCES_LOCK:
-            MATCH_INSTANCES.pop(match_id, None)
+        # Invalidate after commit, in _delete_match_json, so rollback keeps live state.
 
     def _delete_match_json(match):
         """Remove match JSON file from disk using stored path or fallback scan."""
+        MATCH_STORE.invalidate(match.id)
         match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
 
         # O(1) — use stored path
@@ -151,8 +151,7 @@ def register_tournament_routes(
         if not match_id:
             return None
 
-        with MATCH_INSTANCES_LOCK:
-            MATCH_INSTANCES.pop(match_id, None)
+        MATCH_STORE.invalidate(match_id)
 
         json_path = os.path.join(
             PROJECT_ROOT, "data", "matches", f"match_{match_id}.json"
@@ -179,8 +178,7 @@ def register_tournament_routes(
         delete has committed: file removal cannot be rolled back.
         """
         for match_id in match_ids:
-            with MATCH_INSTANCES_LOCK:
-                MATCH_INSTANCES.pop(match_id, None)
+            MATCH_STORE.invalidate(match_id)
             json_path = os.path.join(
                 PROJECT_ROOT, "data", "matches", f"match_{match_id}.json"
             )
@@ -649,7 +647,7 @@ def register_tournament_routes(
             tournament_id=tournament_id, user_id=current_user.id, cleanup_pending=True
         ).all():
             try:
-                cleanup(receipt, PROJECT_ROOT, MATCH_INSTANCES, MATCH_INSTANCES_LOCK)
+                cleanup(receipt, PROJECT_ROOT, MATCH_STORE)
             except Exception:
                 db.session.rollback()
                 app.logger.exception("Replay artifact cleanup will be retried")
@@ -689,7 +687,7 @@ def register_tournament_routes(
         count = len(json.loads(receipt.impact_json)['fixtures'])
         pending = False
         try:
-            pending = not cleanup(receipt, PROJECT_ROOT, MATCH_INSTANCES, MATCH_INSTANCES_LOCK)
+            pending = not cleanup(receipt, PROJECT_ROOT, MATCH_STORE)
         except Exception:
             db.session.rollback()
             pending = True
@@ -701,3 +699,5 @@ def register_tournament_routes(
             message += " Result reset succeeded; archived-file cleanup is queued for retry."
         flash(message, "success")
         return jsonify(message=message, redirect=destination, cleanup_pending=pending, already_reset=not changed)
+
+    protect_registered_routes(app, previous_endpoints)
