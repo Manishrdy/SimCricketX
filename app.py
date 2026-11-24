@@ -51,7 +51,7 @@ import uuid
 import hashlib
 import secrets
 import ipaddress
-import threading  # Bug Fix B2: Add thread safety for MATCH_INSTANCES
+import threading
 from collections import deque
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -108,6 +108,7 @@ import pandas as pd
 from tabulate import tabulate
 from flask import Response
 from sqlalchemy.orm import joinedload, aliased
+from sqlalchemy.pool import NullPool
 from routes.stats_routes import register_stats_routes
 from routes.tournament_routes import register_tournament_routes
 from routes.auth_routes import register_auth_routes
@@ -177,8 +178,8 @@ DBUser.__init__ = _dbuser_init_compat
 User = DBUser
 
 
-MATCH_INSTANCES = {}
-MATCH_INSTANCES_LOCK = threading.Lock()  # Bug Fix B2: Thread safety for concurrent access
+from services.match_store import MatchStore
+MATCH_STORE = MatchStore()
 tournament_engine = TournamentEngine()
 
 # Module-level logger for functions outside create_app() scope
@@ -407,27 +408,12 @@ def cleanup_old_match_instances(app):
     global _last_cleanup_run
     try:
         current_time = time.time()
-        cutoff_time = current_time - (24 * 3600)  # 24 hours ago
 
-        # Phase 1: Clean up old in-memory match instances.
-        # Evict by LAST ACCESS, not creation time — an actively-played (or
-        # recently resumed) match must not hit a 24h-since-creation cliff
-        # mid-game. last_accessed is stamped by the match routes on every
-        # fetch; created_at is the fallback for instances that predate it.
-        with MATCH_INSTANCES_LOCK:
-            instances_to_remove = []
-            for match_id, instance in MATCH_INSTANCES.items():
-                instance_time = (getattr(instance, 'last_accessed', None)
-                                 or getattr(instance, 'created_at', current_time))
-                if instance_time < cutoff_time:
-                    instances_to_remove.append(match_id)
-
-            for match_id in instances_to_remove:
-                del MATCH_INSTANCES[match_id]
-                app.logger.info(f"[Cleanup] Removed old match instance: {match_id}")
-
-        if instances_to_remove:
-            app.logger.info(f"[Cleanup] Cleaned up {len(instances_to_remove)} old match instances")
+        # Completed entries remain protected until durable recovery is implemented.
+        outcome = MATCH_STORE.sweep("incomplete")
+        instances_to_remove = outcome["match_ids"]
+        for match_id in instances_to_remove:
+            app.logger.info(f"[Cleanup] Removed old match instance: {match_id}")
 
         # Phase 2: Clean up orphaned JSON files older than 24 hours
         # These are temp files from matches that were never archived or failed to clean up
@@ -440,10 +426,24 @@ def cleanup_old_match_instances(app):
                     continue
                 path = os.path.join(match_dir, fn)
                 try:
-                    if os.path.getmtime(path) < json_cutoff:
-                        os.remove(path)
-                        removed_files += 1
-                        app.logger.info(f"[Cleanup] Removed orphaned JSON: {fn}")
+                    # A cached completed/pending or protected match is not an orphan.
+                    with open(path, "r", encoding="utf-8") as snapshot:
+                        snapshot_data = json.load(snapshot)
+                    owner = snapshot_data.get("created_by")
+                    if not owner:
+                        continue  # Unknown ownership is not safe to classify as orphaned.
+                    with MATCH_STORE.scope(owner):
+                        # A request may have resumed while we waited for its scope.
+                        with open(path, "r", encoding="utf-8") as snapshot:
+                            snapshot_data = json.load(snapshot)
+                        mid = snapshot_data.get("match_id")
+                        if (mid in MATCH_STORE.cached_ids()
+                                or snapshot_data.get("current_state") == "completed"):
+                            continue
+                        if os.path.getmtime(path) < json_cutoff:
+                            os.remove(path)
+                            removed_files += 1
+                            app.logger.info(f"[Cleanup] Removed orphaned JSON: {fn}")
                 except Exception as e:
                     log_exception(e)
                     app.logger.warning(f"[Cleanup] Failed to remove {fn}: {e}")
@@ -457,14 +457,14 @@ def cleanup_old_match_instances(app):
         app.logger.error(f"[Cleanup] Error cleaning up match instances: {e}", exc_info=True)
 
 def periodic_cleanup(app):
-    """Run cleanup every 6 hours. Runs immediately on first call, then every 6 hours."""
+    """Run cleanup every 4 hours. Runs immediately on first call, then every 4 hours."""
     while True:
         try:
             cleanup_old_match_instances(app)
         except Exception as e:
             log_exception(e)
             app.logger.error(f"[PeriodicCleanup] Error in cleanup thread: {e}")
-        time.sleep(MATCH_CLEANUP_INTERVAL_SECONDS)  # 6 hours
+        time.sleep(MATCH_CLEANUP_INTERVAL_SECONDS)  # 4 hours
 
 
 def cleanup_temp_scorecard_images(logger=None, min_age_seconds=300):
@@ -494,8 +494,7 @@ def cleanup_temp_scorecard_images(logger=None, min_age_seconds=300):
         # far older than five minutes while the match is still going. Any
         # match-setup POST (this runs on that path) would otherwise wipe the
         # interval cards out from under the archive that is yet to be built.
-        with MATCH_INSTANCES_LOCK:
-            live_match_ids = tuple(MATCH_INSTANCES.keys())
+        live_match_ids = MATCH_STORE.cached_ids()
 
         for root, dirs, files in os.walk(temp_images_dir, topdown=False):
             for fn in files:
@@ -550,6 +549,7 @@ def create_app():
     global _backup_scheduler_started, MAINTENANCE_MODE, IP_WHITELIST_MODE
     # --- Flask setup ---
     app = Flask(__name__)
+    app.extensions["match_store"] = MATCH_STORE
     from middleware.request_timing import install_request_timing
     install_request_timing(app)
     test_mode = bool(
@@ -810,8 +810,8 @@ def create_app():
         if current_user.is_authenticated:
             try:
                 active_matches = []
-                with MATCH_INSTANCES_LOCK:
-                    for mid, inst in list(MATCH_INSTANCES.items()):
+                with MATCH_STORE.borrow_all() as cached:
+                    for mid, inst in cached:
                         if (inst.data.get("created_by") == current_user.id and
                                 inst.data.get("current_state") != "completed"):
                             active_matches.append({
@@ -1270,7 +1270,8 @@ def create_app():
     else:
         app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'poolclass': NullPool}
+
     db.init_app(app)
 
     # Unified schema migration precheck — runs every idempotent migration in
@@ -1654,8 +1655,7 @@ def create_app():
         TournamentFixture=TournamentFixture,
         MatchPartnership=MatchPartnership,
         PROJECT_ROOT=PROJECT_ROOT,
-        MATCH_INSTANCES=MATCH_INSTANCES,
-        MATCH_INSTANCES_LOCK=MATCH_INSTANCES_LOCK,
+        MATCH_STORE=MATCH_STORE,
         text=text,
         get_whitelist_mode=lambda: IP_WHITELIST_MODE,
         get_cleanup_status=lambda: (_cleanup_scheduler_started, _last_cleanup_run),
@@ -2283,8 +2283,7 @@ def create_app():
 
                 if superseded_match_id:
                     # Files can't be rolled back, so only after the commit.
-                    with MATCH_INSTANCES_LOCK:
-                        MATCH_INSTANCES.pop(superseded_match_id, None)
+                    MATCH_STORE.invalidate(superseded_match_id)
                     match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
                     stale = {os.path.join(match_dir, f"match_{superseded_match_id}.json")}
                     if superseded_json_path and superseded_json_path != "autosaved":
@@ -2373,21 +2372,24 @@ def create_app():
         and can be opened via the existing scoreboard endpoint.
         """
         try:
-            match.data["current_state"] = "completed"
             final_result = outcome.get("result") or getattr(match, "result", None)
             if final_result:
                 match.data["result_description"] = final_result
 
             archiver = MatchArchiver(match.data, match)
-            archiver._save_to_database()
+            if not archiver._save_to_database():
+                return False
+            match.data["current_state"] = "completed"
             logger.info(f"[MatchHistory] Persisted non-tournament match {match_id}")
 
             db_match = db.session.get(DBMatch, match_id)
             if db_match:
                 _assign_motm(db_match, outcome, logger)
+            return db_match is not None
         except Exception as e:
             log_exception(e)
             logger.error(f"[MatchHistory] Failed to persist match {match_id}: {e}", exc_info=True)
+            return False
 
     # ????? Routes ?????
 
@@ -2554,8 +2556,7 @@ def create_app():
         ARCHIVE_MAX_AGE_SECS=ARCHIVE_MAX_AGE_SECS,
         cleanup_temp_scorecard_images=cleanup_temp_scorecard_images,
         PROJECT_ROOT=PROJECT_ROOT,
-        MATCH_INSTANCES=MATCH_INSTANCES,
-        MATCH_INSTANCES_LOCK=MATCH_INSTANCES_LOCK,
+        MATCH_STORE=MATCH_STORE,
         _get_match_file_lock=_get_match_file_lock,
         _load_match_file_for_user=_load_match_file_for_user,
         load_config=load_config,
@@ -2582,8 +2583,7 @@ def create_app():
         MatchPartnership=MatchPartnership,
         TournamentFixture=TournamentFixture,
         reverse_player_aggregates=reverse_player_aggregates,
-        MATCH_INSTANCES=MATCH_INSTANCES,
-        MATCH_INSTANCES_LOCK=MATCH_INSTANCES_LOCK,
+        MATCH_STORE=MATCH_STORE,
         PROJECT_ROOT=PROJECT_ROOT,
         match_is_live=_match_route_helpers["match_is_live"],
     )
