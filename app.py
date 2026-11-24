@@ -249,7 +249,7 @@ def rate_limit(max_requests=30, window_seconds=10):
     return decorator
 
 # Archive expiry — read from .env, default 7 days
-ARCHIVE_MAX_AGE_DAYS = int(os.getenv("ARCHIVE_MAX_AGE_DAYS", "7"))
+ARCHIVE_MAX_AGE_DAYS = int(os.getenv("ARCHIVE_MAX_AGE_DAYS", "3"))
 ARCHIVE_MAX_AGE_SECS = ARCHIVE_MAX_AGE_DAYS * 24 * 3600
 
 # Make sure PROJECT_ROOT is defined near the top of app.py:
