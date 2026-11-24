@@ -1,6 +1,6 @@
 # SimCricketX Gunicorn Configuration
 #
-# IMPORTANT: This app uses in-memory match state (MATCH_INSTANCES dict).
+# IMPORTANT: This app uses in-memory match state (MatchStore).
 # Multiple workers each get their own memory space, causing match state
 # to diverge across workers. Must use exactly 1 worker.
 #
@@ -16,3 +16,10 @@ bind = "127.0.0.1:5000"
 workers = 1
 worker_class = "geventwebsocket.gunicorn.workers.GeventWebSocketWorker"
 timeout = 600
+
+# Recycle the worker after this many requests to reclaim Python heap growth.
+# The worker finishes in-flight requests before exiting, but active WebSocket
+# connections (live match simulations) will be dropped at recycle time.
+# Set high enough that mid-match recycling is unlikely during normal traffic.
+max_requests = 2000
+max_requests_jitter = 200
