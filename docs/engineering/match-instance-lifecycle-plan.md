@@ -1,8 +1,8 @@
 # Match instance lifecycle development plan
 
-Status: development started; Phase 1 service foundation implemented and tested.
-Production registry migration and Phases 2–4 remain pending. Early completed
-eviction is not enabled. See the implementation checkpoint at the end.
+Status: Phase 1 registry migration implemented; application consumers use the
+shared store. Phases 2–4 remain pending and early completed eviction is disabled.
+See the latest implementation checkpoint at the end for validation and scope.
 Intended developer: Astra.
 Prepared: 2026-11-21.
 
@@ -395,3 +395,136 @@ Phases 2–3; no timeout is chosen or implicitly approved by this increment.
 `version.txt` and the latest changelog header remain `3.0.3`; recheck before the
 eventual release bump. Rollback of this increment requires only removing the
 unused new service/tests and this checkpoint; there is no data migration.
+
+## Registry migration checkpoint — 2026-11-25
+
+This checkpoint supersedes the first increment's pending-integration status.
+The user's subsequent instructions authorized the full registry migration and
+selected a full stop/deploy/start rollout. No production operation was performed.
+
+### Implemented integration
+
+- `app.py` now owns one `MATCH_STORE`, also exposed through
+  `app.extensions['match_store']`. The production `MATCH_INSTANCES` dictionary
+  and its public lock have been removed. There is no parallel registry or
+  production dictionary compatibility alias.
+- `services/match_access.py` provides request boundaries. All match routes,
+  tournament routes, and nested tour routes run in operation scopes. The same
+  scope mechanism wraps the shared HTTP/WebSocket delivery helper. Cached
+  instances, including those used only indirectly during image uploads, remain
+  leased through the operation's completion or exception.
+- Scopes serialize operations **per owner**, including deletion/replay and
+  archive uploads/builds. Different owners have independent gates. This is an
+  intentional tradeoff: two matches belonging to the same account do not mutate
+  concurrently. Gate records are removed when no operation is waiting or active.
+  Lock order is identity admission → owner operation gate → file/delivery locks
+  → short store metadata locks. Store methods do not wait on owner/file locks
+  while holding the registry lock, or hold it during restoration/database/file I/O.
+- Restoration uses the store's coordinated loader, with ownership checks before
+  gameplay touch. Completed setup JSON is rejected rather than constructing a
+  fresh simulation. Durable replay tombstones remain checked, and missing,
+  reassigned or deleted tournament fixtures cannot be restored from stale JSON.
+- Toss refresh retires a cached instance for a fresh load. Deletion/replay
+  invalidates the ID; protected objects drain before their references are removed.
+  Tournament/tour and loose-match invalidation follows successful commit.
+  In-process tombstones retain IDs only; durable replay checks remain necessary
+  across process restarts.
+- FC offloaded captain work receives a separate lease via the gevent completion
+  callback. It remains protected if the engine drops the job handle after a
+  deadline fallback. The callback runs on the gevent hub and releases on actual
+  completion without a polling worker. Closed leases and retained completion
+  callbacks do not keep an evicted instance alive.
+- Admin counts, active-match display, temporary image cleanup, fixture replay,
+  identity email review, account merge and account deletion now use store
+  snapshots/counts/invalidation. Existing identity admission, policy and ownership
+  rules remain unchanged. Identity merge retires cached ownership state so it
+  can reload; deletion permanently invalidates it for this process.
+- Incomplete cleanup uses the existing 12-hour policy and four-hour scheduler.
+  It skips leases and completed entries. Age-only orphan JSON cleanup now protects
+  cached and completed snapshots and rechecks under the owner's operation gate.
+  Legacy/newly loaded entries start their monotonic inactivity clock at loading;
+  there is no conversion of wall-clock instance fields into elapsed time.
+- Result persistence success/failure is recorded separately from engine completion.
+  Non-tournament persistence no longer reports success when `_save_to_database()`
+  returns false, and retry attempts do not increment the match counter again.
+  Accepted commentary/images invalidate archive readiness; archive build failures
+  are recorded. Successful current browser builds remain **pending final-readiness
+  certification** until Phase 2 defines the upload protocol and durable storage.
+- An archive build without a cached completed instance now returns an actionable
+  failure directing the user to existing archives. It no longer makes a fresh
+  `Match` from setup metadata and exports it as a completed result. Existing ZIP
+  downloads continue through their existing ownership-checked route.
+
+### Tests and compatibility
+
+Legacy test fixtures now use `tests/match_store_helpers.py`, a **test-only**
+mapping over the real store. It owns no data and is never imported by production.
+App fixtures use isolated stores; a test's `monkeypatch.undo()` cannot swap out
+the store behind its registered routes. Manual-mode tests use the shared QA
+accounts instead of a synthetic login. A pending FC forecast is retired during
+test teardown, rather than bypassing its active lease.
+
+Validation includes native threads and the app's gevent runtime; concurrent
+loading, per-owner serialization, background completion/cancellation, HTTP and
+WebSocket delivery, image/commentary/archive protection, unauthorized access,
+deletion/replay, orphan cleanup, failed persistence and stale completed setup
+metadata. Fake clocks cover retention boundaries without real retention waits.
+The controlled 30-instance batch and weak-reference assertions remain service
+reference-release evidence, not an RSS saving claim.
+
+Validation results (shared QA accounts for authenticated application tests):
+
+```sh
+.venv/bin/python -m pytest -p tests.qa_accounts_plugin \
+  tests/test_match_store.py tests/test_match_store_integration.py \
+  tests/test_fc_declaration_stall.py tests/test_hundred_integration.py \
+  tests/test_tournament_review_fixes.py tests/test_fixture_replay.py \
+  tests/test_changelog_page.py -o addopts='-q --tb=short --maxfail=3'
+# Final closeout: 146 passed; existing late SSL monkey-patch warning.
+
+.venv/bin/python -m pytest --noconftest \
+  tests/test_match_store.py tests/test_deploy_offline.py \
+  -o addopts='-q --tb=short --maxfail=3'
+# Native-thread/deployment checks: 56 passed, 1 expected skip (gevent-only offload).
+```
+
+The broader 25-file regression run covered store integration, delivery, match
+routes, tournaments, replay, admin workspaces, transport parity, toss, first-ball
+restore, manual mode, live innings, FC/Super Over resume, Hundred, FC pending
+decisions/stalls/archives/end-to-end, T10, header/logo display and archive ownership.
+It produced **370 passed and one teardown failure**: the dropped-socket card test
+attempted to force-discard an instance with a captain-job lease still draining.
+The test now retires it; its full file passed in the final 146-test run above.
+Earlier identity email/merge/campaign and changelog tests passed as part of a
+174-pass run whose only failure was a new integration-test directory setup
+collision. That collision was fixed and the entire new integration file passed
+at closeout. No unresolved failure remains in the selected validation.
+
+`git diff --check` and Python compilation passed. A production-source search
+found no remaining `MATCH_INSTANCES`/`MATCH_INSTANCES_LOCK` accesses. Existing
+unrelated engine, release, retention and UI work was preserved; no simulation
+behavior or identity policy change was introduced by this migration.
+
+### Release and remaining lifecycle work
+
+- The workspace independently advanced to **3.0.5** (commit `da7b87c`), with a
+  **three-day** default ZIP retention introduced in 3.0.4. These changes are
+  preserved. The earlier expected 3.0.4 lifecycle version and seven-day retention
+  assumptions are historical; recheck release state before shipping Phases 2–4.
+- No schema migration or completed-data backfill was introduced by this registry
+  migration. A full application restart switches all consumers to the store.
+  Rollback must revert the store and its consumers together; restoring the old
+  dictionary alone is incompatible with the new route signatures.
+- **Completed eviction remains disabled.** Completed cached instances are retained
+  while durable recovery/final-readiness certification is missing. This intermediate
+  state does not deliver the planned completed-match memory reduction.
+- Phase 2 still needs durable completed/archive data, atomic ZIP publication,
+  archive-only idempotent retries, final upload-completion certification and
+  retention-aligned rebuild records. Phase 3 still needs the completed scheduler
+  and interrupted-browser fallback. Phase 4 still needs the expanded health UI.
+  Do not describe those features as shipped or enable the completed sweep yet.
+- `scripts/deploy_offline.py` and `docs/operations/offline-rollout.md` prepare the
+  selected offline rollout: read-only by default, exact commit, stopped-service
+  backup with SQLite WAL-safe copying, migrations, restart, health check, and
+  retained recovery material. The existing deployment workflow was not replaced.
+  No production migration, restart, rollout or rollback has been run.

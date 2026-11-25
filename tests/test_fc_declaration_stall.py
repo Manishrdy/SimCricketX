@@ -260,7 +260,9 @@ def test_interval_card_survives_a_dropped_socket(app, authenticated_client,
             f"/match/{match_id}/live-state").get_json()
         assert after.get("pending_card") is None
     finally:
-        MATCH_INSTANCES.pop(match_id, None)
+        # The forecast may still be finishing after the HTTP response. Drain
+        # its lease rather than force-evicting an instance under active work.
+        app.extensions["match_store"].retire(match_id)
         try:
             os.remove(path)
         except OSError:
@@ -307,7 +309,9 @@ def test_rate_limited_response_is_recoverable(app, authenticated_client,
         assert 0 <= limited["retry_after"] <= 10
     finally:
         app_module._rate_limit_store.clear()
-        MATCH_INSTANCES.pop(match_id, None)
+        # The forecast may still be finishing after the HTTP response. Drain
+        # its lease rather than force-evicting an instance under active work.
+        app.extensions["match_store"].retire(match_id)
         try:
             os.remove(path)
         except OSError:

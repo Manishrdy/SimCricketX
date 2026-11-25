@@ -1,10 +1,10 @@
 # Offline production rollout
 
-**The match-instance lifecycle release is not ready to deploy.** The new store
-is currently a tested foundation; application integration, durable archive
-recovery, scheduled eviction and health-page changes remain to implement.
+**The complete match-instance lifecycle feature is not ready to deploy.** The
+registry migration is implemented; durable archive recovery, scheduled completed
+eviction and expanded health-page metrics remain to implement.
 `deploy_offline.py` deploys a chosen, already tested commit. It does not perform
-those code changes or turn the foundation into a completed feature.
+those remaining code changes or turn registry migration into the completed feature.
 
 ## Deployment model
 
