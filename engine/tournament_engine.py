@@ -11,6 +11,7 @@ import itertools
 import logging
 import json
 import math
+import random
 
 from utils.exception_tracker import log_exception
 
@@ -170,10 +171,17 @@ class TournamentEngine:
         """Get the next power of 2 >= n"""
         return 2 ** math.ceil(math.log2(n))
 
+    def _new_fixture(self, **values):
+        """Assign every generated fixture, including placeholders, a pool venue."""
+        tournament = db.session.get(Tournament, values['tournament_id'])
+        if tournament.stadium_ids is not None and not tournament.tour_id:
+            values['stadium_id'] = random.choice(tournament.stadium_ids)
+        return TournamentFixture(**values)
+
     def create_tournament(self, name: str, user_id: str, team_ids: list,
                           mode: str = MODE_ROUND_ROBIN, playoff_teams: int = 4,
                           series_config: dict = None, format_type: str = 'T20',
-                          creation_token: str = None, commit: bool = True, scheduled_overs=None) -> Tournament:
+                          creation_token: str = None, commit: bool = True, scheduled_overs=None, stadium_ids=None) -> Tournament:
         """
         Creates a new tournament with specified mode.
 
@@ -186,6 +194,7 @@ class TournamentEngine:
             series_config: Configuration for custom series mode
             format_type: Cricket format for all matches ('T20' or 'ListA', default: 'T20')
             creation_token: Optional idempotency token for one creation intent
+            stadium_ids: Optional 1–15 playable venues; None preserves legacy/tour behavior
             commit: False lets the tour caller commit all series atomically
 
         Returns:
@@ -241,6 +250,14 @@ class TournamentEngine:
             if existing:
                 return existing
 
+        if stadium_ids is not None:
+            from services.stadium_tuning import playable_stadium
+            stadium_ids = list(dict.fromkeys(stadium_ids))
+            if not 1 <= len(stadium_ids) <= 15:
+                raise ValueError("Select between 1 and 15 stadiums for the tournament.")
+            for stadium_id in stadium_ids:
+                playable_stadium(stadium_id, user_id)
+
         try:
             # 1. Create Tournament Record
             tournament = Tournament(
@@ -253,6 +270,7 @@ class TournamentEngine:
                 current_stage=self.STAGE_LEAGUE if mode != self.MODE_KNOCKOUT else self._get_knockout_round_name(self._next_power_of_two(len(team_ids)), 1),
                 playoff_teams=min(playoff_teams, len(team_ids)),
                 series_config=json.dumps(series_config) if series_config else None,
+                stadium_ids=stadium_ids,
                 creation_token=creation_token,
             )
             db.session.add(tournament)
@@ -386,7 +404,7 @@ class TournamentEngine:
                             else:
                                 home, away = t1, t2
 
-                        fixture = TournamentFixture(
+                        fixture = self._new_fixture(
                             tournament_id=tournament_id,
                             home_team_id=home,
                             away_team_id=away,
@@ -438,7 +456,7 @@ class TournamentEngine:
             # and for byes, we can just populate the next round.
             
             if t1 is not None and t2 is not None:
-                fixture = TournamentFixture(
+                fixture = self._new_fixture(
                     tournament_id=tournament_id,
                     home_team_id=t1,
                     away_team_id=t2,
@@ -457,7 +475,7 @@ class TournamentEngine:
                 home_id = t1 if t1 is not None else bye_id
                 away_id = t2 if t2 is not None else bye_id
 
-                fixture = TournamentFixture(
+                fixture = self._new_fixture(
                     tournament_id=tournament_id,
                     home_team_id=home_id,
                     away_team_id=away_id,
@@ -472,7 +490,7 @@ class TournamentEngine:
                 db.session.flush()
             else:
                 # Both are None (Phantom match)
-                fixture = TournamentFixture(
+                fixture = self._new_fixture(
                     tournament_id=tournament_id,
                     home_team_id=None,
                     away_team_id=None,
@@ -495,7 +513,7 @@ class TournamentEngine:
         while num_matches_current_round >= 1:
             round_name = self._get_knockout_round_name(next_power, current_round)
             for i in range(num_matches_current_round):
-                fixture = TournamentFixture(
+                fixture = self._new_fixture(
                     tournament_id=tournament_id,
                     home_team_id=None,
                     away_team_id=None,
@@ -569,7 +587,7 @@ class TournamentEngine:
         tbd_id = self._get_placeholder_team_id(tournament_id, "TBD")
 
         # Semi-final 1: 1st vs 4th
-        sf1 = TournamentFixture(
+        sf1 = self._new_fixture(
             tournament_id=tournament_id,
             home_team_id=None,
             away_team_id=None,
@@ -582,7 +600,7 @@ class TournamentEngine:
         db.session.add(sf1)
 
         # Semi-final 2: 2nd vs 3rd
-        sf2 = TournamentFixture(
+        sf2 = self._new_fixture(
             tournament_id=tournament_id,
             home_team_id=None,
             away_team_id=None,
@@ -595,7 +613,7 @@ class TournamentEngine:
         db.session.add(sf2)
 
         # Final
-        final = TournamentFixture(
+        final = self._new_fixture(
             tournament_id=tournament_id,
             home_team_id=None,
             away_team_id=None,
@@ -623,7 +641,7 @@ class TournamentEngine:
         tbd_id = self._get_placeholder_team_id(tournament_id, "TBD")
 
         # Qualifier 1: 1st vs 2nd
-        q1 = TournamentFixture(
+        q1 = self._new_fixture(
             tournament_id=tournament_id,
             home_team_id=None,
             away_team_id=None,
@@ -636,7 +654,7 @@ class TournamentEngine:
         db.session.add(q1)
 
         # Eliminator: 3rd vs 4th
-        elim = TournamentFixture(
+        elim = self._new_fixture(
             tournament_id=tournament_id,
             home_team_id=None,
             away_team_id=None,
@@ -649,7 +667,7 @@ class TournamentEngine:
         db.session.add(elim)
 
         # Qualifier 2: Loser Q1 vs Winner Eliminator
-        q2 = TournamentFixture(
+        q2 = self._new_fixture(
             tournament_id=tournament_id,
             home_team_id=None,
             away_team_id=None,
@@ -662,7 +680,7 @@ class TournamentEngine:
         db.session.add(q2)
 
         # Final
-        final = TournamentFixture(
+        final = self._new_fixture(
             tournament_id=tournament_id,
             home_team_id=None,
             away_team_id=None,
@@ -710,7 +728,7 @@ class TournamentEngine:
             home_team = team_ids[home_idx]
             away_team = team_ids[1 - home_idx]
 
-            fixture = TournamentFixture(
+            fixture = self._new_fixture(
                 tournament_id=tournament_id,
                 home_team_id=home_team,
                 away_team_id=away_team,

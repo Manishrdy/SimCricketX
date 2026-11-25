@@ -63,11 +63,15 @@ def test_invalid_squad_rejected(authenticated_client, ready_tournament_teams, fm
 @pytest.mark.parametrize("mode", ["round_robin", "knockout", "custom_series"])
 def test_ready_squads_create_tournament(authenticated_client, ready_tournament_teams, fmt, mode):
     home, away = ready_tournament_teams
+    from services.stadium_tuning import create_personal
+    from services.stadiums import neutral_profile
+    venue = create_personal(home.user_id, neutral_profile())
     unused = "FC" if fmt != "FC" else "T20"
     db.session.delete(next(p for p in away.profiles if p.format_type == unused))
     db.session.commit()
     response = authenticated_client.post("/tournaments/create", data={
         "name": "Ready cup", "team_ids": [home.id, away.id],
+        "stadium_ids": [venue.id],
         "match_format": fmt, "mode": mode, "series_matches": 3,
     })
     tournament = Tournament.query.one()

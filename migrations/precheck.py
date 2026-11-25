@@ -69,6 +69,7 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     ("add_tournament_format",    _loader("migrations.add_tournament_format")),
     ("add_tournament_creation_token",
      _loader("migrations.add_tournament_creation_token")),
+    ("add_tournament_stadiums", _loader("migrations.add_tournament_stadiums")),
     ("add_tours", _loader("migrations.add_tours")),
     ("add_hundred_metadata", _loader("migrations.add_hundred_metadata")),
     ("add_scheduled_overs", _loader("migrations.add_scheduled_overs")),

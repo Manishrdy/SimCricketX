@@ -44,7 +44,7 @@ const initialize = source.slice(source.indexOf('    function initializeStadium('
 function venueSetup(previous, records) {
     const select = {value:'', disabled:true, options:[{value:''}, ...records.map(s => ({value:s.id}))]};
     const nodes = {'stadium-select':select, 'stadium-conditions':{}, 'venue-display':{}, 'match-format-value':{value:'T20'}};
-    const context = {STADIUM_FIXTURE_ID:previous, STADIUM_DATA:records,
+    const context = {TOURNAMENT_STADIUM_POOL:null, STADIUM_FIXTURE_ID:previous, STADIUM_DATA:records,
         document:{getElementById:id=>nodes[id]}, populatePitchOptions(){}, updateStadiumPreview(){}, updateConditionsSummary(){}};
     vm.createContext(context);
     vm.runInContext(initialize, context);
@@ -77,4 +77,12 @@ test('legacy home and previous links stay selectable while unrelated legacy venu
         assert.equal(option.disabled, false);
     }
     assert.equal(select.options.find(o=>o.value==='unrelated').hidden, true);
+});
+
+test('restricted pool never falls back to an unselected home ground', () => {
+    const {context, select} = venueSetup('retired', [{id:'allowed', schema_version:3}]);
+    context.TOURNAMENT_STADIUM_POOL = ['retired', 'allowed'];
+    context.initializeStadium({stadium_id:'outside', venue_mode:'stadium'});
+    assert.equal(select.value, 'allowed');
+    assert.equal(select.options[0].disabled, true);
 });

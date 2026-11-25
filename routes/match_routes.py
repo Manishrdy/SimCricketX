@@ -558,7 +558,13 @@ def register_match_routes(
                     playable_stadium(default_stadium, current_user.id, default_stadium)
                 except ValueError:
                     default_stadium = None  # Retired/inaccessible previous venue.
-            if 'stadium_id' in data:
+            pool = (fixture.tournament.stadium_ids
+                    if req_fixture_id and not fixture.tournament.tour_id else None)
+            if pool is not None:
+                selected_stadium = data.get('stadium_id', default_stadium)
+                if selected_stadium not in pool:
+                    return jsonify(error='Choose a stadium selected for this tournament.'), 400
+            elif 'stadium_id' in data:
                 selected_stadium = data.get('stadium_id') or home_db.stadium_id
             else:
                 selected_stadium = default_stadium or home_db.stadium_id
@@ -694,7 +700,9 @@ def register_match_routes(
 
         return render_template("match_setup.html",
                                teams=teams,
-                               fixture_stadium_id=fixture.stadium_id if fixture_id else None,
+                               tournament_stadium_ids=(fixture.tournament.stadium_ids
+                                   if tournament_id and not fixture.tournament.tour_id else None),
+                               fixture_stadium_id=fixture.stadium_id if tournament_id else None,
                                preselect_home=preselect_home,
                                preselect_away=preselect_away,
                                tournament_id=tournament_id,

@@ -310,6 +310,7 @@ def register_tournament_routes(
                     format_type=match_format,
                     scheduled_overs=request.form.get("scheduled_overs"),
                     creation_token=creation_token,
+                    stadium_ids=request.form.getlist("stadium_ids"),
                 )
                 flash(f"Tournament '{name}' created successfully!", "success")
                 return redirect(url_for("tournament_dashboard", tournament_id=t.id))

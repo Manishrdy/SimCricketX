@@ -12,7 +12,7 @@ const template = fs.readFileSync(
 // The ids a render actually contains. With no teams, each `{% if teams %}`
 // body is dropped (keeping any `{% else %}` body); with teams, the reverse.
 function renderedIds(hasTeams) {
-    const markup = template.replace(
+    const markup = template.replace(/\{% for stadium in stadium_choices\(\) %\}[\s\S]*?\{% endfor %\}/g, '').replace(
         /\{% if teams %\}([\s\S]*?)(?:\{% else %\}([\s\S]*?))?\{% endif %\}/g,
         (_, ifBody, elseBody = '') => (hasTeams ? ifBody : elseBody)
     );

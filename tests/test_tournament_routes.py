@@ -23,6 +23,14 @@ from database.models import (
 from engine.tournament_engine import TournamentEngine
 
 
+def selected_stadiums(team):
+    from services.stadium_tuning import create_personal
+    from services.stadiums import neutral_profile
+    venue = create_personal(team.user_id, neutral_profile())
+    db.session.commit()
+    return [venue.id]
+
+
 class TestTournamentListRoute:
     """Tests for tournament listing page."""
 
@@ -70,6 +78,7 @@ class TestTournamentCreationRoute:
                 "name": "New Tournament",
                 "mode": "round_robin",
                 "team_ids": [test_team.id, test_team_2.id],
+                "stadium_ids": selected_stadiums(test_team),
             },
             follow_redirects=True,
         )
@@ -90,6 +99,7 @@ class TestTournamentCreationRoute:
             "name": "Retry Safe Cup",
             "mode": "round_robin",
             "team_ids": [test_team.id, test_team_2.id],
+                "stadium_ids": selected_stadiums(test_team),
             "creation_token": uuid.uuid4().hex,
         }
 
@@ -140,6 +150,7 @@ class TestTournamentCreationRoute:
                 "name": "Knockout Tournament",
                 "mode": "knockout",
                 "team_ids": [test_team.id, test_team_2.id],
+                "stadium_ids": selected_stadiums(test_team),
             },
             follow_redirects=True,
         )
@@ -154,6 +165,7 @@ class TestTournamentCreationRoute:
                 "name": "Test Series",
                 "mode": "custom_series",
                 "team_ids": [test_team.id, test_team_2.id],
+                "stadium_ids": selected_stadiums(test_team),
                 "series_matches": 5,
             },
             follow_redirects=True,
@@ -184,6 +196,7 @@ class TestTournamentCreationRoute:
                 "mode": "round_robin",
                 "match_format": "FC",
                 "team_ids": [test_team.id, test_team_2.id],
+                "stadium_ids": selected_stadiums(test_team),
             },
             follow_redirects=True,
         )
@@ -208,6 +221,7 @@ class TestTournamentCreationRoute:
                 "name": "Bogus Mode Tournament",
                 "mode": "not_a_real_mode",
                 "team_ids": [test_team.id, test_team_2.id],
+                "stadium_ids": selected_stadiums(test_team),
             },
             follow_redirects=True,
         )
@@ -228,6 +242,7 @@ class TestTournamentCreationRoute:
                 "name": "   ",
                 "mode": "round_robin",
                 "team_ids": [test_team.id, test_team_2.id],
+                "stadium_ids": selected_stadiums(test_team),
             },
         )
         assert response.status_code == 302
@@ -247,6 +262,7 @@ class TestTournamentCreationRoute:
                 "name": "",
                 "mode": "round_robin",
                 "team_ids": [test_team.id, test_team_2.id],
+                "stadium_ids": selected_stadiums(test_team),
             },
         )
         assert response.status_code == 302
@@ -266,6 +282,7 @@ class TestTournamentCreationRoute:
                 "name": "A" * 101,
                 "mode": "round_robin",
                 "team_ids": [test_team.id, test_team_2.id],
+                "stadium_ids": selected_stadiums(test_team),
             },
         )
         assert response.status_code == 302
@@ -285,6 +302,7 @@ class TestTournamentCreationRoute:
                 "name": name_100,
                 "mode": "round_robin",
                 "team_ids": [test_team.id, test_team_2.id],
+                "stadium_ids": selected_stadiums(test_team),
             },
             follow_redirects=True,
         )
@@ -301,6 +319,7 @@ class TestTournamentCreationRoute:
                 "name": "  Trimmed Premier League  ",
                 "mode": "round_robin",
                 "team_ids": [test_team.id, test_team_2.id],
+                "stadium_ids": selected_stadiums(test_team),
             },
             follow_redirects=True,
         )
@@ -984,6 +1003,7 @@ class TestTournamentModes:
                 "name": "Knockout Test",
                 "mode": "knockout",
                 "team_ids": [test_team.id, test_team_2.id],
+                "stadium_ids": selected_stadiums(test_team),
             },
             follow_redirects=True,
         )

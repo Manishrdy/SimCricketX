@@ -174,6 +174,21 @@
             </div>
         </div>
 
+        <section class="form-section" aria-labelledby="stadium-heading">
+            <div class="section-header"><i class="fas fa-map-marker-alt"></i><h2 id="stadium-heading">Tournament stadiums</h2></div>
+            <p>Select 1–15 stadiums. Fixtures receive a random stadium from this selection. You can switch between these stadiums before each match.</p>
+            <p><a href="{{ url_for('stadiums') }}" target="_blank" rel="noopener">Manage my stadiums</a> · Add or adopt stadiums, then refresh this page.</p>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+                {% for stadium in stadium_choices() %}
+                <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--border-color);border-radius:8px">
+                    <input type="checkbox" name="stadium_ids" value="{{ stadium.id }}" onchange="updateStadiumSelection()">
+                    {{ stadium.name }}
+                </label>
+                {% else %}<p>No stadiums available. Add or adopt a stadium to create a tournament.</p>{% endfor %}
+            </div>
+            <p id="stadium-selection-count" aria-live="polite">0 / 15 stadiums selected</p>
+        </section>
+
         <div class="form-actions">
             <a href="{{ url_for('tournaments') }}" class="cancel-btn" onclick="location.href=this.href; return false;">
                 <i class="fas fa-times"></i> Cancel
@@ -487,11 +502,23 @@
         return Math.pow(2, Math.ceil(Math.log2(n)));
     }
 
+    function updateStadiumSelection() {
+        const boxes = [...document.querySelectorAll('input[name="stadium_ids"]')];
+        const count = boxes.filter(box => box.checked).length;
+        document.getElementById('stadium-selection-count').textContent = `${count} / 15 stadiums selected`;
+        boxes.forEach(box => { box.disabled = count >= 15 && !box.checked; });
+    }
+
     function validateForm() {
         if (isSubmitting) {
             return false;
         }
 
+        const stadiumCount = document.querySelectorAll('input[name="stadium_ids"]:checked').length;
+        if (stadiumCount < 1 || stadiumCount > 15) {
+            alert('Select between 1 and 15 stadiums for the tournament.');
+            return false;
+        }
         const checked = document.querySelectorAll('input[name="team_ids"]:checked').length;
         const mode = document.getElementById('selectedMode').value;
         const name = document.getElementById('tournament-name').value.trim();

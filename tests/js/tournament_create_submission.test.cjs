@@ -30,7 +30,7 @@ test('valid tournament form enters a pending state and rejects a second submit',
                 return elements[id];
             },
             querySelectorAll(selector) {
-                assert.equal(selector, 'input[name="team_ids"]:checked');
+                assert.ok(['input[name="team_ids"]:checked', 'input[name="stadium_ids"]:checked'].includes(selector));
                 return { length: 2 };
             },
         },
@@ -152,3 +152,30 @@ test('validateForm rejects tournament name longer than 100 characters', () => {
     assert.equal(submitBtn.disabled, false);
 });
 
+
+test('creation rejects zero or more than fifteen stadiums before submitting', () => {
+    const validator = template.match(/function validateForm\(\) \{[\s\S]*?\r?\n    \}/)[0];
+    for (const count of [0, 16]) {
+        let message;
+        const context = {isSubmitting:false, alert: text => {message = text;},
+            document:{querySelectorAll: () => ({length:count})}};
+        vm.runInNewContext(validator, context);
+        assert.equal(context.validateForm(), false);
+        assert.match(message, /between 1 and 15 stadiums/);
+    }
+});
+
+test('stadium selection caps at fifteen and re-enables choices after removal', () => {
+    const fn = template.match(/function updateStadiumSelection\(\) \{[\s\S]*?\r?\n    \}/)[0];
+    const boxes = Array.from({length:16}, (_, i) => ({checked:i < 15, disabled:false}));
+    const counter = {};
+    const context = {document:{querySelectorAll:() => boxes, getElementById:() => counter}};
+    vm.runInNewContext(fn, context);
+    context.updateStadiumSelection();
+    assert.equal(boxes[15].disabled, true);
+    assert.equal(boxes[0].disabled, false);
+    boxes[0].checked = false;
+    context.updateStadiumSelection();
+    assert.equal(boxes[15].disabled, false);
+    assert.match(counter.textContent, /14 \/ 15/);
+});

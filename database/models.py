@@ -965,6 +965,8 @@ class Tournament(db.Model):
     status = db.Column(db.String(20), default='Active')  # Active, Completed
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     creation_token = db.Column(db.String(64), nullable=True)
+    # NULL preserves unrestricted venue selection for legacy tournaments and tours.
+    stadium_ids = db.Column(db.JSON, nullable=True)
 
     tour_id = db.Column(db.Integer, db.ForeignKey('tours.id'), nullable=True, index=True)
     tour_order = db.Column(db.Integer, nullable=True)

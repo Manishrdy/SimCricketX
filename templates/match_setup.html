@@ -1,4 +1,7 @@
 {% extends "layout.html" %}
+{% set venue_pool = tournament_stadium_ids|default(none) %}
+{% set setup_stadiums = stadium_choices(include_legacy=true) %}
+{% if venue_pool is not none %}{% set setup_stadiums = setup_stadiums|selectattr("id", "in", venue_pool)|list %}{% endif %}
 
 {% block title %}New Match - SimCricketX{% endblock %}
 
@@ -1188,8 +1191,8 @@
                         </div>
                         <input type="text" id="venue-display" readonly class="ms-setting-control ms-readonly">
                         <select id="stadium-select" class="ms-setting-control" aria-label="Stadium">
-                          <option value="">Use home ground</option>
-                          {% for s in stadium_choices(include_legacy=true) %}<option value="{{ s.id }}" data-name="{{ s.name }}">{{ s.name }}</option>{% endfor %}
+                          <option value="" {% if venue_pool is not none %}disabled hidden{% endif %}>{% if venue_pool is not none %}Select tournament stadium{% else %}Use home ground{% endif %}</option>
+                          {% for s in setup_stadiums %}<option value="{{ s.id }}" data-name="{{ s.name }}">{{ s.name }}</option>{% endfor %}
                         </select>
                     </div>
                     <div id="stadium-conditions" hidden>
@@ -1901,7 +1904,8 @@
     }
 
     const STADIUM_FIXTURE_ID = {{ fixture_stadium_id|default(none)|tojson }};
-    const STADIUM_DATA = {{ stadium_choices(include_legacy=true)|tojson }};
+    const TOURNAMENT_STADIUM_POOL = {{ venue_pool|tojson }};
+    const STADIUM_DATA = {{ setup_stadiums|tojson }};
     function stadiumOverrides() {
         if (!document.getElementById('stadium-select').value) return {};
         const result = {};
@@ -1917,9 +1921,9 @@
             option.disabled = option.hidden;
         }
         const previousVenue = STADIUM_DATA.find(s => s.id === STADIUM_FIXTURE_ID);
-        select.value = previousVenue ? previousVenue.id : (home.stadium_id || '');
+        select.value = previousVenue ? previousVenue.id : (TOURNAMENT_STADIUM_POOL !== null ? (STADIUM_DATA[0]?.id || '') : (home.stadium_id || ''));
         select.disabled = false;
-        select.options[0].disabled = home.venue_mode === 'stadium';
+        select.options[0].disabled = TOURNAMENT_STADIUM_POOL !== null || home.venue_mode === 'stadium';
         const update = () => {
             const stadium = STADIUM_DATA.find(s => s.id === select.value);
             document.getElementById('stadium-conditions').hidden = !stadium;
