@@ -22,7 +22,7 @@ Country, timezone, location metadata, descriptions, advanced JSON editing, bound
 
 ## Conditions model
 
-New matches use `stadium_v2`. Match setup preselects the chosen stadium's pitch for the format and permits a match-specific pitch override. Changing stadium or format resets that choice to the corresponding default. Fixture stadium assignment takes precedence over explicit match selection, then the home stadium.
+Preserved v2 matches use `stadium_v2`; current adopted stadiums use `stadium_v3`. Match setup preselects the chosen stadium's pitch for the format and permits a match-specific pitch override. Changing stadium or format resets that choice to the corresponding default. A fixture's saved stadium is an editable default for a fresh attempt, including after abandonment or replay. Explicit selection takes precedence; omitted selection uses the accessible, active previous venue, then the home stadium. An empty selection uses the home ground. Successful setup remembers the new choice; resumed matches retain their immutable snapshots.
 
 At creation the server freezes stadium identity/revision/name, pitch, dimensions, speed, temperature, coefficients, temperature wear rate, format/day-night flag, original delivery budget, effective engine configuration, weather script and conditions seed. Play and resume use this snapshot without catalogue reads. Stadium changes and retirement never rewrite saved matches. Browser projections omit RNG seeds, effective configuration, scripts and checkpoints.
 

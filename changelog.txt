@@ -1,3 +1,6 @@
+[3.0.6] 2026-11-25
+- Fixed stadium selection staying locked after abandoning or replaying a tournament fixture, including playoff matches. Fresh setup remembers the previous venue but allows a different ground; resumed matches keep their saved conditions.
+
 [3.0.5] 2026-11-24
 - Added data retention policy: login history is now pruned after 90 days by a background cleanup worker
 - Added data retention policy: community posts (and all associated comments, votes, notifications, images, reports, and mentions) are pruned 30 days after the post's last activity; children always follow the post as the reference, not their own timestamps

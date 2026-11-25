@@ -1184,7 +1184,7 @@
                     <div class="ms-setting-row">
                         <div class="ms-setting-copy">
                             <label class="ms-setting-label" for="venue-display">Host Venue</label>
-                            <span class="ms-setting-hint">Auto-filled from the selected home team.</span>
+                            <span class="ms-setting-hint">Choose the ground for this match. Replays start with the previous venue selected.</span>
                         </div>
                         <input type="text" id="venue-display" readonly class="ms-setting-control ms-readonly">
                         <select id="stadium-select" class="ms-setting-control" aria-label="Stadium">
@@ -1916,8 +1916,9 @@
             option.hidden = Boolean(record && record.schema_version !== 3 && record.id !== STADIUM_FIXTURE_ID && record.id !== home.stadium_id);
             option.disabled = option.hidden;
         }
-        select.value = STADIUM_FIXTURE_ID || home.stadium_id || '';
-        select.disabled = Boolean(STADIUM_FIXTURE_ID);
+        const previousVenue = STADIUM_DATA.find(s => s.id === STADIUM_FIXTURE_ID);
+        select.value = previousVenue ? previousVenue.id : (home.stadium_id || '');
+        select.disabled = false;
         select.options[0].disabled = home.venue_mode === 'stadium';
         const update = () => {
             const stadium = STADIUM_DATA.find(s => s.id === select.value);

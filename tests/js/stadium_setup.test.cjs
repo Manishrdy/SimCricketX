@@ -39,3 +39,42 @@ test('legacy setup keeps its chosen pitch across format option refresh',()=>{
     const {context,nodes,pitch}=setup(); nodes['stadium-select'].value='';
     pitch.value='Green';context.populatePitchOptions('FC');assert.equal(pitch.value,'Green');
 });
+
+const initialize = source.slice(source.indexOf('    function initializeStadium('), source.indexOf('    function updateStadiumPreview('));
+function venueSetup(previous, records) {
+    const select = {value:'', disabled:true, options:[{value:''}, ...records.map(s => ({value:s.id}))]};
+    const nodes = {'stadium-select':select, 'stadium-conditions':{}, 'venue-display':{}, 'match-format-value':{value:'T20'}};
+    const context = {STADIUM_FIXTURE_ID:previous, STADIUM_DATA:records,
+        document:{getElementById:id=>nodes[id]}, populatePitchOptions(){}, updateStadiumPreview(){}, updateConditionsSummary(){}};
+    vm.createContext(context);
+    vm.runInContext(initialize, context);
+    return {context, select, nodes};
+}
+test('replay preselects its previous venue but permits a new stadium', () => {
+    const {context, select, nodes} = venueSetup('previous', [
+        {id:'previous', name:'Previous ground', schema_version:3},
+        {id:'home', name:'Home ground', schema_version:3},
+    ]);
+    context.initializeStadium({stadium_id:'home', venue_mode:'stadium'});
+    assert.equal(select.value, 'previous');
+    assert.equal(select.disabled, false);
+    select.value = 'home'; select.onchange();
+    assert.equal(nodes['venue-display'].value, 'Home ground');
+});
+test('unavailable previous venues fall back to the home ground', () => {
+    const {context, select} = venueSetup('retired', [{id:'home', schema_version:3}]);
+    context.initializeStadium({stadium_id:'home', venue_mode:'stadium'});
+    assert.equal(select.value, 'home');
+    assert.equal(select.disabled, false);
+});
+test('legacy home and previous links stay selectable while unrelated legacy venues stay hidden', () => {
+    const {context, select} = venueSetup('previous', ['previous','home','unrelated'].map(id=>({id,schema_version:2})));
+    context.initializeStadium({stadium_id:'home', venue_mode:'stadium'});
+    assert.equal(select.disabled, false);
+    for (const id of ['previous','home']) {
+        const option = select.options.find(o=>o.value===id);
+        assert.equal(option.hidden, false);
+        assert.equal(option.disabled, false);
+    }
+    assert.equal(select.options.find(o=>o.value==='unrelated').hidden, true);
+});

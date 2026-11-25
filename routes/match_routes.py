@@ -549,13 +549,25 @@ def register_match_routes(
             for key in ('conditions_snapshot', 'conditions_model_version', 'stadium_revision'):
                 data.pop(key, None)
             data['ground_config'].pop('_stadium', None)
-            assigned_stadium = fixture.stadium_id if req_fixture_id else None
-            selected_stadium = assigned_stadium or data.get('stadium_id') or home_db.stadium_id
+            # A fixture remembers the last venue as a setup default, not a
+            # restriction on a fresh attempt. Resume uses the saved snapshot.
+            remembered_stadium = fixture.stadium_id if req_fixture_id else None
+            default_stadium = remembered_stadium
+            if default_stadium:
+                try:
+                    playable_stadium(default_stadium, current_user.id, default_stadium)
+                except ValueError:
+                    default_stadium = None  # Retired/inaccessible previous venue.
+            if 'stadium_id' in data:
+                selected_stadium = data.get('stadium_id') or home_db.stadium_id
+            else:
+                selected_stadium = default_stadium or home_db.stadium_id
             if selected_stadium:
                 if not app.config.get('STADIUM_MATCHES_ENABLED', True):
                     return jsonify(error='New stadium matches are temporarily disabled.'), 503
                 try:
-                    venue = playable_stadium(selected_stadium, current_user.id, assigned_stadium or home_db.stadium_id)
+                    existing_stadium = selected_stadium if selected_stadium in (remembered_stadium, home_db.stadium_id) else None
+                    venue = playable_stadium(selected_stadium, current_user.id, existing_stadium)
                     if venue.current_profile_version == 3 and not app.config.get('STADIUM_V3_ENABLED', True):
                         return jsonify(error='New stadium tuning is temporarily disabled.'), 503
                     tuning = revision_record(venue) if venue.current_profile_version == 3 else None
@@ -627,15 +639,16 @@ def register_match_routes(
                     }), 409
 
             try:
-                if req_fixture_id and selected_stadium and not assigned_stadium and venue.current_profile_version == 3:
-                    fixture.stadium_id = data['stadium_id']
-                    db.session.commit()
                 with open(path, "w") as f:
                     json.dump(data, f, indent=2)
+                if req_fixture_id:
+                    fixture.stadium_id = data['stadium_id']
+                    db.session.commit()
             except Exception:
                 # Never leave the fixture reserved for a match whose file was
                 # never written — that would lock it with nothing to resume.
                 if req_fixture_id:
+                    db.session.rollback()
                     release_fixture(fixture, match_id)
                 raise
 
