@@ -174,19 +174,32 @@
             </div>
         </div>
 
-        <section class="form-section" aria-labelledby="stadium-heading">
-            <div class="section-header"><i class="fas fa-map-marker-alt"></i><h2 id="stadium-heading">Tournament stadiums</h2></div>
-            <p>Select 1–15 stadiums. Fixtures receive a random stadium from this selection. You can switch between these stadiums before each match.</p>
-            <p><a href="{{ url_for('stadiums') }}" target="_blank" rel="noopener">Manage my stadiums</a> · Add or adopt stadiums, then refresh this page.</p>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
-                {% for stadium in stadium_choices() %}
-                <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--border-color);border-radius:8px">
-                    <input type="checkbox" name="stadium_ids" value="{{ stadium.id }}" onchange="updateStadiumSelection()">
-                    {{ stadium.name }}
-                </label>
-                {% else %}<p>No stadiums available. Add or adopt a stadium to create a tournament.</p>{% endfor %}
+        <section class="form-section tournament-venues" aria-labelledby="stadium-heading">
+            <div class="section-header">
+                <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
+                <h2 id="stadium-heading">Tournament stadiums</h2>
+                <span class="venue-count" id="stadium-selection-count" aria-live="polite">0 / 15 stadiums selected</span>
             </div>
-            <p id="stadium-selection-count" aria-live="polite">0 / 15 stadiums selected</p>
+            <div class="venue-toolbar">
+                <p id="stadium-selection-help">Choose 1–15 grounds for your tournament.</p>
+                <a class="venue-manage" href="{{ url_for('stadiums') }}" target="_blank" rel="noopener">
+                    Manage stadiums <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                    <span class="venue-sr-only">(opens in a new tab)</span>
+                </a>
+            </div>
+            <div class="venue-grid" role="group" aria-labelledby="stadium-heading" aria-describedby="stadium-selection-help">
+                {% for stadium in stadium_choices() %}
+                <label class="venue-card">
+                    <input type="checkbox" name="stadium_ids" value="{{ stadium.id }}" onchange="updateStadiumSelection()">
+                    <span class="venue-card-icon" aria-hidden="true"><i class="fas fa-map-marker-alt"></i></span>
+                    <span class="venue-card-copy"><span class="venue-card-name">{{ stadium.name }}</span><span class="venue-card-state" aria-hidden="true"></span></span>
+                    <span class="venue-check" aria-hidden="true"><i class="fas fa-check"></i></span>
+                </label>
+                {% else %}
+                <div class="venue-empty"><i class="fas fa-map-marker-alt" aria-hidden="true"></i><strong>Your tournament needs a home.</strong><span>Add or adopt a stadium in My stadiums, then refresh this page to select it.</span></div>
+                {% endfor %}
+            </div>
+            <p class="venue-note"><i class="fas fa-random" aria-hidden="true"></i><span>Fixtures are assigned randomly. You can switch between selected grounds before each match.</span></p>
         </section>
 
         <div class="form-actions">
@@ -728,6 +741,42 @@
         font-size: 0.9rem;
         margin-bottom: 1.25rem;
     }
+
+    /* Tournament venue selection */
+    .tournament-venues .section-header { flex-wrap: wrap; }
+    .venue-count { margin-left: auto; padding: 0.35rem 0.7rem; border-radius: 20px; border: 1px solid var(--card-border); background: var(--bg); color: var(--fg-secondary); font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+    .tournament-venues:has(input:checked) .venue-count { color: var(--accent); background: var(--accent-light); border-color: var(--accent); }
+    .venue-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
+    .venue-toolbar p { margin: 0; font-size: 0.9rem; color: var(--fg-secondary); }
+    .venue-manage { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; font-weight: 600; color: var(--accent); text-decoration: none; }
+    .venue-manage:hover { text-decoration: underline; }
+    .venue-manage i { font-size: 0.7rem; }
+    .venue-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 0.75rem; }
+    .venue-card { position: relative; display: flex; align-items: center; gap: 0.85rem; min-height: 88px; padding: 1rem; margin: 0; border: 1px solid var(--card-border); border-radius: 12px; background: var(--bg); cursor: pointer; transition: border-color 150ms, background 150ms; }
+    .venue-card:hover { border-color: var(--accent); }
+    .venue-card:has(input:checked) { border-color: var(--accent); background: var(--accent-light); box-shadow: inset 0 0 0 1px var(--accent); }
+    .venue-card:has(input:focus-visible) { outline: 3px solid var(--accent); outline-offset: 3px; }
+    .venue-card:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
+    .venue-card input, .venue-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+    .venue-card-icon { display: grid; place-items: center; flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px; background: var(--card-bg); color: var(--accent); border: 1px solid var(--card-border); }
+    .venue-card-copy { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+    .venue-card-name { font-size: 0.9rem; font-weight: 600; color: var(--fg); overflow-wrap: anywhere; }
+    .venue-card-state { font-size: 0.73rem; font-weight: 400; color: var(--fg-secondary); }
+    .venue-card-state::after { content: 'Select ground'; }
+    .venue-card:has(input:checked) .venue-card-state::after { content: 'Selected for tournament'; color: var(--accent); }
+    .venue-check { display: grid; place-items: center; margin-left: auto; width: 21px; height: 21px; flex-shrink: 0; border: 1.5px solid var(--fg-secondary); border-radius: 6px; color: transparent; font-size: 0.65rem; }
+    .venue-card:has(input:checked) .venue-check { background: var(--accent); border-color: var(--accent); color: var(--card-bg); }
+    .venue-note { display: flex; align-items: baseline; gap: 0.55rem; margin: 1rem 0 0; font-size: 0.78rem; line-height: 1.6; color: var(--fg-secondary); }
+    .venue-note i { color: var(--accent); }
+    .venue-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 0.65rem; text-align: center; padding: 1.75rem 1rem; border: 1px dashed var(--card-border); border-radius: 12px; color: var(--fg-secondary); font-size: 0.85rem; }
+    .venue-empty > i { color: var(--accent); font-size: 1.4rem; }
+    .venue-empty strong { color: var(--fg); }
+    @media (max-width: 480px) {
+        .tournament-venues .section-header { gap: 0.6rem; }
+        .venue-count { margin-left: 0; }
+        .venue-toolbar { align-items: flex-start; flex-direction: column; }
+    }
+    @media (prefers-reduced-motion: reduce) { .venue-card { transition: none; } }
 
     /* --- Form Inputs --- */
     .form-group {
