@@ -9,6 +9,7 @@ from database import db
 from database.models import User, Team, Match, ActiveSession, LoginHistory, FailedLoginAttempt
 from scripts.dev_test_accounts import ACCOUNTS, logged_in_client, seed
 from services import admin_workspace as workspace
+from services.match_store import MatchStore
 
 
 @pytest.fixture
@@ -150,7 +151,7 @@ def test_removed_user_sections_and_self_service_unchanged(app, qa):
 def test_system_metrics_failure_isolation(app,tmp_path,monkeypatch):
     metrics=workspace.database_metrics()
     assert metrics['size_mb'] == round(__import__('os').path.getsize(db.engine.url.database)/1024**2,2)
-    data=workspace.system_overview(tmp_path/'missing-root',None,{},threading.Lock())
+    data=workspace.system_overview(tmp_path/'missing-root',None,MatchStore())
     assert data['memory_mb'] is None and data['disk'] is None
     assert data['data_mb'] is None and data['log_mb'] is None and data['matches'] == 0
     backup_dir=tmp_path/'data'/'backups'
@@ -167,7 +168,10 @@ def test_system_metrics_failure_isolation(app,tmp_path,monkeypatch):
     assert second['backup_hours'] == workspace.BACKUP_INTERVAL_SECONDS//3600
     def fail(*args,**kwargs): raise PermissionError('QA unavailable')
     monkeypatch.setattr(workspace.os,'walk',fail)
-    data=workspace.system_overview(tmp_path,None,{'one':1},threading.Lock())
+    store = MatchStore()
+    with store.acquire('one', loader=lambda: object()):
+        pass
+    data=workspace.system_overview(tmp_path,None,store)
     assert data['data_mb'] is None and data['backup']['timestamp'] is not None and data['matches']==1
 
 
@@ -185,7 +189,7 @@ def test_in_memory_database_and_partial_process_metrics(app, monkeypatch, tmp_pa
         def cpu_percent(self,interval): return 3.5
         def create_time(self): return workspace.time.time()-3600
     psutil=SimpleNamespace(Process=Process,disk_usage=lambda root:SimpleNamespace(total=100,used=40,free=60,percent=40))
-    data=workspace.system_overview(tmp_path,psutil,{},threading.Lock())
+    data=workspace.system_overview(tmp_path,psutil,MatchStore())
     assert data['memory_mb'] is None
     assert data['cpu']==3.5 and data['uptime_hours']==1.0
     assert data['disk'].free==60

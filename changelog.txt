@@ -1,3 +1,8 @@
+[3.0.5] 2026-11-24
+- Added data retention policy: login history is now pruned after 90 days by a background cleanup worker
+- Added data retention policy: community posts (and all associated comments, votes, notifications, images, reports, and mentions) are pruned 30 days after the post's last activity; children always follow the post as the reference, not their own timestamps
+- Pinned posts are exempt from automatic age-based deletion
+
 [3.0.4] 2026-11-24
 - Reduced match archive (zip) retention from 7 days to 3 days to free up disk space sooner; override with the ARCHIVE_MAX_AGE_DAYS environment variable
 

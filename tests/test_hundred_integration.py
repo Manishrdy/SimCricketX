@@ -1,4 +1,6 @@
 """Public Hundred workflows use shared QA identities and existing T20 profiles."""
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 import json
 from pathlib import Path
 from datetime import datetime
@@ -32,7 +34,6 @@ def hundred_qa(app):
 
 
 def test_setup_live_restore_and_no_squad_creation(app,hundred_qa):
-    from app import MATCH_INSTANCES
     client,owner,teams=hundred_qa
     response=client.post('/match/setup',json=dict(team_home=teams[0].id,team_away=teams[1].id,
         match_format='Hundred',pitch='Hard',stadium='QA Ground',toss='Heads',
@@ -92,7 +93,6 @@ def test_stats_isolation_exports_and_tour(hundred_qa):
 
 def test_complete_match_archive_and_readonly_scorecard(app,hundred_qa,monkeypatch):
     import engine.match as engine
-    from app import MATCH_INSTANCES
     client,owner,teams=hundred_qa
     monkeypatch.setattr(engine,'calculate_outcome',lambda **kw: dict(runs=1,batter_out=False,is_extra=False,description='Single'))
     response=client.post('/match/setup',json=dict(team_home=teams[0].id,team_away=teams[1].id,
@@ -144,7 +144,6 @@ def test_hundred_points_nrr_reversal(hundred_qa):
 
 def test_two_tied_super_fives_archive_league_winner(app, hundred_qa, monkeypatch):
     import engine.match as engine
-    from app import MATCH_INSTANCES
     from database.models import TournamentFixture
 
     client, owner, teams = hundred_qa
@@ -216,7 +215,6 @@ def test_two_tied_super_fives_archive_league_winner(app, hundred_qa, monkeypatch
 
 
 def test_pure_knockout_setup_selects_repeat_policy(app, hundred_qa):
-    from app import MATCH_INSTANCES
     client, owner, teams = hundred_qa
     tournament = TournamentEngine().create_tournament(
         '[QA] Hundred pure knockout', owner, [t.id for t in teams],

@@ -178,16 +178,19 @@ def test_artifact_failure_is_retryable_and_legacy_files_removed(qa,tmp_path,monk
     directory=tmp_path/'data'/'matches';directory.mkdir(parents=True, exist_ok=True)
     canonical=directory/f'match_{mid}.json';canonical.write_text(json.dumps({'match_id':mid}))
     legacy=directory/'legacy.json';legacy.write_text(json.dumps({'match_id':mid}))
-    cache={mid:object()}
+    from services.match_store import MatchStore
+    cache = MatchStore()
+    with cache.acquire(mid, loader=lambda: object()):
+        pass
     unlink=Path.unlink
     def fail(self,*args,**kwargs):
         if self==canonical: raise PermissionError('injected file failure')
         return unlink(self,*args,**kwargs)
     monkeypatch.setattr(Path,'unlink',fail)
-    assert not cleanup(receipt,tmp_path,cache,RLock())
-    assert receipt.cleanup_pending and mid not in cache and canonical.exists()
+    assert not cleanup(receipt,tmp_path,cache)
+    assert receipt.cleanup_pending and cache.describe(mid) is None and canonical.exists()
     monkeypatch.setattr(Path,'unlink',unlink)
-    assert cleanup(receipt,tmp_path,cache,RLock())
+    assert cleanup(receipt,tmp_path,cache)
     assert not canonical.exists() and not legacy.exists() and not receipt.cleanup_pending
 
 

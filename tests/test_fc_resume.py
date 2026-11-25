@@ -14,6 +14,8 @@ restarting the match from fc_innings=1. Now:
    rebuild+restore instances from it on demand (next-ball and live-state
    both), so a restart resumes exactly where it stopped instead of restarting.
 """
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 import copy
 import json
 import os
@@ -182,7 +184,7 @@ def test_fc_live_state_rebuilds_from_snapshot(app, authenticated_client, regular
 
     try:
         # Simulate restart: nothing in memory for this match.
-        assert match_id not in app_module.MATCH_INSTANCES
+        assert match_id not in MATCH_INSTANCES
 
         resp = authenticated_client.get(f"/match/{match_id}/live-state")
         assert resp.status_code == 200
@@ -192,14 +194,14 @@ def test_fc_live_state_rebuilds_from_snapshot(app, authenticated_client, regular
         assert body["score"] == m.score
         assert body["wickets"] == m.wickets
 
-        restored = app_module.MATCH_INSTANCES.get(match_id)
+        restored = MATCH_INSTANCES.get(match_id)
         assert restored is not None
         assert restored.is_fc is True
         assert restored.fc_innings == m.fc_innings
         assert restored.fc_day == m.fc_day
         assert restored.current_over == m.current_over
     finally:
-        app_module.MATCH_INSTANCES.pop(match_id, None)
+        MATCH_INSTANCES.pop(match_id, None)
         try:
             os.remove(path)
         except OSError:
@@ -220,8 +222,8 @@ def test_fc_next_ball_persists_snapshot_at_over_boundary(app, authenticated_clie
         json.dump(_json_roundtrip(m.match_data), f)
 
     try:
-        with app_module.MATCH_INSTANCES_LOCK:
-            app_module.MATCH_INSTANCES[match_id] = m
+        with MATCH_INSTANCES_LOCK:
+            MATCH_INSTANCES[match_id] = m
 
         for _ in range(60):
             resp = authenticated_client.post(f"/match/{match_id}/next-ball")
@@ -237,7 +239,7 @@ def test_fc_next_ball_persists_snapshot_at_over_boundary(app, authenticated_clie
         assert on_disk.get("fc_snapshot") is not None
         assert on_disk["fc_snapshot"]["v"] == 2
     finally:
-        app_module.MATCH_INSTANCES.pop(match_id, None)
+        MATCH_INSTANCES.pop(match_id, None)
         try:
             os.remove(path)
         except OSError:

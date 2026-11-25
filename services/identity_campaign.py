@@ -405,11 +405,11 @@ def delete_member(member):
         audit(conn, row['campaign_id'], 'deleted', 'Expiry eligibility rechecked; backup verified; account deleted.', member=member)
     db.session.expire_all()
     # Purge this process's caches; other workers still enforce session and DB checks.
-    from app import MATCH_INSTANCES, MATCH_INSTANCES_LOCK
-    with MATCH_INSTANCES_LOCK:
-        for key, match in list(MATCH_INSTANCES.items()):
+    from app import MATCH_STORE
+    with MATCH_STORE.borrow_all() as cached:
+        for key, match in cached:
             if match.data.get('created_by') == user['id']:
-                MATCH_INSTANCES.pop(key, None)
+                MATCH_STORE.invalidate(key)
     cleanup_files()
     return True
 

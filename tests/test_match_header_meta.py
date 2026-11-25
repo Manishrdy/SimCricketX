@@ -6,6 +6,8 @@ neither of which tells you anything about the match you are watching. They are
 replaced by the match format (with the day count for First-Class) and the
 weather forecast, both of which change how the match actually plays.
 """
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 import copy
 import json
 import os
@@ -59,7 +61,7 @@ def _render(app_module, authenticated_client, data):
         assert resp.status_code == 200, resp.status_code
         return resp.get_data(as_text=True)
     finally:
-        app_module.MATCH_INSTANCES.pop(data["match_id"], None)
+        MATCH_INSTANCES.pop(data["match_id"], None)
         try:
             os.remove(path)
         except OSError:

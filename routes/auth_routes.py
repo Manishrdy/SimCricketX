@@ -909,49 +909,14 @@ def register_auth_routes(
     @login_required
     @limiter.limit("3 per hour")
     def account_request_email_change():
-        """Step 1 — store pending email and send verification link to new address."""
-        from werkzeug.security import check_password_hash
+        """Retired: ordinary voluntary email changes are admin-mediated.
 
-        new_email = request.form.get("new_email", "").strip().lower()
-        current_password = request.form.get("current_password", "")
-
-        if not new_email or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', new_email):
-            flash("Please enter a valid email address.", "danger")
-            return redirect(url_for("account_settings"))
-
-        if new_email == current_user.id:
-            flash("That is already your current email address.", "warning")
-            return redirect(url_for("account_settings"))
-
-        if db.session.get(DBUser, new_email):
-            flash("That email address is already registered to another account.", "danger")
-            return redirect(url_for("account_settings"))
-
-        if not check_password_hash(current_user.password_hash, current_password):
-            flash("Current password is incorrect.", "danger")
-            return redirect(url_for("account_settings"))
-
-        token = secrets.token_urlsafe(32)
-        token_hash = hashlib.sha256(token.encode()).hexdigest()
-        try:
-            current_user.pending_email = new_email
-            current_user.pending_email_token = token_hash
-            current_user.pending_email_token_expires = datetime.utcnow() + timedelta(hours=6)
-            db.session.commit()
-        except Exception as e:
-            log_exception(e)
-            db.session.rollback()
-            app.logger.error(f"[Auth] Email change request error: {e}")
-            flash("Failed to initiate email change. Please try again.", "danger")
-            return redirect(url_for("account_settings"))
-
-        verify_link = url_for("account_confirm_email_change", token=token, _external=True)
-        sent = send_verification_email(new_email, current_user.display_name or current_user.id, verify_link)
-        if sent:
-            app.logger.info(f"[Auth] Email change requested: {current_user.id} -> {new_email}")
-            flash(f"Verification link sent to {new_email}. Click the link in that email to confirm the change.", "success")
-        else:
-            flash("Could not send verification email. Please try again later.", "danger")
+        This used to store a pending address and mail a confirmation link, but
+        the confirm step's immediate writer (update_user_email) is retired, so
+        the link could never complete. Refuse before issuing any proof or
+        sending mail. Mandatory correction uses force_verify_email instead.
+        """
+        flash("Email changes are handled by an admin. Please ask in Community and an admin will verify and make the change.", "warning")
         return redirect(url_for("account_settings"))
 
     @app.route("/account/settings/cancel-email-change", methods=["POST"])

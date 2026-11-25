@@ -1,5 +1,7 @@
 """Team logos across /match/setup and /match/<match_id> (pre-match shell + score banner)."""
 
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
+
 import copy
 import io
 import json
@@ -69,7 +71,7 @@ def _render_match_detail(app_module, client, data):
         assert resp.status_code == 200
         return resp.get_data(as_text=True)
     finally:
-        app_module.MATCH_INSTANCES.pop(data["match_id"], None)
+        MATCH_INSTANCES.pop(data["match_id"], None)
         try:
             os.remove(path)
         except OSError:

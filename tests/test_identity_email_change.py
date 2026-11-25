@@ -1,4 +1,6 @@
 """Feature 8 uses shared QA identities and isolated file-backed databases."""
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 from datetime import timedelta
 import json
 import os
@@ -489,7 +491,7 @@ def test_regenerated_archive_uses_current_owner_without_rewriting_snapshot(confi
     original=tmp_path/'snapshot.json';original.write_text(json.dumps(snapshot))
     cid,_=ready();apply(cid)
     client=renamed_client(configured)
-    app_module.MATCH_INSTANCES[mid]=SimpleNamespace(data=snapshot,commentary=['QA commentary'])
+    MATCH_INSTANCES[mid]=SimpleNamespace(data=snapshot,commentary=['QA commentary'])
     root=Path(configured.root_path)/'data'
     generated=root/('qa-email-export-'+uuid.uuid4().hex+'.zip')
     observed={}
@@ -510,7 +512,7 @@ def test_regenerated_archive_uses_current_owner_without_rewriting_snapshot(confi
         assert db.session.get(Match,mid).user_id==NEW
     finally:
         generated.unlink(missing_ok=True)
-        app_module.MATCH_INSTANCES.pop(mid,None)
+        MATCH_INSTANCES.pop(mid,None)
 
 
 def test_admin_confirm_post_revokes_existing_member_session(configured,admin_client):

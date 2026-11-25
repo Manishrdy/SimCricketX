@@ -101,49 +101,10 @@
         </div>
         {% endif %}
 
-        <!-- Change email form -->
-        <details {% if current_user.pending_email %}{% endif %} style="margin-top: 0.5rem;">
-            <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--accent); list-style: none; display: flex; align-items: center; gap: 0.4rem; user-select: none;">
-                <i class="fas fa-pen-to-square"></i> Change email address
-            </summary>
-
-            <form method="POST" action="{{ url_for('account_request_email_change') }}" style="margin-top: 1rem;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-                <div style="margin-bottom: 0.85rem;">
-                    <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--fg-secondary); margin-bottom: 0.4rem;" for="new_email">
-                        New email address
-                    </label>
-                    <input type="email"
-                           id="new_email"
-                           name="new_email"
-                           placeholder="new@example.com"
-                           required
-                           style="width: 100%; box-sizing: border-box; padding: 0.6rem 0.85rem; background: var(--input-bg, var(--bg)); border: 1px solid var(--card-border); border-radius: 8px; color: var(--fg); font-size: 0.9rem; outline: none;">
-                </div>
-
-                <div style="margin-bottom: 1rem;">
-                    <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--fg-secondary); margin-bottom: 0.4rem;" for="current_password">
-                        Confirm with current password
-                    </label>
-                    <input type="password"
-                           id="current_password"
-                           name="current_password"
-                           placeholder="Your current password"
-                           required
-                           autocomplete="current-password"
-                           style="width: 100%; box-sizing: border-box; padding: 0.6rem 0.85rem; background: var(--input-bg, var(--bg)); border: 1px solid var(--card-border); border-radius: 8px; color: var(--fg); font-size: 0.9rem; outline: none;">
-                    <div style="font-size: 0.75rem; color: var(--fg-secondary); margin-top: 0.3rem;">
-                        A verification link will be sent to the new address. Your email changes only after you click it.
-                    </div>
-                </div>
-
-                <button type="submit"
-                        style="padding: 0.55rem 1.25rem; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
-                    <i class="fas fa-paper-plane"></i> Send Verification Link
-                </button>
-            </form>
-        </details>
+        <!-- Ordinary email changes are admin-mediated; the self-service form is retired. -->
+        <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--fg-secondary);">
+            <i class="fas fa-circle-info"></i> To change your email address, ask in <a href="/community" style="color: var(--accent);">Community</a> and an admin will verify and make the change.
+        </p>
     </div>
 
     <!-- ── Password Change Card ── -->

@@ -7970,7 +7970,7 @@ class Match(CaptaincyMixin, HundredPresentation):
                 break
         _pitch_wear = self._compute_pitch_wear()
         _game_mode_override = self._resolve_game_mode()
-        # Historical scenario engines steer both innings; classic scripted
+        # Historical stories and the adaptive director steer both innings; scripted
         # scenarios only ever act on the 2nd innings.
         _scenario_steers_now = bool(self.scenario_engine) and (
             self.innings == 2

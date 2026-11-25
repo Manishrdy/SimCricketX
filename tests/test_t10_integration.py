@@ -1,4 +1,6 @@
 """Public T10 integration: squads, setup, competition identity and rendering."""
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 import json
 import os
 import re
@@ -210,7 +212,7 @@ def test_t10_http_socket_replay_and_live_refresh(app, authenticated_client, regu
     monkeypatch.setattr(match_module, 'print', lambda *a, **kw: None)
     monkeypatch.setattr(match_module, 'calculate_outcome', lambda **kw: {
         'runs': 0, 'batter_out': False, 'is_extra': False, 'description': 'Dot'})
-    app_module.MATCH_INSTANCES[mid] = m
+    MATCH_INSTANCES[mid] = m
     socket = app_module.socketio.test_client(app, flask_test_client=authenticated_client)
     try:
         url = f'/match/{mid}'
@@ -244,4 +246,4 @@ def test_t10_http_socket_replay_and_live_refresh(app, authenticated_client, regu
         assert not refreshed['bowling_eligibility']['selectable']
     finally:
         socket.disconnect()
-        app_module.MATCH_INSTANCES.pop(mid, None)
+        MATCH_INSTANCES.pop(mid, None)

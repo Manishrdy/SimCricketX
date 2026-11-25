@@ -3,6 +3,8 @@ Test suite for Tournament routes
 Tests routes defined in routes/tournament_routes.py
 """
 
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
+
 import os
 import uuid
 
@@ -688,8 +690,8 @@ class TestTournamentDeletionRoute:
 
         db.session.commit()
 
-        with app_module.MATCH_INSTANCES_LOCK:
-            app_module.MATCH_INSTANCES[match_id] = object()
+        with MATCH_INSTANCES_LOCK:
+            MATCH_INSTANCES[match_id] = object()
 
         try:
             response = authenticated_client.post(
@@ -708,8 +710,8 @@ class TestTournamentDeletionRoute:
 
             assert not os.path.isfile(json_path)
 
-            with app_module.MATCH_INSTANCES_LOCK:
-                assert match_id not in app_module.MATCH_INSTANCES
+            with MATCH_INSTANCES_LOCK:
+                assert match_id not in MATCH_INSTANCES
 
             db.session.expire_all()
             refreshed_batter = db.session.get(DBPlayer, player_id)
@@ -719,8 +721,8 @@ class TestTournamentDeletionRoute:
         finally:
             if os.path.isfile(json_path):
                 os.remove(json_path)
-            with app_module.MATCH_INSTANCES_LOCK:
-                app_module.MATCH_INSTANCES.pop(match_id, None)
+            with MATCH_INSTANCES_LOCK:
+                MATCH_INSTANCES.pop(match_id, None)
 
     def test_delete_button_renders_for_completed_tournament(
         self, authenticated_client, test_tournament

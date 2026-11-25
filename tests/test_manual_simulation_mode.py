@@ -1,16 +1,16 @@
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 import json
 import os
 import sys
 import uuid
 
 import pytest
-from flask_login import UserMixin
 
 # Add project root for imports when running from tests/
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import app as app_module
-from app import create_app
 import engine.match as match_module
 
 
@@ -56,38 +56,19 @@ def _build_match_data(user_id: str, simulation_mode: str = "manual"):
 
 
 @pytest.fixture
-def app_client():
-    app = create_app()
-    app.config["TESTING"] = True
-    app.config["WTF_CSRF_ENABLED"] = False
-    app.config["LOGIN_DISABLED"] = False
-    # A bare create_app() points at an empty bootstrap DB; next_ball now reads
-    # the fixture-replay tombstone table, so the schema has to exist.
-    with app.app_context():
-        from database import db
-        db.create_all()
-    client = app.test_client()
-
-    user_id = f"manual_mode_{uuid.uuid4().hex}@example.com"
-
-    class StubUser(UserMixin):
-        def __init__(self, uid):
-            self.id = uid
-
-    @app.login_manager.user_loader
-    def load_user(uid):
-        return StubUser(uid)
-
-    with client.session_transaction() as sess:
-        sess["_user_id"] = user_id
+def app_client(app):
+    from scripts.dev_test_accounts import seed, logged_in_client, ACCOUNTS
+    seed(app)
+    client = logged_in_client(app, "user1")
+    user_id = ACCOUNTS["user1"]["email"]
 
     yield app, client, user_id
 
     # Cleanup in-memory matches for this user only.
-    with app_module.MATCH_INSTANCES_LOCK:
-        remove_ids = [mid for mid, m in app_module.MATCH_INSTANCES.items() if m.data.get("created_by") == user_id]
+    with MATCH_INSTANCES_LOCK:
+        remove_ids = [mid for mid, m in MATCH_INSTANCES.items() if m.data.get("created_by") == user_id]
         for mid in remove_ids:
-            del app_module.MATCH_INSTANCES[mid]
+            del MATCH_INSTANCES[mid]
 
     # Cleanup generated match json files for this user.
     match_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "matches")
@@ -127,8 +108,8 @@ def test_manual_wicket_last_ball_then_next_bowler_decision(app_client, monkeypat
 
     monkeypatch.setattr(match_module, "calculate_outcome", fake_wicket_outcome)
 
-    with app_module.MATCH_INSTANCES_LOCK:
-        app_module.MATCH_INSTANCES[data["match_id"]] = match
+    with MATCH_INSTANCES_LOCK:
+        MATCH_INSTANCES[data["match_id"]] = match
 
     resp = client.post(f"/match/{data['match_id']}/next-ball")
     assert resp.status_code == 200
@@ -178,8 +159,8 @@ def test_mode_switch_manual_to_auto_auto_resolves_pending_decision(app_client, m
     with open(match_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
-    with app_module.MATCH_INSTANCES_LOCK:
-        app_module.MATCH_INSTANCES[data["match_id"]] = match
+    with MATCH_INSTANCES_LOCK:
+        MATCH_INSTANCES[data["match_id"]] = match
 
     mode_resp = client.post(f"/match/{data['match_id']}/set-simulation-mode", json={"mode": "auto"})
     assert mode_resp.status_code == 200
@@ -210,8 +191,8 @@ def test_submit_decision_rejects_invalid_index_and_type(app_client):
     decision = match._create_next_bowler_decision()
     valid_index = decision["options"][0]["index"]
 
-    with app_module.MATCH_INSTANCES_LOCK:
-        app_module.MATCH_INSTANCES[data["match_id"]] = match
+    with MATCH_INSTANCES_LOCK:
+        MATCH_INSTANCES[data["match_id"]] = match
 
     bad_type_resp = client.post(
         f"/match/{data['match_id']}/submit-decision",

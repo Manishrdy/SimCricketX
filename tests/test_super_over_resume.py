@@ -12,6 +12,8 @@ toss. Now:
    transition and rebuild+restore instances from it on demand (live-state
    included), so a restart resumes the super over exactly where it stopped.
 """
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 import json
 import os
 import sys
@@ -232,7 +234,7 @@ def test_live_state_rebuilds_from_snapshot(app, authenticated_client, regular_us
 
     try:
         # Simulate restart: nothing in memory for this match.
-        assert match_id not in app_module.MATCH_INSTANCES
+        assert match_id not in MATCH_INSTANCES
 
         resp = authenticated_client.get(f"/match/{match_id}/live-state")
         assert resp.status_code == 200
@@ -242,12 +244,12 @@ def test_live_state_rebuilds_from_snapshot(app, authenticated_client, regular_us
         assert body["super_over"]["round"] == 1
         assert body["commentary_log"] == ["<b>MATCH TIED!</b>"]
 
-        restored = app_module.MATCH_INSTANCES.get(match_id)
+        restored = MATCH_INSTANCES.get(match_id)
         assert restored is not None
         assert restored.innings == 4
         assert restored.super_over_ball == m.super_over_ball
     finally:
-        app_module.MATCH_INSTANCES.pop(match_id, None)
+        MATCH_INSTANCES.pop(match_id, None)
         try:
             os.remove(path)
         except OSError:

@@ -17,6 +17,8 @@ Two things went wrong, and each has its own guard here:
    had already consumed the session that produced it. It could never be
    produced again.
 """
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 import json
 import uuid
 
@@ -207,8 +209,8 @@ def test_interval_card_survives_a_dropped_socket(app, authenticated_client,
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(copy.deepcopy(match.match_data), handle)
 
-    with app_module.MATCH_INSTANCES_LOCK:
-        app_module.MATCH_INSTANCES[match_id] = match
+    with MATCH_INSTANCES_LOCK:
+        MATCH_INSTANCES[match_id] = match
 
     try:
         # Drive the real route until it hands back a card. The response is
@@ -258,7 +260,7 @@ def test_interval_card_survives_a_dropped_socket(app, authenticated_client,
             f"/match/{match_id}/live-state").get_json()
         assert after.get("pending_card") is None
     finally:
-        app_module.MATCH_INSTANCES.pop(match_id, None)
+        MATCH_INSTANCES.pop(match_id, None)
         try:
             os.remove(path)
         except OSError:
@@ -288,8 +290,8 @@ def test_rate_limited_response_is_recoverable(app, authenticated_client,
     path = os.path.join(match_dir, f"match_{match_id}.json")
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(copy.deepcopy(match.match_data), handle)
-    with app_module.MATCH_INSTANCES_LOCK:
-        app_module.MATCH_INSTANCES[match_id] = match
+    with MATCH_INSTANCES_LOCK:
+        MATCH_INSTANCES[match_id] = match
 
     try:
         app_module._rate_limit_store.clear()
@@ -305,7 +307,7 @@ def test_rate_limited_response_is_recoverable(app, authenticated_client,
         assert 0 <= limited["retry_after"] <= 10
     finally:
         app_module._rate_limit_store.clear()
-        app_module.MATCH_INSTANCES.pop(match_id, None)
+        MATCH_INSTANCES.pop(match_id, None)
         try:
             os.remove(path)
         except OSError:

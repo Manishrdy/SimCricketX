@@ -272,10 +272,10 @@ def cancel(actor, change_id):
 def artifacts(conn, email):
     """Only completed, DB-owned archives can survive without rewriting snapshots."""
     from database.models import Match
-    from app import MATCH_INSTANCES, MATCH_INSTANCES_LOCK
-    with MATCH_INSTANCES_LOCK:
+    from app import MATCH_STORE
+    with MATCH_STORE.borrow_all() as cached:
         if any(m.data.get('created_by') == email and m.data.get('current_state') != 'completed'
-               for m in MATCH_INSTANCES.values()):
+               for _mid, m in cached):
             raise ValueError('Finish active matches before changing this email.')
     root = Path(current_app.config['IDENTITY_EMAIL_MATCH_DIR'])
     result = []

@@ -37,7 +37,7 @@ def public_values(response, rendered_templates):
     template, context = rendered_templates[-1]
     assert template == 'landing.html'
     body = response.get_data(as_text=True)
-    assert 'Build your cricket world' in body
+    assert '<em>your terms.</em>' in body
     assert 'aria-label="Platform statistics"' not in body
     return [context[key] for key in (
         'matches_simulated', 'matches_today', 'total_signups',

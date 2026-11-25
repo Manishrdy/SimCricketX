@@ -1,3 +1,5 @@
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 import json
 from pathlib import Path
 
@@ -23,13 +25,13 @@ def live_match(app):
         path = root / "data" / "matches" / f"match_{match_id}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(match.data), encoding="utf-8")
-        app_module.MATCH_INSTANCES[match_id] = match
+        MATCH_INSTANCES[match_id] = match
         registered.append((match_id, path))
         return f"/match/{match_id}"
 
     yield client, register
     for match_id, path in registered:
-        app_module.MATCH_INSTANCES.pop(match_id, None)
+        MATCH_INSTANCES.pop(match_id, None)
         path.unlink(missing_ok=True)
 
 
@@ -233,7 +235,7 @@ def test_follow_on_break_survives_restore_with_same_batting_team(live_match, mon
     }).get_json()
     assert applied["live_innings"] == applied["transition"]["live_innings"] == {"status": "break"}
 
-    app_module.MATCH_INSTANCES.pop(match.data["match_id"])
+    MATCH_INSTANCES.pop(match.data["match_id"])
     page = client.get(url).get_data(as_text=True)
     assert "window.resumeMode = true" in page
     state = client.get(url + "/live-state").get_json()

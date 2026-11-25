@@ -3,6 +3,8 @@ Test suite for Match routes
 Tests routes defined in routes/match_routes.py
 """
 
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
+
 import pytest
 import json
 import os
@@ -533,7 +535,7 @@ class TestSaveScorecardImages:
 
     def test_save_named_fc_scorecard_image(self, authenticated_client, regular_user):
         """FC interval cards are accepted with a safe event-specific label."""
-        from app import MATCH_INSTANCES, MATCH_INSTANCES_LOCK, PROJECT_ROOT
+        from app import PROJECT_ROOT
         from werkzeug.utils import secure_filename
 
         match_id = str(uuid.uuid4())

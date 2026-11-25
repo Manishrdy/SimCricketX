@@ -2184,7 +2184,7 @@
             interestingHelp.textContent = disabledReason
                 ? disabledReason
                 : (isInteresting
-                    ? 'A dramatic finish will be chosen randomly at runtime.'
+                    ? 'Encourages low-score survival across both innings when conditions suit. The result stays open.'
                     : 'Regular match flow.');
         }
     }
@@ -2344,7 +2344,7 @@
         if (storyOption) {
             setText('summary-scenario', storyOption.textContent.trim());
         } else {
-            setText('summary-scenario', interesting ? 'Surprise drama' : 'Disabled');
+            setText('summary-scenario', interesting ? 'Open-result drama' : 'Disabled');
         }
         const fcDays = document.getElementById('fc-days-value')?.value || '4';
         const formatLabels = { 'Hundred': 'The Hundred', 'T10': 'T10', 'T20': 'T20', 'ListA': `List A · ${document.getElementById('scheduled-overs').value} overs`, 'FC': `First-Class (${fcDays}-day)` };

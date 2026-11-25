@@ -1412,6 +1412,12 @@ def calculate_outcome(
         raw_weights = limit_psychological_odds(raw_weights, psychological_baseline)
         total_weight = sum(raw_weights.values())
 
+    if pressure_effects and pressure_effects.get("match_director"):
+        from engine.match_director import apply_director_weights
+        raw_weights = apply_director_weights(
+            raw_weights, pressure_effects["match_director"], psychological_baseline)
+        total_weight = sum(raw_weights.values())
+
     if captain_tactics:
         from engine.captaincy import apply_tactics
         raw_weights = apply_tactics(raw_weights, captain_tactics, is_fc=_is_fc)

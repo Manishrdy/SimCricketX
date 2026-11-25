@@ -1,4 +1,6 @@
 """Lost replies and competing transports must not simulate extra deliveries."""
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from types import SimpleNamespace
@@ -81,7 +83,7 @@ def test_http_recovery_replays_lost_card_and_rejects_stale_instance(app):
         calls.append(1)
         return {"score": 8, "scorecard_data": {"innings": 1}, "innings_end": True}
     match = SimpleNamespace(data={"created_by": ACCOUNTS["user1"]["email"]}, is_fc=False, is_hundred=False, next_ball=advance)
-    app_module.MATCH_INSTANCES[mid] = match
+    MATCH_INSTANCES[mid] = match
     try:
         url = f'/match/{mid}'
         initial = authenticated_client.get(url + '/live-state?delivery=1').get_json()
@@ -107,4 +109,4 @@ def test_http_recovery_replays_lost_card_and_rejects_stale_instance(app):
         assert authenticated_client.post(url + '/next-ball', json={"delivery_token": token}).status_code == 409
         assert len(calls) == 1
     finally:
-        app_module.MATCH_INSTANCES.pop(mid, None)
+        MATCH_INSTANCES.pop(mid, None)

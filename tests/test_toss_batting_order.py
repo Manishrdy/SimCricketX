@@ -8,6 +8,8 @@ site shares it; `/spin-toss` no longer hand-patches a cached instance at all
 (it drops it, so the next request rebuilds through `Match.__init__`), and a
 re-toss is refused once the match is underway.
 """
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 import json
 import os
 import random
@@ -126,7 +128,7 @@ def match_file(app, regular_user):
     yield _write
 
     for match_id, path in created:
-        app_module.MATCH_INSTANCES.pop(match_id, None)
+        MATCH_INSTANCES.pop(match_id, None)
         try:
             os.remove(path)
         except OSError:
@@ -143,7 +145,7 @@ def test_spin_toss_away_win_and_bat_puts_the_away_side_in(app, authenticated_cli
 
     # A cached instance exists before the toss (e.g. a live-state poll built
     # one) — this is the path that used to be corrupted.
-    app_module.MATCH_INSTANCES[match_id] = match_module.Match(json.loads(json.dumps(data)))
+    MATCH_INSTANCES[match_id] = match_module.Match(json.loads(json.dumps(data)))
 
     # Coin lands "Heads", which matches the away call, so away wins the toss.
     monkeypatch.setattr(random, "choice", lambda seq: seq[0])
@@ -165,7 +167,7 @@ def test_spin_toss_away_win_and_bat_puts_the_away_side_in(app, authenticated_cli
     assert persisted["toss_decision"] == "Bat"
 
     # The stale instance is dropped rather than patched...
-    assert match_id not in app_module.MATCH_INSTANCES
+    assert match_id not in MATCH_INSTANCES
 
     # ...so the rebuild from the persisted toss sends the away side in to bat.
     rebuilt = match_module.Match(persisted)
@@ -177,7 +179,7 @@ def test_spin_toss_away_win_and_bat_puts_the_away_side_in(app, authenticated_cli
     # the old code served a cached instance with the home side batting.
     monkeypatch.undo()
     assert authenticated_client.post(f"/match/{match_id}/next-ball").status_code == 200
-    served = app_module.MATCH_INSTANCES[match_id]
+    served = MATCH_INSTANCES[match_id]
     assert served.batting_team is served.away_xi
     assert set(served.batsman_stats) == set(_names(served.away_xi))
 
@@ -190,13 +192,13 @@ def test_spin_toss_is_refused_once_the_match_is_underway(app, authenticated_clie
 
     live = match_module.Match(json.loads(json.dumps(data)))
     live.current_over = 5
-    app_module.MATCH_INSTANCES[match_id] = live
+    MATCH_INSTANCES[match_id] = live
 
     resp = authenticated_client.post(f"/match/{match_id}/spin-toss")
     assert resp.status_code == 409
 
     # The live match is left completely alone.
-    assert app_module.MATCH_INSTANCES.get(match_id) is live
+    assert MATCH_INSTANCES.get(match_id) is live
     assert live.current_over == 5
     with open(path, encoding="utf-8") as f:
         persisted = json.load(f)
@@ -219,7 +221,7 @@ def test_spin_toss_allowed_before_the_first_ball(app, authenticated_client, regu
 
     data = _match_data(regular_user.id, toss_winner=None, toss_decision=None)
     match_id, _path = match_file(data)
-    app_module.MATCH_INSTANCES[match_id] = match_module.Match(json.loads(json.dumps(data)))
+    MATCH_INSTANCES[match_id] = match_module.Match(json.loads(json.dumps(data)))
 
     resp = authenticated_client.post(f"/match/{match_id}/spin-toss")
     assert resp.status_code == 200

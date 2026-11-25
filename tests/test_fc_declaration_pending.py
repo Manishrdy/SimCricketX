@@ -1,4 +1,6 @@
 """The close-scorecard request must never wait for the captain's CPU work."""
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 import copy
 import time
 
@@ -10,8 +12,26 @@ from tests.test_fc_format import _fc_match
 
 class Pending:
     def __init__(self):
-        self.done = False
+        self._done = False
+        self.callbacks = []
         self.gets = 0
+
+    @property
+    def done(self):
+        return self._done
+
+    @done.setter
+    def done(self, value):
+        self._done = value
+        if value:
+            callbacks, self.callbacks = self.callbacks, []
+            for callback in callbacks:
+                callback(self)
+
+    def rawlink(self, callback):
+        self.callbacks.append(callback)
+        if self.done:
+            self.done = True
 
     def ready(self):
         return self.done
@@ -116,8 +136,8 @@ def test_http_pending_response_and_fc_template(app, authenticated_client, regula
     match_id = match.data["match_id"]
     path = Path(app_module.PROJECT_ROOT) / "data" / "matches" / f"match_{match_id}.json"
     path.write_text(json.dumps(match.data))
-    with app_module.MATCH_INSTANCES_LOCK:
-        app_module.MATCH_INSTANCES[match_id] = match
+    with MATCH_INSTANCES_LOCK:
+        MATCH_INSTANCES[match_id] = match
     try:
         page = authenticated_client.get(f"/match/{match_id}")
         assert page.status_code == 200
@@ -132,8 +152,9 @@ def test_http_pending_response_and_fc_template(app, authenticated_client, regula
         snapshot = json.loads(path.read_text())["fc_snapshot"]
         assert snapshot["fc_declaration_review_over"] == 30
     finally:
-        with app_module.MATCH_INSTANCES_LOCK:
-            app_module.MATCH_INSTANCES.pop(match_id, None)
+        match._fc_declaration_job.done = True
+        with MATCH_INSTANCES_LOCK:
+            MATCH_INSTANCES.pop(match_id, None)
         path.unlink(missing_ok=True)
 
 

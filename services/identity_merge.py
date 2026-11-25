@@ -361,11 +361,11 @@ def execute(actor, mid, token, confirmed_email):
         if conn.exec_driver_sql('PRAGMA foreign_key_check').first():
             raise ValueError('Merge reference validation failed.')
     db.session.expire_all()
-    from app import MATCH_INSTANCES, MATCH_INSTANCES_LOCK
-    with MATCH_INSTANCES_LOCK:
-        for key, match in list(MATCH_INSTANCES.items()):
+    from app import MATCH_STORE
+    with MATCH_STORE.borrow_all() as cached:
+        for key, match in cached:
             if match.data.get('created_by') in (source, survivor):
-                MATCH_INSTANCES.pop(key, None)
+                MATCH_STORE.retire(key)
     return result
 
 
@@ -426,10 +426,10 @@ def recalculate_votes(conn, result):
 
 
 def match_artifacts(conn, address):
-    from app import MATCH_INSTANCES, MATCH_INSTANCES_LOCK
+    from app import MATCH_STORE
     matches = table('matches')
-    with MATCH_INSTANCES_LOCK:
-        for match in MATCH_INSTANCES.values():
+    with MATCH_STORE.borrow_all() as cached:
+        for _mid, match in cached:
             data = match.data
             owner = conn.execute(select(matches.c.user_id).where(matches.c.id == data.get('match_id'))).scalar_one_or_none()
             if (owner == address or (owner is None and data.get('created_by') == address)) and data.get('current_state') != 'completed':

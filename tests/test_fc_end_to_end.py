@@ -7,6 +7,8 @@ database, the match created through /match/setup, and then played out ball
 by ball through /match/<id>/next-ball until a result — checking on the way
 that the things a first-class match is made of actually reach the client.
 """
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 import json
 
 import pytest
@@ -206,7 +208,6 @@ def test_fc_ratings_reach_the_engine_through_match_setup(app, authenticated_clie
     assert resp.status_code == 200, resp.get_data(as_text=True)[:300]
 
     # Read the XI the engine was actually handed.
-    from app import MATCH_INSTANCES
     inst = MATCH_INSTANCES.get(match_id)
     assert inst is not None, "no live match instance after a delivery"
     for xi_name, xi in (("home", inst.home_xi), ("away", inst.away_xi)):
@@ -227,7 +228,6 @@ def test_default_xi_picks_an_attack_from_a_realistic_squad(app, authenticated_cl
     selection failed at over 0.0".
     """
     from utils.squad_rules import MIN_BOWLING_OPTIONS
-    from app import MATCH_INSTANCES
 
     home, away = fc_teams
     created = _create_match(authenticated_client, home, away, send_xi=False)

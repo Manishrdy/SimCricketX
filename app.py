@@ -1578,6 +1578,13 @@ def create_app():
         except Exception:
             log_exception(source="backend")
 
+        try:
+            from services import data_retention
+            data_retention.start_worker(app)
+            app.logger.info("[DataRetention] Cleanup worker started")
+        except Exception:
+            log_exception(source="backend")
+
         # Per-session log capture handler for support diagnostics.
         try:
             from middleware import session_log_capture

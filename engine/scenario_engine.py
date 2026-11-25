@@ -615,11 +615,15 @@ class HistoricalScenarioEngine:
 
 def create_scenario_engine(scenario_mode, match):
     """
-    Factory used by Match.__init__. Classic modes ("last_ball_six", ...) get
+    Factory used by Match.__init__. adaptive_v1 uses an open-result director.
+    Classic modes ("last_ball_six", ...) get
     the scripted ScenarioEngine; "historical:<pack_id>" modes get the
     beat-driven HistoricalScenarioEngine. Returns None when a historical pack
     cannot be resolved so the match falls back to normal simulation.
     """
+    if scenario_mode == "adaptive_v1":
+        from engine.match_director import MatchDirector
+        return None if getattr(match, "is_fc", False) else MatchDirector(match)
     if isinstance(scenario_mode, str) and scenario_mode.startswith(HISTORICAL_MODE_PREFIX):
         pack = match.data.get("scenario_pack")
         if not pack:

@@ -8,6 +8,8 @@
    auto-advanced as a bye.
 4. A knockout draw could pair two byes, creating a team-less phantom match.
 """
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 import random
 
 import pytest
@@ -329,7 +331,7 @@ def test_deleting_a_tournament_discards_its_in_flight_match(app, qa):
     assert client.post(f'/tournaments/{tournament.id}/delete').status_code == 302
     assert db.session.get(type(tournament), tournament.id) is None
     assert not os.path.isfile(path)
-    assert match_id not in app_module.MATCH_INSTANCES
+    assert match_id not in MATCH_INSTANCES
 
 
 def test_result_is_not_recorded_on_a_fixture_that_changed_hands(app, qa, monkeypatch):

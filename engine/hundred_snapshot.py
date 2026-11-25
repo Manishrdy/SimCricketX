@@ -8,13 +8,14 @@ from engine.dls import ResourceLedger
 from engine.pressure_engine import PressureEngine
 from engine.commentary_engine import CommentaryEngine
 from engine.scenario_engine import HistoricalScenarioEngine, ScenarioEngine
+from engine.match_director import MatchDirector
 
 _TYPES = {c.__name__: c for c in (FormatConfig, Phase, HundredBowlerManager,
                                 ResourceLedger, PressureEngine, CommentaryEngine,
-                                ScenarioEngine, HistoricalScenarioEngine)}
+                                ScenarioEngine, HistoricalScenarioEngine, MatchDirector)}
 # These engines point back at the live match. The checkpoint already owns that
 # match, so the pointer is left out of the graph and rebound on restore.
-_REBIND_MATCH = {ScenarioEngine.__name__, HistoricalScenarioEngine.__name__}
+_REBIND_MATCH = {ScenarioEngine.__name__, HistoricalScenarioEngine.__name__, MatchDirector.__name__}
 
 
 def serialize(match):

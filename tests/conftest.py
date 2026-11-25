@@ -145,7 +145,18 @@ def test_config(tmp_path):
 
 
 @pytest.fixture(scope="function")
-def app(test_config, tmp_path, monkeypatch):
+def isolated_match_store():
+    # Independent patch scope: a test's monkeypatch.undo() must not swap the
+    # authoritative store out from under an already-constructed application's routes.
+    import app as app_module
+    from services.match_store import MatchStore
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(app_module, "MATCH_STORE", MatchStore())
+        yield app_module.MATCH_STORE
+
+
+@pytest.fixture(scope="function")
+def app(test_config, tmp_path, monkeypatch, isolated_match_store):
     """Create and configure a test Flask application instance."""
     # Set the config path environment variable
     monkeypatch.setenv("SIMCRICKETX_CONFIG_PATH", str(test_config))

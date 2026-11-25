@@ -13,6 +13,8 @@ normal match got {"status": "not_in_memory"} — a status recoverDelivery()
 cannot act on, which surfaced as "Live match state is unavailable. Reload to
 resume." right after the toss commentary.
 """
+
+from tests.match_store_helpers import instances as MATCH_INSTANCES, lock as MATCH_INSTANCES_LOCK
 import copy
 import json
 import os
@@ -62,7 +64,7 @@ def test_delivery_state_rebuilds_a_match_that_is_not_in_memory(
     path = _write_match(app_module, data)
 
     try:
-        assert match_id not in app_module.MATCH_INSTANCES
+        assert match_id not in MATCH_INSTANCES
         assert "super_over_snapshot" not in data and "fc_snapshot" not in data
 
         resp = authenticated_client.get(f"/match/{match_id}/live-state?delivery=1")
@@ -72,9 +74,9 @@ def test_delivery_state_rebuilds_a_match_that_is_not_in_memory(
         # / completed. Anything else stops the match with a reload prompt.
         assert body["status"] == "delivery_ready", body
         assert body.get("delivery_token")
-        assert app_module.MATCH_INSTANCES.get(match_id) is not None
+        assert MATCH_INSTANCES.get(match_id) is not None
     finally:
-        app_module.MATCH_INSTANCES.pop(match_id, None)
+        MATCH_INSTANCES.pop(match_id, None)
         try:
             os.remove(path)
         except OSError:
@@ -99,9 +101,9 @@ def test_plain_live_state_still_reports_a_match_it_has_not_started(
         resp = authenticated_client.get(f"/match/{match_id}/live-state")
         assert resp.status_code == 200
         assert resp.get_json()["status"] == "not_in_memory"
-        assert app_module.MATCH_INSTANCES.get(match_id) is None
+        assert MATCH_INSTANCES.get(match_id) is None
     finally:
-        app_module.MATCH_INSTANCES.pop(match_id, None)
+        MATCH_INSTANCES.pop(match_id, None)
         try:
             os.remove(path)
         except OSError:
@@ -132,7 +134,7 @@ def test_toss_then_first_ball_is_the_exact_sequence_that_used_to_strand(
         assert toss.get_json()["toss_winner"]
 
         # The toss dropped any cached instance so it rebuilds from the JSON.
-        assert app_module.MATCH_INSTANCES.get(match_id) is None
+        assert MATCH_INSTANCES.get(match_id) is None
 
         state = authenticated_client.get(f"/match/{match_id}/live-state?delivery=1")
         assert state.status_code == 200
@@ -146,7 +148,7 @@ def test_toss_then_first_ball_is_the_exact_sequence_that_used_to_strand(
         assert ball.status_code == 200, ball.get_data(as_text=True)
         assert "error" not in ball.get_json()
     finally:
-        app_module.MATCH_INSTANCES.pop(match_id, None)
+        MATCH_INSTANCES.pop(match_id, None)
         try:
             os.remove(path)
         except OSError:

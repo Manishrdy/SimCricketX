@@ -3081,7 +3081,7 @@ function soSetupInnings2(data) {
 }
 
 // Rebuild the super-over UI after a page refresh, from the live-state snapshot.
-// In-memory resume only — the engine state still lives in MATCH_INSTANCES, so
+// In-memory resume only — the engine state still lives in MatchStore, so
 // this restores the modal (mid-selection) or continues the ball loop (mid-over).
 function soResumeFromState(state, opts = {}) {
     const so = state.super_over || {};
