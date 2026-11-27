@@ -71,3 +71,4 @@ todo/
 # Identity operation coordination and private database backups
 instance/identity-*.lock
 instance/identity-email-backups/
+config/config.yaml
