@@ -7791,26 +7791,26 @@ class Match(CaptaincyMixin, HundredPresentation):
                         )
                 self._ensure_current_bowler_stats_entry()
                 self.bowler_selected_for_over = self.current_over
-            if self.is_hundred:
-                self._hundred_bowler_announcement()
-            elif self.current_over == 0:
-                batting_team_name = self._get_team_name(self.batting_team)
-                bowling_team_name = self._get_team_name(self.bowling_team)
-                opener_1 = self.current_non_striker['name']
-                opener_2 = self.current_striker['name']
-                self.pending_pre_ball_commentary.extend([
-                    "",
-                    f"<strong>{self._innings_banner()}</strong>",
-                    "",
-                    f"{opener_1} and {opener_2} will open the attack for {batting_team_name}. {opener_2} is on strike.",
-                    f"{self.current_bowler['name']} will bowl the opening over for {bowling_team_name}.",
-                    ""
-                ])
-            else:
-                self.pending_pre_ball_commentary.extend([
-                    f"{self.current_bowler['name']} is into the attack.",
-                    ""
-                ])
+                if self.is_hundred:
+                    self._hundred_bowler_announcement()
+                elif self.current_over == 0:
+                    batting_team_name = self._get_team_name(self.batting_team)
+                    bowling_team_name = self._get_team_name(self.bowling_team)
+                    opener_1 = self.current_non_striker['name']
+                    opener_2 = self.current_striker['name']
+                    self.pending_pre_ball_commentary.extend([
+                        "",
+                        f"<strong>{self._innings_banner()}</strong>",
+                        "",
+                        f"{opener_1} and {opener_2} will open the attack for {batting_team_name}. {opener_2} is on strike.",
+                        f"{self.current_bowler['name']} will bowl the opening over for {bowling_team_name}.",
+                        ""
+                    ])
+                else:
+                    self.pending_pre_ball_commentary.extend([
+                        f"{self.current_bowler['name']} is into the attack.",
+                        ""
+                    ])
 
         # Calculate pressure and effects.
         # FC uses an entirely separate model (session-survival + lead-
