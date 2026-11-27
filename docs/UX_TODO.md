@@ -155,3 +155,9 @@ New standalone tournaments require 1–15 stadiums from the user's playable stad
 Validation: focused shared-QA coverage checks all seven tournament modes, minimum/maximum counts, private/retired/unadopted venue rejection, restricted setup, creation retries, tour compatibility and migration repeatability. Existing fixture reset and tournament engine regressions passed. All 18 focused JavaScript checks passed. Browser visual verification was not performed.
 
 Tournament stadium selection refinement: replaced plain checkbox rows and oversized helper text with compact venue cards, visible selected states, keyboard focus outlines, a header count badge, a distinct management link and a short assignment note. Cards use existing theme tokens, wrap long names and stack on narrow screens. Added an empty-collection prompt. All 11 tournament creation JavaScript checks and diff whitespace checks passed; browser visual verification remains pending.
+
+## Public homepage repair — November 26, 2026
+
+Fixed decorative SVG positioning: a more-specific child selector had overridden absolute positioning and inserted large empty blocks into the scorebook and dugout panels. Refined the hero typography, replaced repeated boxed cards with format columns and competition rows, simplified feature surfaces and the closing action, and made mobile navigation wrap with the theme control on the brand row. Changes are scoped to the public homepage; existing shared-page edits are preserved.
+
+Validation: all seven homepage-statistics and changelog regression tests passed using isolated test databases and shared QA identities. Visually inspected desktop dark theme and phone light theme, verified theme switching and the format anchor, and measured no horizontal overflow at 1280px, 390px and 320px after correcting the narrow navigation. Diff whitespace check passed.

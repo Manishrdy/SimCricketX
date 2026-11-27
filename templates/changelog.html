@@ -1,58 +1,102 @@
-{% extends "public_base.html" %}{% block title %}Changelog — SimCricketX release notes{% endblock %}
-{% block head %}<meta name="description" content="Every SimCricketX release: new formats, engine tuning, fixes and features, newest first.">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/changelog.css') }}">{% endblock %}
+{% extends "public_base.html" %}
+{% block title %}Changelog — SimCricketX release notes{% endblock %}
+{% block body_class %}changelog-page{% endblock %}
+{% block head %}
+<meta name="description" content="Every SimCricketX release: new formats, engine tuning, fixes and features, newest first.">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/changelog.css') }}">
+{% endblock %}
 {% block content %}
 <section class="cl-hero">
-<p class="eyebrow">RELEASE NOTES</p>
-<h1>What's new.<br><em>Ball by ball.</em></h1>
-<p class="lead">Every change we've shipped to SimCricketX, newest first. {{ releases|length }} releases, {{ total_changes }} changes.</p>
-{% if releases %}
-<div class="cl-tools">
-<label class="cl-search"><span class="sr-only">Search the changelog</span>
-<i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-<input id="cl-search" type="search" placeholder="Search changes, e.g. “First-Class” or “tournament”" autocomplete="off"></label>
-<p id="cl-count" class="fine" aria-live="polite"></p>
-</div>
-{% endif %}
+    <div class="cl-hero-top">
+        <div>
+            <p class="eyebrow"><span class="cl-live-dot" aria-hidden="true"></span> RELEASE NOTES</p>
+            <h1>What's new.<br><em>Ball by ball.</em></h1>
+            <p class="lead">Every change we've shipped to SimCricketX, newest first.</p>
+        </div>
+        {% if releases %}
+        <div class="cl-summary-pills" aria-label="Changelog summary">
+            <div class="cl-stat-pill">
+                <span class="cl-stat-label">Latest</span>
+                <strong>v{{ releases[0].version }}</strong>
+            </div>
+            <div class="cl-stat-pill">
+                <span class="cl-stat-label">Releases</span>
+                <strong>{{ releases|length }}</strong>
+            </div>
+            <div class="cl-stat-pill">
+                <span class="cl-stat-label">Changes</span>
+                <strong>{{ total_changes }}</strong>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if releases %}
+    <div class="cl-tools">
+        <label class="cl-search">
+            <span class="sr-only">Search the changelog</span>
+            <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+            <input id="cl-search" type="search" placeholder="Search changes, e.g. “First-Class” or “tournament”" autocomplete="off">
+        </label>
+        <div class="cl-filters" role="group" aria-label="Filter by release type">
+            <button type="button" class="cl-filter-btn is-active" data-kind="all" aria-pressed="true">All</button>
+            <button type="button" class="cl-filter-btn" data-kind="major" aria-pressed="false">Major</button>
+            <button type="button" class="cl-filter-btn" data-kind="minor" aria-pressed="false">Minor</button>
+            <button type="button" class="cl-filter-btn" data-kind="patch" aria-pressed="false">Patch</button>
+        </div>
+        <p id="cl-count" class="fine" aria-live="polite"></p>
+    </div>
+    {% endif %}
 </section>
 
 {% if releases %}
 <div class="cl-layout">
-<aside class="cl-index" aria-label="Jump to a release">
-<p class="eyebrow">VERSIONS</p>
-<ul>
-{% for r in releases %}<li><a href="#v{{ r.version }}" data-target="v{{ r.version }}"{% if r.kind == 'major' %} class="is-major"{% endif %}>v{{ r.version }}<small>{{ r.date_label }}</small></a></li>
-{% endfor %}</ul>
-</aside>
+    <aside class="cl-index" aria-label="Jump to a release">
+        <p class="eyebrow">VERSIONS</p>
+        <ul>
+            {% for r in releases %}
+            <li>
+                <a href="#v{{ r.version }}" data-target="v{{ r.version }}"{% if r.kind == 'major' %} class="is-major"{% endif %}>
+                    <span>v{{ r.version }}</span>
+                    <small>{{ r.date_label }}</small>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </aside>
 
-<ol class="cl-timeline">
-{% for r in releases %}
-<li class="cl-release cl-{{ r.kind }}" id="v{{ r.version }}">
-<header>
-<h2>v{{ r.version }}</h2>
-{% if loop.first %}<span class="cl-badge cl-badge-latest">Latest</span>{% endif %}
-<span class="cl-badge">{{ r.kind }}</span>
-{% if r.date_iso %}<time datetime="{{ r.date_iso }}">{{ r.date_label }}</time>{% endif %}
-</header>
-<ul class="cl-entries">
-{% for e in r.entries %}<li>{{ e }}</li>
-{% endfor %}</ul>
-</li>
-{% endfor %}
-</ol>
+    <ol class="cl-timeline">
+        {% for r in releases %}
+        <li class="cl-release cl-{{ r.kind }}{% if loop.first %} is-latest{% endif %}" id="v{{ r.version }}" data-kind="{{ r.kind }}">
+            <span class="cl-node" aria-hidden="true"></span>
+            <header>
+                <h2>v{{ r.version }}</h2>
+                {% if loop.first %}<span class="cl-badge cl-badge-latest">Latest</span>{% endif %}
+                <span class="cl-badge cl-badge-{{ r.kind }}">{{ r.kind }}</span>
+                {% if r.date_iso %}<time datetime="{{ r.date_iso }}">{{ r.date_label }}</time>{% endif %}
+            </header>
+            <ul class="cl-entries">
+                {% for e in r.entries %}
+                <li>{{ e }}</li>
+                {% endfor %}
+            </ul>
+        </li>
+        {% endfor %}
+    </ol>
 </div>
-<p id="cl-empty" class="cl-empty" hidden>No changes match your search.</p>
+<p id="cl-empty" class="cl-empty" hidden>No changes match your current filter.</p>
 {% else %}
 <p class="cl-empty">The changelog is unavailable right now. Please check back soon.</p>
 {% endif %}
 
 <section class="closing cl-closing">
-<h2>Like what you see?</h2>
-<p>Build squads, run tournaments and watch every delivery unfold.</p>
-<div class="actions">
-<a class="button" href="{{ '/' if current_user.is_authenticated else '/register' }}">{{ 'Open dashboard' if current_user.is_authenticated else 'Get started free' }} ↗</a>
-<a href="/about">Explore every capability →</a>
-</div>
+    <p class="eyebrow">READY TO PLAY</p>
+    <h2>Like what you see?</h2>
+    <p>Build squads, run tournaments and watch every delivery unfold.</p>
+    <div class="actions">
+        <a class="button" href="{{ '/' if current_user.is_authenticated else '/register' }}">{{ 'Open dashboard' if current_user.is_authenticated else 'Get started free' }} <span aria-hidden="true">↗</span></a>
+        <a href="/about">Explore every capability <span aria-hidden="true">→</span></a>
+    </div>
 </section>
 
 <script>
@@ -61,26 +105,46 @@
     if (!input) return;
     var releases = Array.prototype.slice.call(document.querySelectorAll('.cl-release'));
     var links = Array.prototype.slice.call(document.querySelectorAll('.cl-index a'));
+    var filterBtns = Array.prototype.slice.call(document.querySelectorAll('.cl-filter-btn'));
     var count = document.getElementById('cl-count');
     var empty = document.getElementById('cl-empty');
+    var activeKind = 'all';
 
     function filter() {
         var q = input.value.trim().toLowerCase(), shown = 0, hits = 0;
         releases.forEach(function (rel, i) {
+            var kindOk = activeKind === 'all' || rel.dataset.kind === activeKind;
             var items = rel.querySelectorAll('.cl-entries li'), any = false;
             items.forEach(function (li) {
-                var match = !q || li.textContent.toLowerCase().indexOf(q) !== -1 || rel.id.indexOf(q) !== -1;
+                var textMatch = !q || li.textContent.toLowerCase().indexOf(q) !== -1 || rel.id.toLowerCase().indexOf(q) !== -1;
+                var match = kindOk && textMatch;
                 li.hidden = !match;
                 if (match) { any = true; hits++; }
             });
             rel.hidden = !any;
-            links[i].parentNode.hidden = !any;
+            if (links[i] && links[i].parentNode) links[i].parentNode.hidden = !any;
             if (any) shown++;
         });
         empty.hidden = shown !== 0;
-        count.textContent = q ? hits + ' matching change' + (hits === 1 ? '' : 's') + ' in ' + shown + ' release' + (shown === 1 ? '' : 's') : '';
+        if (q || activeKind !== 'all') {
+            count.textContent = hits + ' matching change' + (hits === 1 ? '' : 's') + ' in ' + shown + ' release' + (shown === 1 ? '' : 's');
+        } else {
+            count.textContent = '';
+        }
     }
+
     input.addEventListener('input', filter);
+    filterBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            activeKind = btn.dataset.kind || 'all';
+            filterBtns.forEach(function (b) {
+                var selected = b === btn;
+                b.classList.toggle('is-active', selected);
+                b.setAttribute('aria-pressed', String(selected));
+            });
+            filter();
+        });
+    });
 
     if ('IntersectionObserver' in window) {
         var obs = new IntersectionObserver(function (entries) {
@@ -88,7 +152,7 @@
                 if (!en.isIntersecting) return;
                 links.forEach(function (a) { a.classList.toggle('is-active', a.dataset.target === en.target.id); });
             });
-        }, { rootMargin: '-20% 0px -70% 0px' });
+        }, { rootMargin: '-18% 0px -68% 0px' });
         releases.forEach(function (r) { obs.observe(r); });
     }
 })();

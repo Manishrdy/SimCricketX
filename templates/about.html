@@ -21,19 +21,24 @@
 </script>
 {% endblock %}
 {% block content %}
-{% macro section_heading(icon, title) %}
-<h2 class="about-section-heading"><i class="fa-solid fa-{{ icon }}" aria-hidden="true"></i>{{ title }}</h2>
+{% macro section_heading(num, icon, title) %}
+<div class="about-section-head">
+    <span class="about-section-kicker">CHAPTER {{ num }}</span>
+    <h2 class="about-section-heading"><span class="about-section-icon"><i class="fa-solid fa-{{ icon }}" aria-hidden="true"></i></span>{{ title }}</h2>
+</div>
 {% endmacro %}
+
 <header class="about-hero">
     <img class="about-hero-image" src="{{ url_for('static', filename='images/about-cricket-ground.webp') }}" alt="" width="1600" height="819" fetchpriority="high">
     <div class="about-hero-copy">
+        <p class="about-hero-eyebrow"><span class="about-live-dot" aria-hidden="true"></span> PLAYBOOK &amp; ARCHITECTURE</p>
         <h1>About <span>SimCricketX</span></h1>
         <p class="about-summary">SimCricketX is a free, open-source, text-based cricket simulator you play in your browser. Build your own teams, choose the conditions, and follow every ball in a one-off match, a tournament or a multi-format tour.</p>
         <div class="about-actions">
             {% if current_user.is_authenticated %}
-            <a class="button" href="/match/setup">Set up a match</a>
+            <a class="button" href="/match/setup">Set up a match <span aria-hidden="true">↗</span></a>
             {% else %}
-            <a class="button" href="/register">Create a free account</a>
+            <a class="button" href="/register">Create a free account <span aria-hidden="true">↗</span></a>
             {% endif %}
             <a class="about-hero-link" href="#about-contents-title">Explore the game <span aria-hidden="true">↓</span></a>
         </div>
@@ -42,24 +47,25 @@
 
 <div class="about-layout">
     <nav class="about-contents" aria-labelledby="about-contents-title">
+        <p class="about-contents-eyebrow">INDEX</p>
         <h2 id="about-contents-title">On this page</h2>
         <ul>
-            <li><a href="#formats">Formats and playing rules</a></li>
-            <li><a href="#play">The match experience</a></li>
-            <li><a href="#teams">Teams and players</a></li>
-            <li><a href="#stadiums">Stadiums and conditions</a></li>
-            <li><a href="#engine">Simulation algorithms</a></li>
-            <li><a href="#competitions">Tournaments and tours</a></li>
-            <li><a href="#statistics">Scorecards and statistics</a></li>
-            <li><a href="#community">Community and account</a></li>
-            <li><a href="#start">Getting started</a></li>
+            <li><a href="#formats" data-target="formats"><span>01</span>Formats &amp; rules</a></li>
+            <li><a href="#play" data-target="play"><span>02</span>Match experience</a></li>
+            <li><a href="#teams" data-target="teams"><span>03</span>Teams &amp; players</a></li>
+            <li><a href="#stadiums" data-target="stadiums"><span>04</span>Stadiums &amp; conditions</a></li>
+            <li><a href="#engine" data-target="engine"><span>05</span>Simulation engine</a></li>
+            <li><a href="#competitions" data-target="competitions"><span>06</span>Tournaments &amp; tours</a></li>
+            <li><a href="#statistics" data-target="statistics"><span>07</span>Scorecards &amp; stats</a></li>
+            <li><a href="#community" data-target="community"><span>08</span>Community &amp; account</a></li>
+            <li><a href="#start" data-target="start"><span>09</span>Getting started</a></li>
         </ul>
     </nav>
 
     <div class="about-content">
         <section id="formats">
-            {{ section_heading("baseball", "Formats and playing rules") }}
-            <p>Auto mode is available in every format. T10, T20, List A and The Hundred also offer Manual mode. Each format has its own match records and statistics.</p>
+            {{ section_heading("01", "baseball", "Formats and playing rules") }}
+            <p class="about-section-lead">Auto mode is available in every format. T10, T20, List A and The Hundred also offer Manual mode. Each format has its own match records and statistics.</p>
             <dl class="about-rows about-formats">
                 <div>
                     <dt>T10 <span>10 overs</span></dt>
@@ -85,7 +91,7 @@
         </section>
 
         <section id="play">
-            {{ section_heading("circle-play", "The match experience") }}
+            {{ section_heading("02", "circle-play", "The match experience") }}
             <div class="about-grid">
                 <article>
                     <h3>Set up a fixture</h3>
@@ -107,7 +113,7 @@
         </section>
 
         <section id="teams">
-            {{ section_heading("people-group", "Teams, players and captaincy") }}
+            {{ section_heading("03", "people-group", "Teams, players and captaincy") }}
             <div class="about-grid">
                 <article>
                     <h3>Create or import players</h3>
@@ -125,7 +131,7 @@
         </section>
 
         <section id="stadiums">
-            {{ section_heading("location-dot", "Stadiums, pitches and weather") }}
+            {{ section_heading("04", "location-dot", "Stadiums, pitches and weather") }}
             <div class="about-grid">
                 <article>
                     <h3>Choose or create a ground</h3>
@@ -140,43 +146,61 @@
                     <p>Choose among Green, Dry, Hard, Flat and Dead pitches. Simulate clear skies, showers, rain or storms. Day/night settings can introduce dew in supported formats. Rain can reduce the innings allocation, revise targets or cause a no result in limited-overs cricket. In First-Class, rain and bad light take time out of sessions and can leave a match drawn.</p>
                 </article>
             </div>
-            <p class="about-resource"><a href="/stadiums/conditions-guide">Read the stadium conditions guide</a></p>
+            <p class="about-resource"><a href="/stadiums/conditions-guide"><i class="fa-solid fa-book-open" aria-hidden="true"></i> Read the stadium conditions guide <span aria-hidden="true">→</span></a></p>
         </section>
 
         <section id="engine">
-            {{ section_heading("sliders", "How the simulation algorithms work") }}
-            <p>SimCricketX uses weighted probabilities to model deliveries and tactical policies to make decisions. The resulting scores and records describe simulated cricket.</p>
+            {{ section_heading("05", "sliders", "How the simulation algorithms work") }}
+            <p class="about-section-lead">SimCricketX uses weighted probabilities to model deliveries and tactical policies to make decisions. The resulting scores and records describe simulated cricket.</p>
             <div class="about-models">
                 <article>
-                    <h3>Delivery outcome and fielding model</h3>
-                    <p>Each ball starts with format and pitch weights for dots, runs, boundaries, extras and wickets. The engine adjusts the weights for factors such as ratings, handedness matchups, pace or spin, batter form, bowler workload, innings phase, pitch wear and stadium conditions before sampling an outcome. Fielding logic resolves chances and credits catches, stumpings and run-outs. Separate scoring rules handle extras, strike rotation, free hits and legal-ball counts.</p>
+                    <span class="about-model-num">01</span>
+                    <div>
+                        <h3>Delivery outcome and fielding model</h3>
+                        <p>Each ball starts with format and pitch weights for dots, runs, boundaries, extras and wickets. The engine adjusts the weights for factors such as ratings, handedness matchups, pace or spin, batter form, bowler workload, innings phase, pitch wear and stadium conditions before sampling an outcome. Fielding logic resolves chances and credits catches, stumpings and run-outs. Separate scoring rules handle extras, strike rotation, free hits and legal-ball counts.</p>
+                    </div>
                 </article>
                 <article>
-                    <h3>Pressure, momentum and batting intent</h3>
-                    <p>The match-state model reads the score, wickets in hand, deliveries remaining, run rates and recent events. Batters can rebuild after a cluster of wickets or take on more risk when the required rate rises. Settling in, surviving a difficult spell and building a partnership can change the balance between scoring and dismissal risk.</p>
+                    <span class="about-model-num">02</span>
+                    <div>
+                        <h3>Pressure, momentum and batting intent</h3>
+                        <p>The match-state model reads the score, wickets in hand, deliveries remaining, run rates and recent events. Batters can rebuild after a cluster of wickets or take on more risk when the required rate rises. Settling in, surviving a difficult spell and building a partnership can change the balance between scoring and dismissal risk.</p>
+                    </div>
                 </article>
                 <article>
-                    <h3>Captaincy and bowling allocation</h3>
-                    <p>Automatic captains reassess batting intent and bowling plans at events such as wickets, phase changes, breaks and revised targets. They consider conditions, matchups, workload and recent performance. Bowling selection checks quotas and consecutive overs or sets, and plans ahead to retain enough eligible bowling for the end of the innings. First-Class bowlers tire during spells and recover with rest.</p>
+                    <span class="about-model-num">03</span>
+                    <div>
+                        <h3>Captaincy and bowling allocation</h3>
+                        <p>Automatic captains reassess batting intent and bowling plans at events such as wickets, phase changes, breaks and revised targets. They consider conditions, matchups, workload and recent performance. Bowling selection checks quotas and consecutive overs or sets, and plans ahead to retain enough eligible bowling for the end of the innings. First-Class bowlers tire during spells and recover with rest.</p>
+                    </div>
                 </article>
                 <article>
-                    <h3>First-Class decision forecasts</h3>
-                    <p>A rate-and-wicket model fitted to the delivery engine estimates what different batting tempos can buy. Dynamic programming over time, wickets and runs estimates possible innings outcomes. Captains weigh win, draw and loss chances when considering declarations and follow-ons, using the match situation, forecast time and their appetite for risk.</p>
+                    <span class="about-model-num">04</span>
+                    <div>
+                        <h3>First-Class decision forecasts</h3>
+                        <p>A rate-and-wicket model fitted to the delivery engine estimates what different batting tempos can buy. Dynamic programming over time, wickets and runs estimates possible innings outcomes. Captains weigh win, draw and loss chances when considering declarations and follow-ons, using the match situation, forecast time and their appetite for risk.</p>
+                    </div>
                 </article>
                 <article>
-                    <h3>Rain and target revision</h3>
-                    <p>Weather presets generate simulated interruptions. For shortened limited-overs games, the engine records resources lost using remaining balls and wickets lost. Its Duckworth–Lewis Standard Edition approximation interpolates between rows of the resource table. This can produce different targets and par scores from official professional DLS. Revised allocations also change powerplays and bowling limits where applicable.</p>
+                    <span class="about-model-num">05</span>
+                    <div>
+                        <h3>Rain and target revision</h3>
+                        <p>Weather presets generate simulated interruptions. For shortened limited-overs games, the engine records resources lost using remaining balls and wickets lost. Its Duckworth–Lewis Standard Edition approximation interpolates between rows of the resource table. This can produce different targets and par scores from official professional DLS. Revised allocations also change powerplays and bowling limits where applicable.</p>
+                    </div>
                 </article>
                 <article>
-                    <h3>Ties and shootouts</h3>
-                    <p>Eligible ties in T10, T20 and List A can go to a Super Over, with repeat rounds and boundary countback if five rounds stay level. In The Hundred, exhibition and league ties stand. Knockout ties use repeated five-ball, two-wicket Super Fives. First-Class outcomes distinguish ties from draws.</p>
+                    <span class="about-model-num">06</span>
+                    <div>
+                        <h3>Ties and shootouts</h3>
+                        <p>Eligible ties in T10, T20 and List A can go to a Super Over, with repeat rounds and boundary countback if five rounds stay level. In The Hundred, exhibition and league ties stand. Knockout ties use repeated five-ball, two-wicket Super Fives. First-Class outcomes distinguish ties from draws.</p>
+                    </div>
                 </article>
             </div>
         </section>
 
         <section id="competitions">
-            {{ section_heading("trophy", "Tournaments and multi-format tours") }}
-            <p>Choose a match format, enter eligible teams and follow fixtures, results, league tables and bracket progression. Select from seven competition structures.</p>
+            {{ section_heading("06", "trophy", "Tournaments and multi-format tours") }}
+            <p class="about-section-lead">Choose a match format, enter eligible teams and follow fixtures, results, league tables and bracket progression. Select from seven competition structures.</p>
             <dl class="about-rows">
                 <div><dt>Round Robin</dt><dd>Every team plays every other team once.</dd></div>
                 <div><dt>Double Round Robin</dt><dd>Each pairing meets twice, home and away.</dd></div>
@@ -203,7 +227,7 @@
         </section>
 
         <section id="statistics">
-            {{ section_heading("chart-column", "Scorecards, statistics and exports") }}
+            {{ section_heading("07", "chart-column", "Scorecards, statistics and exports") }}
             <div class="about-grid">
                 <article>
                     <h3>Revisit a match</h3>
@@ -225,7 +249,7 @@
         </section>
 
         <section id="community">
-            {{ section_heading("comments", "Community and account") }}
+            {{ section_heading("08", "comments", "Community and account") }}
             <div class="about-grid">
                 <article>
                     <h3>Discuss cricket and give feedback</h3>
@@ -239,22 +263,48 @@
         </section>
 
         <section id="start" class="about-start">
+            <span class="about-section-kicker">CHAPTER 09</span>
             <h2>Play your first match</h2>
-            <ol>
-                <li>Create a free account and complete email verification when prompted.</li>
-                <li>Build and publish two teams with eligible squads for the format you want to play.</li>
-                <li>Open Simulate Match, set the conditions and choose both XIs. Start in Auto or make the selection calls in Manual where supported.</li>
+            <ol class="about-steps">
+                <li>
+                    <span class="step-num">1</span>
+                    <p>Create a free account and complete email verification when prompted.</p>
+                </li>
+                <li>
+                    <span class="step-num">2</span>
+                    <p>Build and publish two teams with eligible squads for the format you want to play.</p>
+                </li>
+                <li>
+                    <span class="step-num">3</span>
+                    <p>Open Simulate Match, set the conditions and choose both XIs. Start in Auto or make the selection calls in Manual where supported.</p>
+                </li>
             </ol>
-            <p class="about-resource">In-app walkthroughs guide you through setup and key pages. Use the help button on supported pages to replay a walkthrough.</p>
-            <p>If you enjoy the game, you can optionally help the developer cover hosting and other running costs.</p>
+            <p class="about-resource-note">In-app walkthroughs guide you through setup and key pages. Use the help button on supported pages to replay a walkthrough.</p>
+            <p class="about-resource-note">If you enjoy the game, you can optionally help the developer cover hosting and other running costs.</p>
             <div class="about-actions">
-                <a class="button" href="{{ '/' if current_user.is_authenticated else '/register' }}">{{ 'Open dashboard' if current_user.is_authenticated else 'Create a free account' }}</a>
-                <a href="/changelog">Changelog</a>
-                <a href="https://github.com/ManishYelam/SimCricketX">Source code</a>
-                <a href="/llms.txt">LLM guide</a>
-                <a href="{{ support_url }}" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
+                <a class="button" href="{{ '/' if current_user.is_authenticated else '/register' }}">{{ 'Open dashboard' if current_user.is_authenticated else 'Create a free account' }} <span aria-hidden="true">↗</span></a>
+                <a class="about-secondary-link" href="/changelog">Changelog</a>
+                <a class="about-secondary-link" href="https://github.com/ManishYelam/SimCricketX" target="_blank" rel="noopener noreferrer">Source code ↗</a>
+                <a class="about-secondary-link" href="/llms.txt">LLM guide</a>
+                <a class="about-secondary-link" href="{{ support_url }}" target="_blank" rel="noopener noreferrer">Buy me a coffee ↗</a>
             </div>
         </section>
     </div>
 </div>
+
+<script>
+(function () {
+    if (!('IntersectionObserver' in window)) return;
+    const links = Array.from(document.querySelectorAll('.about-contents a[data-target]'));
+    const sections = links.map(l => document.getElementById(l.dataset.target)).filter(Boolean);
+    if (!sections.length) return;
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            links.forEach((a) => a.classList.toggle('is-active', a.dataset.target === entry.target.id));
+        });
+    }, { rootMargin: '-18% 0px -68% 0px' });
+    sections.forEach((s) => observer.observe(s));
+})();
+</script>
 {% endblock %}

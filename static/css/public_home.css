@@ -1,87 +1,587 @@
-/* Public home only: a clean, athletic type system with no font download dependency. */
+/* ================================================================
+   public_home.css — Landing page (/) styles
+   Shares Space Grotesk / IBM Plex Mono & dashboard surface language
+   ================================================================ */
+
 .landing-page {
-    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    --font-mono: var(--font-sans);
-    /* Share dashboard palette in both light and dark themes. */
     --paper: var(--bg-body);
     --ink: var(--text-main);
     --muted: var(--text-muted);
     --line: var(--border-light);
     --card: var(--bg-glass);
-    font-family: var(--font-sans);
 }
-.landing-page main { max-width: 1320px; }
-.landing-page .public-nav { border-bottom: 1px solid var(--line); }
-.landing-page .nav-logo-text { font-family: var(--font-sans); font-weight: 800; letter-spacing: -.8px; }
+.landing-page main { max-width: 1240px; }
 
-.landing-page .hero { grid-template-columns: 1.15fr 1fr; gap: 64px; padding-block: 90px 74px; }
-.landing-page .eyebrow { font: 700 11px/1.5 var(--font-sans); letter-spacing: 1.8px; }
-.landing-page h1 { font-size: clamp(56px, 6.8vw, 92px); line-height: 1.02; letter-spacing: -.065em; font-weight: 800; margin-bottom: 28px; }
-.landing-page h1 em { font-weight: inherit; }
-.landing-page .lead { font-size: 18px; line-height: 1.75; max-width: 480px; }
-.landing-page .button { border-radius: var(--radius-md); gap: 30px; padding: 15px 23px; color: #fff; }
-[data-theme="dark"] .landing-page .button { color: var(--text-on-accent); }
-.landing-page .actions > a:not(.button) { text-decoration: none; }
-.landing-page .actions > a:not(.button):hover { text-decoration: underline; }
-.landing-page .fine { font-size: 12px; line-height: 1.8; }
-.landing-page .scorebook { position: relative; overflow: hidden; border-radius: 20px; padding: 30px; background: linear-gradient(130deg, color-mix(in srgb, var(--brand-primary) 58%, #071b19), #071b19); border: 1px solid color-mix(in srgb, var(--brand-primary) 65%, #071b19); box-shadow: var(--shadow-md); }
-.landing-page .score-top { font: 700 10px/1.4 var(--font-sans); letter-spacing: 1.4px; align-items: center; margin-bottom: 26px; padding-bottom: 20px; }
-.landing-page .score-top .match-label { color: #fff; }
-.landing-page .demo-label { color: #d4e6df; font-size: 9px; letter-spacing: .7px; border: 1px solid #ffffff35; border-radius: 4px; padding: 5px 7px; }
-.landing-page .scorebook .eyebrow { color: #d4e6df; font-size: 10px; }
-.landing-page .match-team { font-size: 19px; font-weight: 700; letter-spacing: -.3px; margin: 12px 0 4px; }
-.landing-page .match-team span { font-size: 12px; font-weight: 400; color: #d4e6df; margin-left: 8px; }
-.landing-page .score { font: 750 88px/1.2 var(--font-sans); letter-spacing: -5px; font-variant-numeric: tabular-nums; }
-.landing-page .score > span { font-size: 44px; letter-spacing: -2px; }
-.landing-page .match-equation { display: flex; flex-wrap: wrap; gap: 4px; color: #d4e6df; margin: 8px 0 24px; }
+/* ── Hero ────────────────────────────────────────────────────────── */
+.landing-page .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
+    gap: clamp(32px, 5vw, 68px);
+    align-items: center;
+    padding-block: clamp(44px, 6vw, 84px) clamp(40px, 5vw, 68px);
+    border-bottom: 0;
+}
+.hero-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--brand-primary);
+    box-shadow: 0 0 0 4px var(--accent-light);
+}
+.landing-page .fine a {
+    color: var(--brand-primary);
+    font-weight: 600;
+    text-decoration: none;
+}
+.landing-page .fine a:hover { text-decoration: underline; }
+
+/* ── Scorebook (Dashboard Primary Pavilion Card DNA) ─────────────── */
+.landing-page .scorebook {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    padding: 30px;
+    background:
+        radial-gradient(ellipse at 95% 0%, color-mix(in srgb, var(--brand-secondary) 16%, transparent), transparent 60%),
+        linear-gradient(130deg, color-mix(in srgb, var(--brand-primary) 58%, #071b19), #071b19);
+    color: #fff9f2;
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 65%, #071b19);
+    box-shadow: var(--shadow-lg);
+}
+.landing-page .scorebook > :not(svg) { position: relative; z-index: 1; }
+.scorebook-oval {
+    position: absolute;
+    width: 320px;
+    height: 320px;
+    right: -120px;
+    top: -48px;
+    transform: rotate(-22deg);
+    stroke: #d5e8cb;
+    stroke-width: 1;
+    opacity: 0.16;
+    pointer-events: none;
+    z-index: 0 !important;
+}
+.scorebook-oval .stadium-pitch { fill: rgba(213, 232, 203, 0.22); }
+
+.landing-page .score-top {
+    font: 600 0.65rem/1.4 var(--font-mono);
+    letter-spacing: 0.14em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+    gap: 12px;
+}
+.landing-page .score-top .match-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #fff9f2;
+}
+.score-live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--brand-secondary);
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.22);
+}
+.landing-page .demo-label {
+    color: #d4e6df;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    padding: 4px 8px;
+}
+.landing-page .scorebook .eyebrow {
+    color: #b8d6ca;
+    font-size: 0.64rem;
+    margin-bottom: 6px;
+}
+.landing-page .match-team {
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: #fff9f2;
+    margin: 0 0 10px;
+}
+.landing-page .match-team span {
+    font-size: 0.84rem;
+    font-weight: 400;
+    color: #c4dcd2;
+    margin-left: 6px;
+}
+.score-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+.landing-page .score {
+    font: 600 clamp(3.4rem, 5vw, 4.6rem)/1 var(--font-mono);
+    letter-spacing: -0.05em;
+    font-variant-numeric: tabular-nums;
+    color: #fff9f2;
+}
+.landing-page .score > span {
+    font-size: 0.52em;
+    color: rgba(255, 249, 242, 0.62);
+    letter-spacing: -0.02em;
+    margin-left: 2px;
+}
+.score-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+    font: 500 0.72rem/1.3 var(--font-mono);
+    color: #cde3da;
+    padding-bottom: 6px;
+}
+.score-rr { color: var(--brand-secondary); }
+
+.landing-page .match-equation {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.84rem;
+    color: #d4e6df;
+    margin: 0 0 16px;
+}
 .landing-page .match-equation b { color: var(--brand-secondary); }
-.landing-page .match-equation > span { margin-left: auto; }
-.landing-page .delivery { align-items: center; line-height: 1.6; }
-.landing-page .delivery b { font: 600 12px var(--font-sans); color: #d4e6df; }
-.landing-page .delivery strong { color: var(--brand-secondary); }
-.landing-page .ball-row { gap: 8px; padding: 10px 0; }
-.landing-page .ball-row span { width: 32px; height: 32px; display: grid; place-items: center; font-size: 12px; }
-.landing-page .ball-row span:first-child { background: var(--brand-secondary); }
-.landing-page .ribbon { padding: 26px 0; }
-.landing-page .ribbon > span { font: 750 30px var(--font-sans); letter-spacing: -1px; }
-.landing-page .ribbon small { font: 600 10px/1.5 var(--font-sans); letter-spacing: 1px; color: var(--muted); }
-.landing-page h2 { font-size: clamp(30px, 3.2vw, 42px); font-weight: 750; letter-spacing: -.045em; }
-.landing-page .match-team { font-size: 19px; letter-spacing: -.3px; }
-.landing-page h3 { font-weight: 700; letter-spacing: -.5px; }
-.landing-page .format-grid { gap: 12px; border: 0; overflow: visible; box-shadow: none; }
-.landing-page .format-grid article { padding: 25px 18px; border: 1px solid var(--line); border-radius: 20px; background: var(--card); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bg-raised) 70%, transparent); }
-.landing-page .format-grid h3 { font-size: 23px; }
-.landing-page .format-grid p { font-size: 13px; line-height: 1.7; }
-.landing-page .ink-panel { background: var(--card); border-color: var(--line); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bg-raised) 70%, transparent); border-radius: 20px; color: var(--ink); }
-.landing-page .ink-panel p { color: var(--muted); }
-.landing-page .mode-number { display: block; font-size: 13px; color: var(--brand-primary); font-weight: 700; margin-bottom: 24px; }
-.landing-page .mode-note { border-color: var(--line); }
-.landing-page .tour-callout { background: linear-gradient(120deg, color-mix(in srgb, var(--brand-secondary) 12%, transparent), transparent), var(--bg-surface); border-color: var(--line); color: var(--ink); border-radius: 20px; }
-.landing-page .index { font-family: var(--font-sans); }
-.landing-page .closing { background: var(--card); border: 1px solid var(--line); border-radius: 20px; margin: 24px 0 60px; padding: 64px 24px; }
-.landing-page .public-footer { border-top: 1px solid var(--line); }
-.landing-page .skip { z-index: 100; }
+.landing-page .match-equation > span {
+    margin-left: auto;
+    font: 500 0.72rem var(--font-mono);
+    color: #b8d6ca;
+}
+
+.scorebook-players {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px 16px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    font: 400 0.72rem/1.4 var(--font-mono);
+    color: #d4e6df;
+}
+.scorebook-players strong {
+    color: #9ec0b4;
+    font-weight: 500;
+    margin-right: 4px;
+}
+
+.landing-page .delivery {
+    border-top: 1px solid rgba(255, 255, 255, 0.13);
+    padding: 12px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: #eef6f2;
+}
+.landing-page .delivery b {
+    font: 600 0.74rem var(--font-mono);
+    color: #b8d6ca;
+    flex-shrink: 0;
+}
+.landing-page .delivery strong {
+    margin-left: auto;
+    font: 600 0.75rem var(--font-mono);
+    min-width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--brand-secondary);
+}
+.landing-page .ball-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 0 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.13);
+}
+.landing-page .ball-row span {
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    font: 600 0.74rem/1 var(--font-mono);
+    color: #e4f0eb;
+}
+.landing-page .ball-row span.ball-boundary {
+    background: var(--brand-secondary);
+    border-color: var(--brand-secondary);
+    color: #17231b;
+}
+.landing-page .scorebook .fine {
+    color: #b8d6ca;
+    opacity: 0.85;
+    font-size: 0.72rem;
+    margin: 10px 0 0;
+}
+
+/* ── Ribbon (Architectural Glass Metric Bar) ─────────────────────── */
+.landing-page .ribbon {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin-bottom: 12px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--bg-glass);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bg-raised) 70%, transparent);
+    overflow: hidden;
+}
+.ribbon-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 20px 24px;
+}
+.ribbon-item + .ribbon-item { border-left: 1px solid var(--line); }
+.ribbon-num {
+    font: 600 1.85rem/1 var(--font-mono);
+    letter-spacing: -0.04em;
+    color: var(--brand-primary);
+}
+.ribbon-item small {
+    font: 600 0.65rem/1.4 var(--font-mono);
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    max-width: 140px;
+}
+
+/* ── Format Cards ────────────────────────────────────────────────── */
+.format-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 14px;
+}
+.format-card {
+    display: flex;
+    flex-direction: column;
+    padding: 22px 20px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--card);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bg-raised) 70%, transparent);
+    transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.format-card:hover {
+    border-color: var(--brand-primary);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-sm);
+}
+.format-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+.format-pill {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: var(--accent-light);
+    color: var(--brand-primary);
+    font: 600 0.64rem/1.2 var(--font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+.format-mode-tag {
+    font: 500 0.62rem/1.2 var(--font-mono);
+    color: var(--muted);
+}
+.format-card h3 { font-size: 1.32rem; margin-bottom: 8px; }
+.format-card p { font-size: 0.84rem; line-height: 1.6; color: var(--muted); margin: 0; }
+
+/* ── In the Dugout (Dark Pavilion Feature Panel) ─────────────────── */
+.ink-section { border-bottom: 0; padding-block: 24px 64px; }
+.landing-page .ink-panel {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(32px, 5vw, 52px);
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 55%, #071b19);
+    background:
+        radial-gradient(ellipse at 10% 100%, color-mix(in srgb, var(--brand-secondary) 12%, transparent), transparent 55%),
+        linear-gradient(130deg, color-mix(in srgb, var(--brand-primary) 52%, #071b19), #071b19);
+    color: #fff9f2;
+    box-shadow: var(--shadow-lg);
+}
+.landing-page .ink-panel > :not(svg) { position: relative; z-index: 1; }
+.ink-panel-art {
+    position: absolute;
+    width: 360px;
+    height: 360px;
+    right: -110px;
+    top: -110px;
+    transform: rotate(-20deg);
+    stroke: #d5e8cb;
+    stroke-width: 1;
+    opacity: 0.12;
+    pointer-events: none;
+    z-index: 0 !important;
+}
+.landing-page .ink-panel .eyebrow { color: var(--brand-secondary); }
+.landing-page .ink-panel h2 { color: #fff9f2; }
+
+.three-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+}
+.ink-panel .three-grid { margin-top: 32px; }
+.mode-card {
+    padding: 24px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(8px);
+}
+.landing-page .mode-number {
+    display: inline-grid;
+    place-items: center;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.16);
+    color: var(--brand-secondary);
+    font: 600 0.72rem/1.4 var(--font-mono);
+    margin-bottom: 16px;
+}
+.mode-card h3 { color: #fff9f2; font-size: 1.16rem; margin-bottom: 8px; }
+.mode-card p { color: #cde3da; font-size: 0.86rem; line-height: 1.65; margin: 0; }
+.landing-page .mode-note {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    margin: 28px 0 0;
+    padding-top: 20px;
+    font-size: 0.82rem;
+    color: #cde3da;
+}
+.landing-page .mode-note i { color: var(--brand-secondary); }
+
+/* ── Competitions & Tour Callout ─────────────────────────────────── */
+.competition-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+.competition-grid article {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px 22px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--card);
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.competition-grid article:hover {
+    border-color: color-mix(in srgb, var(--brand-primary) 45%, var(--line));
+    transform: translateY(-2px);
+}
+.competition-card-wide { grid-column: 1 / -1; }
+.index {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: var(--accent-light);
+    color: var(--brand-primary);
+    font: 600 0.74rem/1 var(--font-mono);
+}
+.competition-grid h3 { font-size: 1.04rem; margin-bottom: 4px; }
+.competition-grid p { font-size: 0.85rem; color: var(--muted); margin: 0; }
+
+.tour-callout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+    background: linear-gradient(120deg, color-mix(in srgb, var(--brand-secondary) 13%, transparent), transparent 60%), var(--bg-surface);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    padding: 28px 30px;
+    margin-top: 18px;
+    border-radius: 20px;
+}
+.tour-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font: 600 0.65rem/1.4 var(--font-mono);
+    letter-spacing: 0.14em;
+    color: var(--brand-secondary);
+    margin-bottom: 8px;
+}
+.tour-callout h3 { font-size: 1.25rem; margin-bottom: 6px; }
+.tour-callout p { max-width: 64ch; font-size: 0.88rem; color: var(--muted); margin: 0; }
+.tour-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--bg-raised);
+    color: var(--brand-primary);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+.tour-link:hover {
+    border-color: var(--brand-primary);
+    background: var(--accent-light);
+}
+
+/* ── Capabilities Trio (Mirrors Dashboard Home Cards) ────────────── */
+.capabilities-section { border-bottom: 0; padding-block: 56px 24px; }
+.capability-card {
+    padding: 26px;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: var(--card);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bg-raised) 70%, transparent);
+    transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.capability-card:hover {
+    border-color: var(--brand-primary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+.capability-icon {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: var(--accent-light);
+    color: var(--brand-primary);
+    font-size: 1rem;
+    margin-bottom: 18px;
+}
+.capability-card .eyebrow { margin-bottom: 8px; }
+.capability-card h3 { font-size: 1.15rem; margin-bottom: 8px; }
+.capability-card p { font-size: 0.86rem; color: var(--muted); margin: 0; }
+
+/* Homepage composition: quiet surfaces, clear section hierarchy. */
+.landing-page .hero h1 { font-size: clamp(3.2rem, 6.2vw, 5rem); letter-spacing: -0.065em; }
+.landing-page .hero-copy { padding-block: 16px; }
+.landing-page .hero-copy .lead { max-width: 42ch; }
+.landing-page .hero-copy .fine { max-width: 45ch; line-height: 1.8; }
+.landing-page .button, .landing-page .button-ghost { border-radius: 6px; }
+.landing-page .scorebook { background: #123e35; box-shadow: 0 22px 48px -30px #123e3580; }
+.landing-page .scorebook-oval { right: -100px; top: -60px; }
+.landing-page .ribbon {
+    border-radius: 0; border-inline: 0; background: transparent; box-shadow: none;
+}
+.landing-page .ribbon-item { justify-content: flex-start; padding: 22px 28px; }
+.landing-page .ribbon-item:first-child { padding-left: 0; }
+.landing-page .ribbon-num { font-size: 1.6rem; }
+.landing-page .section-header { margin-bottom: 30px; }
+.landing-page .section-header h2 { max-width: 680px; }
+.landing-page .section-intro { margin-bottom: 0; }
+.landing-page .format-grid { gap: 0; border-block: 1px solid var(--line); }
+.landing-page .format-card {
+    border: 0; border-right: 1px solid var(--line); border-radius: 0;
+    background: transparent; box-shadow: none; padding: 24px 20px;
+}
+.landing-page .format-card:first-child { padding-left: 0; }
+.landing-page .format-card:last-child { border-right: 0; }
+.landing-page .format-card:hover { transform: none; box-shadow: none; }
+.landing-page .format-card-head { flex-direction: column; align-items: flex-start; gap: 10px; min-height: 54px; }
+.landing-page .format-pill { padding: 0; background: none; font-size: .68rem; }
+.landing-page .format-card h3 { font-size: 1.4rem; }
+.landing-page .format-card p { font-size: .86rem; }
+.landing-page .ink-section { padding-top: 48px; }
+.landing-page .ink-panel { background: #123e35; box-shadow: none; }
+.landing-page .mode-card { border: 0; border-left: 1px solid #ffffff30; border-radius: 0; background: transparent; padding: 0 24px; backdrop-filter: none; }
+.landing-page .mode-card:first-child { border-left: 0; padding-left: 0; }
+.landing-page .mode-number { padding: 0; background: none; margin-bottom: 14px; }
+.landing-page .competition-grid { gap: 0 32px; }
+.landing-page .competition-grid article { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; padding: 22px 0; }
+.landing-page .competition-grid article:hover { transform: none; }
+.landing-page .competition-card-wide { grid-column: auto; }
+.landing-page .index { background: none; width: 24px; justify-items: start; }
+.landing-page .tour-callout { border-radius: 8px; background: var(--accent-light); padding: 28px; margin-top: 32px; }
+.landing-page .tour-kicker { color: var(--brand-primary); }
+.landing-page .capability-card { border: 0; border-radius: 0; background: none; box-shadow: none; padding: 0 24px 0 0; }
+.landing-page .capability-card:hover { transform: none; box-shadow: none; }
+.landing-page .capability-icon { border-radius: 6px; }
+.landing-page .closing { border-radius: 12px; background: var(--bg-surface); border: 1px solid var(--line); box-shadow: none; }
+.landing-page .closing h2 { color: var(--ink); }
+.landing-page .closing p { color: var(--muted); }
+.landing-page .closing .eyebrow { color: var(--brand-primary); }
+.landing-page .closing .button { background: var(--brand-primary); color: #fff; }
+[data-theme="dark"] .landing-page .closing .button { color: var(--text-on-accent); }
+.landing-page .closing .actions > a:not(.button) { color: var(--ink); border-color: var(--line); border-radius: 6px; }
+.landing-page .public-nav .nav-brand-mark, .landing-page .wordmark .nav-brand-mark { background: var(--brand-primary); color: #fff; }
+
+/* ── Responsive ──────────────────────────────────────────────────── */
 @media (max-width: 1050px) {
     .landing-page .hero { gap: 32px; }
-    .landing-page .format-grid { grid-template-columns: repeat(3, 1fr); }
-    .landing-page .desktop-break { display: none; }
+    .landing-page .format-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .landing-page .format-card { padding: 22px 20px; border: 0; }
+    .landing-page .format-card:first-child { padding-left: 20px; }
+    .desktop-break { display: none; }
 }
-@media (max-width: 760px) {
-    .landing-page .hero { grid-template-columns: 1fr; padding-block: 48px; gap: 36px; }
-    .landing-page h1 { font-size: clamp(52px, 11vw, 78px); }
-    .landing-page .lead { max-width: 560px; font-size: 17px; }
-    .landing-page .scorebook { max-width: 560px; width: 100%; padding: 24px; }
-    .landing-page .ribbon { gap: 20px; flex-wrap: wrap; }
-    .landing-page .ribbon > span { font-size: 25px; gap: 10px; }
-    .landing-page .format-grid { grid-template-columns: repeat(2, 1fr); }
-    .landing-page .three-grid { grid-template-columns: 1fr; }
-    .landing-page .mode-number { margin-bottom: 10px; }
+@media (max-width: 780px) {
+    .landing-page .hero {
+        grid-template-columns: 1fr;
+        padding-block: 36px 32px;
+        gap: 32px;
+    }
+    .landing-page .ribbon { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .landing-page .ribbon-item, .landing-page .ribbon-item:first-child { flex-direction: column; align-items: flex-start; padding: 18px 12px; gap: 8px; }
+    .landing-page .ribbon-item + .ribbon-item { border-top: 0; border-left: 1px solid var(--line); }
+    .landing-page .ribbon-item small { font-size: .56rem; letter-spacing: .04em; }
+    .ribbon-item { justify-content: flex-start; padding: 16px 20px; }
+    .ribbon-item + .ribbon-item { border-left: 0; border-top: 1px solid var(--line); }
+    .landing-page .format-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .landing-page .mode-card, .landing-page .mode-card:first-child { border-left: 0; border-top: 1px solid #ffffff30; padding: 22px 0 0; }
+    .landing-page .mode-card:first-child { border-top: 0; padding-top: 0; }
+    .landing-page .capabilities { gap: 28px; }
+    .landing-page .public-nav.scx-nav.navbar { flex-wrap: wrap; padding-block: 12px; gap: 10px; }
+    .landing-page .public-nav .nav-items { width: 100%; justify-content: space-between; }
+    .landing-page .public-nav #theme-toggle { position: absolute; right: 12px; top: 12px; }
+    .three-grid, .competition-grid { grid-template-columns: 1fr; }
+    .competition-card-wide { grid-column: auto; }
+    .landing-page .ink-panel { padding: 28px 20px; border-radius: 18px; }
 }
-@media (max-width: 420px) {
+@media (max-width: 480px) {
     .landing-page .format-grid { grid-template-columns: 1fr; }
-    .landing-page .scorebook { padding: 20px; }
-    .landing-page .score { font-size: 76px; }
-    .landing-page .nav-items { gap: 4px; }
-    .landing-page .public-nav .nav-control { padding-inline: 8px; }
-    .landing-page .public-nav .nav-cta { padding-inline: 10px; }
+    .landing-page .format-card, .landing-page .format-card:first-child { padding: 22px 0; border-bottom: 1px solid var(--line); }
+    .landing-page .format-card:last-child { border-bottom: 0; }
+    .landing-page .format-card-head { flex-direction: row; min-height: 0; margin-bottom: 10px; }
+    .landing-page .hero h1 { font-size: clamp(2.8rem, 12vw, 3.8rem); }
+    .landing-page .score-top { gap: 8px; letter-spacing: .06em; }
+    .landing-page .demo-label { font-size: .53rem; padding-inline: 5px; }
+    .landing-page .tour-callout { padding: 22px; }
+    .landing-page .hero .actions { align-items: stretch; }
+    .landing-page .hero .actions a { flex: 1 1 auto; }
+    .landing-page .scorebook { padding: 22px 18px; }
 }

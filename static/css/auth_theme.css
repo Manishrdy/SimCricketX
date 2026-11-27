@@ -1,27 +1,27 @@
-/* Adapt existing auth components to the internal homepage's shared theme. */
+/* ================================================================
+   auth_theme.css — Bridge between auth.css and theme_manage.css
+   Ensures login/register share exact dashboard colors and tokens.
+   ================================================================ */
+
 :root, [data-theme="dark"] {
+    --bg: var(--bg-body);
     --bg-input: var(--bg-raised);
+    --fg: var(--text-main);
     --fg-muted: var(--text-muted);
+    --fg-secondary: var(--text-muted);
+    --card-bg: var(--bg-surface);
+    --card-border: var(--border-light);
     --brand: var(--brand-primary);
     --brand-dark: var(--accent-hover);
     --brand-light: var(--accent-light);
+    --accent: var(--brand-primary);
     --amber: var(--brand-secondary);
     --panel-grad: linear-gradient(130deg, color-mix(in srgb, var(--brand-primary) 58%, #071b19), #071b19);
 }
-.auth-left { background: var(--panel-grad); color: #fff9f2; }
-.auth-left-tagline-accent {
-    background: none;
-    color: var(--brand-secondary);
-    -webkit-text-fill-color: var(--brand-secondary);
-    font-family: var(--font-sans);
-    font-style: normal;
-    font-weight: 500;
+
+[data-theme="dark"] .auth-card {
+    background: var(--bg-surface);
 }
-.auth-kicker, .auth-explore { color: var(--brand-secondary); }
-.auth-left-sub, .auth-left-features li, .auth-left-footer { color: #d4e6df; }
-.auth-formats { color: #fff9f2; }
-.auth-back { color: var(--text-muted); }
-.auth-input, .auth-btn { border-radius: var(--radius-md); }
-.auth-btn, [data-theme="dark"] .auth-btn { box-shadow: var(--shadow-sm); }
-[data-theme="dark"] .auth-btn { color: var(--text-on-accent); }
-.auth-btn:hover, [data-theme="dark"] .auth-btn:hover { box-shadow: var(--shadow-md); }
+[data-theme="dark"] .auth-btn {
+    color: var(--text-on-accent);
+}

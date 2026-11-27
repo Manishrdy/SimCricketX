@@ -16,17 +16,13 @@
     <title>Create Account — SimCricketX</title>
     <meta name="robots" content="noindex">
 
-    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 
-    <!-- Auth styles -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_manage.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/auth_theme.css') }}">
     {% if cf_turnstile_site_key %}
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -36,169 +32,180 @@
 
 <div class="auth-page">
 
-    <!-- ════════════════════════════════════════════════════════
-         LEFT PANEL — branding
-         ════════════════════════════════════════════════════════ -->
     {% include "partials/auth_brand.html" %}
 
-
-    <!-- ════════════════════════════════════════════════════════
-         RIGHT PANEL — form
-         ════════════════════════════════════════════════════════ -->
     <main class="auth-right">
 
-        <!-- Theme toggle -->
-        <button class="auth-theme-btn" id="themeBtn" aria-label="Toggle dark mode" type="button">
-            <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
-        </button>
+        <div class="auth-topbar">
+            <a class="auth-mobile-brand" href="/">
+                <span class="auth-brand-mark" aria-hidden="true"><i class="fas fa-baseball-ball"></i></span>
+                <span>SimCricketX</span>
+            </a>
+            <a class="auth-back auth-back-desktop" href="/">← Back to SimCricketX</a>
 
-        <div class="auth-form-wrap"><a class="auth-back" href="/">← Back to SimCricketX</a>
-
-            <h1 class="auth-form-title">Create account</h1>
-            <p class="auth-form-sub">Your teams, your tournaments, your next great match.</p>
-
-            <!-- Error -->
-            {% if error %}
-            <div class="auth-alert" id="authAlert">
-                <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
-                <span>{{ error }}</span>
+            <div class="auth-topbar-actions">
+                <a class="auth-switch-pill" href="{{ url_for('login') }}">Sign in</a>
+                <button class="auth-theme-btn" id="themeBtn" aria-label="Toggle dark mode" type="button">
+                    <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
+                </button>
             </div>
-            {% endif %}
+        </div>
 
-            {% if identity_signup_enforced or identity_network_enabled %}<p><a href="{{ url_for('identity_signup.appeal') }}">Signup blocked? Request private review</a></p>{% endif %}
+        <div class="auth-form-wrap">
+            <div class="auth-card">
+                <h1 class="auth-form-title">Create account</h1>
+                <p class="auth-form-sub">Your teams, your tournaments, your next great match.</p>
 
-            {% if identity_network_enabled %}<p class="auth-form-sub">We check your IP for VPNs and proxies through ProxyCheck. <a href="{{ url_for('identity_network.privacy') }}">Network privacy details</a></p>{% endif %}
-            <!-- Register form -->
-            <form class="auth-form" method="POST" action="/register" id="registerForm" novalidate>
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="challenge_id"      id="challenge_id">
-                <input type="hidden" name="challenge_counter" id="challenge_counter">
-                <input type="hidden" name="challenge_digest"  id="challenge_digest">
-
-                <!-- Display name -->
-                <div class="auth-field">
-                    <label class="auth-label" for="display_name">Display name</label>
-                    <div class="auth-input-wrap">
-                        <i class="fas fa-user auth-input-icon" aria-hidden="true"></i>
-                        <input class="auth-input"
-                               type="text"
-                               id="display_name"
-                               name="display_name"
-                               placeholder="Your display name"
-                               required
-                               maxlength="50"
-                               autocomplete="nickname">
-                    </div>
+                {% if error %}
+                <div class="auth-alert" id="authAlert" role="alert">
+                    <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+                    <span>{{ error }}</span>
                 </div>
-
-                <!-- Email -->
-                <div class="auth-field">
-                    <label class="auth-label" for="email">Email address</label>
-                    <div class="auth-input-wrap">
-                        <i class="fas fa-envelope auth-input-icon" aria-hidden="true"></i>
-                        <input class="auth-input"
-                               type="email"
-                               id="email"
-                               name="email"
-                               placeholder="you@example.com"
-                               required
-                               autofocus
-                               autocomplete="email">
-                    </div>
-                </div>
-
-                <!-- Password -->
-                <div class="auth-field">
-                    <label class="auth-label" for="password">Password</label>
-                    <div class="auth-input-wrap">
-                        <i class="fas fa-lock auth-input-icon" aria-hidden="true"></i>
-                        <input class="auth-input auth-input--pw"
-                               type="password"
-                               id="password"
-                               name="password"
-                               placeholder="Min 8 chars, upper + lower + digit"
-                               required
-                               minlength="8"
-                               autocomplete="new-password">
-                        <button type="button" class="auth-eye-btn" id="eyeBtn" aria-label="Show password">
-                            <i class="fas fa-eye" id="eyeIcon" aria-hidden="true"></i>
-                        </button>
-                    </div>
-                    <span class="auth-hint">At least 8 characters with uppercase, lowercase, and a number.</span>
-                    <span class="auth-hint" id="policyHint" style="display:none; color: var(--danger);">
-                        <i class="fas fa-exclamation-circle"></i> <span id="policyHintText"></span>
-                    </span>
-                </div>
-
-                <!-- Confirm password -->
-                <div class="auth-field">
-                    <label class="auth-label" for="confirm_password">Confirm password</label>
-                    <div class="auth-input-wrap">
-                        <i class="fas fa-lock auth-input-icon" aria-hidden="true"></i>
-                        <input class="auth-input auth-input--pw"
-                               type="password"
-                               id="confirm_password"
-                               name="confirm_password"
-                               placeholder="Re-enter your password"
-                               required
-                               autocomplete="new-password">
-                        <button type="button" class="auth-eye-btn" id="eyeBtn2" aria-label="Show confirm password">
-                            <i class="fas fa-eye" id="eyeIcon2" aria-hidden="true"></i>
-                        </button>
-                    </div>
-                    <span class="auth-hint" id="matchHint" style="display:none; color: var(--danger);">
-                        <i class="fas fa-exclamation-circle"></i> Passwords do not match
-                    </span>
-                </div>
-
-                <!-- Where did you come across SimCricketX? -->
-                <div class="auth-field">
-                    <label class="auth-label" for="referral_source">Where did you come across SimCricketX?</label>
-                    <div class="auth-input-wrap">
-                        <i class="fas fa-compass auth-input-icon" aria-hidden="true"></i>
-                        <select class="auth-input auth-select"
-                                id="referral_source"
-                                name="referral_source">
-                            <option value="">Select an option (optional)</option>
-                            <option value="Google Search">Google Search</option>
-                            <option value="Planet Cricket">Planet Cricket</option>
-                            <option value="AI Search">AI Search (ChatGPT, Claude, Perplexity, etc.)</option>
-                            <option value="Reddit">Reddit</option>
-                            <option value="YouTube">YouTube</option>
-                            <option value="Social Media">Social Media (X, Discord, etc.)</option>
-                            <option value="Friend / Word of Mouth">Friend / Word of Mouth</option>
-                            <option value="Other">Other</option>
-                        </select>
-                        <i class="fas fa-chevron-down auth-select-caret" aria-hidden="true"></i>
-                    </div>
-                </div>
-
-                {% if cf_turnstile_site_key %}
-                <div class="cf-turnstile" style="margin-bottom:0.75rem;"
-                     data-sitekey="{{ cf_turnstile_site_key }}"
-                     data-theme="auto"></div>
                 {% endif %}
 
-                <button type="submit" class="auth-btn" id="submitBtn">
-                    <i class="fas fa-user-plus" id="btnIcon" aria-hidden="true"></i>
-                    <span id="btnText">Create Account</span>
-                </button>
-                <button type="button" class="auth-cancel-link" id="cancelCheckBtn">Cancel</button>
-                {% include "partials/device_notice.html" %}
-            </form>
+                {% if identity_signup_enforced or identity_network_enabled %}
+                <p class="auth-notice"><a href="{{ url_for('identity_signup.appeal') }}">Signup blocked? Request private review</a></p>
+                {% endif %}
 
-            <div class="auth-divider"></div>
+                {% if identity_network_enabled %}
+                <p class="auth-notice">We check your IP for VPNs and proxies through ProxyCheck. <a href="{{ url_for('identity_network.privacy') }}">Network privacy details</a></p>
+                {% endif %}
 
-            <div class="auth-link-row">
-                Already have an account?
-                <a href="{{ url_for('login') }}">Sign in</a>
+                <form class="auth-form" method="POST" action="/register" id="registerForm" novalidate>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="challenge_id"      id="challenge_id">
+                    <input type="hidden" name="challenge_counter" id="challenge_counter">
+                    <input type="hidden" name="challenge_digest"  id="challenge_digest">
+
+                    <div class="auth-field">
+                        <label class="auth-label" for="display_name">Display name</label>
+                        <div class="auth-input-wrap">
+                            <i class="fas fa-user auth-input-icon" aria-hidden="true"></i>
+                            <input class="auth-input"
+                                   type="text"
+                                   id="display_name"
+                                   name="display_name"
+                                   placeholder="Your display name"
+                                   required
+                                   maxlength="50"
+                                   autocomplete="nickname">
+                        </div>
+                    </div>
+
+                    <div class="auth-field">
+                        <label class="auth-label" for="email">Email address</label>
+                        <div class="auth-input-wrap">
+                            <i class="fas fa-envelope auth-input-icon" aria-hidden="true"></i>
+                            <input class="auth-input"
+                                   type="email"
+                                   id="email"
+                                   name="email"
+                                   placeholder="you@example.com"
+                                   required
+                                   autofocus
+                                   autocomplete="email">
+                        </div>
+                    </div>
+
+                    <div class="auth-field">
+                        <label class="auth-label" for="password">Password</label>
+                        <div class="auth-input-wrap">
+                            <i class="fas fa-lock auth-input-icon" aria-hidden="true"></i>
+                            <input class="auth-input auth-input--pw"
+                                   type="password"
+                                   id="password"
+                                   name="password"
+                                   placeholder="Min 8 chars, upper + lower + digit"
+                                   required
+                                   minlength="8"
+                                   autocomplete="new-password">
+                            <button type="button" class="auth-eye-btn" id="eyeBtn" aria-label="Show password">
+                                <i class="fas fa-eye" id="eyeIcon" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div class="auth-pw-rules" aria-label="Password requirements">
+                            <span class="auth-pw-rule" data-rule="length">8+ chars</span>
+                            <span class="auth-pw-rule" data-rule="upper">A–Z</span>
+                            <span class="auth-pw-rule" data-rule="lower">a–z</span>
+                            <span class="auth-pw-rule" data-rule="digit">0–9</span>
+                        </div>
+                        <span class="auth-hint" id="policyHint" style="display:none; color: var(--danger);">
+                            <i class="fas fa-exclamation-circle"></i> <span id="policyHintText"></span>
+                        </span>
+                    </div>
+
+                    <div class="auth-field">
+                        <label class="auth-label" for="confirm_password">Confirm password</label>
+                        <div class="auth-input-wrap">
+                            <i class="fas fa-lock auth-input-icon" aria-hidden="true"></i>
+                            <input class="auth-input auth-input--pw"
+                                   type="password"
+                                   id="confirm_password"
+                                   name="confirm_password"
+                                   placeholder="Re-enter your password"
+                                   required
+                                   autocomplete="new-password">
+                            <button type="button" class="auth-eye-btn" id="eyeBtn2" aria-label="Show confirm password">
+                                <i class="fas fa-eye" id="eyeIcon2" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <span class="auth-hint" id="matchHint" style="display:none; color: var(--danger);">
+                            <i class="fas fa-exclamation-circle"></i> Passwords do not match
+                        </span>
+                    </div>
+
+                    <div class="auth-field">
+                        <label class="auth-label" for="referral_source">Where did you come across SimCricketX?</label>
+                        <div class="auth-input-wrap">
+                            <i class="fas fa-compass auth-input-icon" aria-hidden="true"></i>
+                            <select class="auth-input auth-select"
+                                    id="referral_source"
+                                    name="referral_source">
+                                <option value="">Select an option (optional)</option>
+                                <option value="Google Search">Google Search</option>
+                                <option value="Planet Cricket">Planet Cricket</option>
+                                <option value="AI Search">AI Search (ChatGPT, Claude, Perplexity, etc.)</option>
+                                <option value="Reddit">Reddit</option>
+                                <option value="YouTube">YouTube</option>
+                                <option value="Social Media">Social Media (X, Discord, etc.)</option>
+                                <option value="Friend / Word of Mouth">Friend / Word of Mouth</option>
+                                <option value="Other">Other</option>
+                            </select>
+                            <i class="fas fa-chevron-down auth-select-caret" aria-hidden="true"></i>
+                        </div>
+                    </div>
+
+                    {% if cf_turnstile_site_key %}
+                    <div class="cf-turnstile" style="margin-bottom:0.25rem;"
+                         data-sitekey="{{ cf_turnstile_site_key }}"
+                         data-theme="auto"></div>
+                    {% endif %}
+
+                    <button type="submit" class="auth-btn" id="submitBtn">
+                        <i class="fas fa-user-plus" id="btnIcon" aria-hidden="true"></i>
+                        <span id="btnText">Create Account</span>
+                    </button>
+                    <button type="button" class="auth-cancel-link" id="cancelCheckBtn">Cancel</button>
+                    {% include "partials/device_notice.html" %}
+                </form>
+
+                <div class="auth-divider"></div>
+
+                <div class="auth-link-row">
+                    Already have an account?
+                    <a href="{{ url_for('login') }}">Sign in</a>
+                </div>
             </div>
-            <div class="auth-link-row">
+
+            <div class="auth-link-row" style="margin-top: 1.1rem;">
                 <a href="{{ url_for('about') }}">About</a>
                 <span class="sep">·</span>
                 <a href="{{ url_for('changelog') }}">What's new</a>
+                <span class="sep">·</span>
+                <a href="https://github.com/Manishrdy/SimCricketX" target="_blank" rel="noopener noreferrer">
+                    <i class="fab fa-github" aria-hidden="true"></i> GitHub
+                </a>
             </div>
-
         </div>
     </main>
 
@@ -220,7 +227,6 @@
         try { localStorage.setItem('theme', t); } catch (e) {}
     }
 
-    // Sync icon with already-applied theme (set in <head>)
     applyTheme(html.getAttribute('data-theme') || 'light');
 
     btn.addEventListener('click', function () {
@@ -260,6 +266,24 @@
     /* ── Password policy validation (mirrors server-side validate_password_policy) ── */
     var policyHint     = document.getElementById('policyHint');
     var policyHintText = document.getElementById('policyHintText');
+    var rulePills      = {
+        length: document.querySelector('[data-rule="length"]'),
+        upper:  document.querySelector('[data-rule="upper"]'),
+        lower:  document.querySelector('[data-rule="lower"]'),
+        digit:  document.querySelector('[data-rule="digit"]')
+    };
+
+    function updateRulePills(pw) {
+        var checks = {
+            length: pw.length >= 8,
+            upper:  /[A-Z]/.test(pw),
+            lower:  /[a-z]/.test(pw),
+            digit:  /[0-9]/.test(pw)
+        };
+        Object.keys(checks).forEach(function (k) {
+            if (rulePills[k]) rulePills[k].classList.toggle('is-met', checks[k]);
+        });
+    }
 
     function passwordPolicyError(pw) {
         if (pw.length < 8) return 'At least 8 characters required.';
@@ -270,6 +294,7 @@
     }
 
     function checkPolicy() {
+        updateRulePills(pwInput.value);
         if (!pwInput.value) {
             policyHint.style.display = 'none';
             pwInput.setCustomValidity('');
@@ -296,11 +321,6 @@
     var powChallengeFetchedAt  = 0;
     var submittingWithPow     = false;
     var solveCancelled         = false;
-    // Headroom under the server's TTL (default 180s) for solve time + network
-    // latency. A challenge inside this margin of expiring is treated as unusable
-    // and silently refetched — otherwise a slow typist, a mobile user switching
-    // apps to fetch a password, or a changed IP gets a valid submission rejected
-    // as "expired"/"source mismatch" with no warning until after they've waited.
     var CHALLENGE_SAFETY_MARGIN_MS = 20000;
 
     async function sha256Hex(input) {
@@ -353,7 +373,7 @@
         btnIcon.className  = 'fas fa-shield-halved fa-spin';
         btnText.textContent = 'Running Security Check…';
         document.body.style.pointerEvents = 'none';
-        cancelBtn.style.pointerEvents = 'auto'; // stay clickable despite the line above
+        cancelBtn.style.pointerEvents = 'auto';
         cancelBtn.classList.add('visible');
     }
 
@@ -373,9 +393,6 @@
         if (submittingWithPow) return;
         e.preventDefault();
 
-        // Client-side password policy + match checks before the expensive PoW
-        // solve — catch what the server would reject anyway before paying for
-        // a proof-of-work grind and a full round trip.
         if (!checkPolicy()) {
             pwInput.focus();
             return;
@@ -397,9 +414,6 @@
                 return;
             }
             var solved = await solveChallenge(powChallenge);
-            // The grind itself can take a while at elevated difficulty — if the
-            // challenge would now land outside the server's TTL, solve a fresh
-            // one instead of submitting a solution that's about to be rejected.
             if (!challengeIsFresh()) {
                 await fetchChallenge();
                 solved = await solveChallenge(powChallenge);
@@ -418,7 +432,6 @@
         }
     });
 
-    /* ── Init: fetch challenge + auto-dismiss errors ─────────── */
     window.addEventListener('DOMContentLoaded', function () {
         fetchChallenge().catch(function () {});
 
